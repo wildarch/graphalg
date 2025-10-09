@@ -70,6 +70,16 @@ func Assign(a: Vector<s, int>, m: Vector<s, int>, b: Vector<s, int>) -> Vector<s
 
 Program(Func(Ident,Param(Ident,Vector(Dim(Ident),Semiring)),Param(Ident,Vector(Dim(Ident),Semiring)),Param(Ident,Vector(Dim(Ident),Semiring)),Vector(Dim(Ident),Semiring),Assign(Ident,Mask(Ident),Ident),Return(Ident)))
 
+# Assign (mask with negation) 
+func maskNeg(a: Vector<s, int>, m: Vector<s, int>, b: Vector<s, int>) -> Vector<s, int> {
+  a<!m> = b;
+  return a;
+}
+
+==>
+
+Program(Func(Ident,Param(Ident,Vector(Dim(Ident),Semiring)),Param(Ident,Vector(Dim(Ident),Semiring)),Param(Ident,Vector(Dim(Ident),Semiring)),Vector(Dim(Ident),Semiring),Assign(Ident,Mask(Ident),Ident),Return(Ident)))
+
 # Assign (fill)
 
 func Assign(a: Vector<s, int>) -> Vector<s, int> {
@@ -80,6 +90,16 @@ func Assign(a: Vector<s, int>) -> Vector<s, int> {
 ==>
 
 Program(Func(Ident,Param(Ident,Vector(Dim(Ident),Semiring)),Vector(Dim(Ident),Semiring),Assign(Ident,Fill,LiteralExpr(Semiring,Number)),Return(Ident)))
+
+# Accumulate
+func accumulate(a: Vector<s, int>, b: Vector<s, int>) -> Vector<s, int> {
+  a += b;
+  return a;
+}
+
+==>
+
+Program(Func(Ident,Param(Ident,Vector(Dim(Ident),Semiring)),Param(Ident,Vector(Dim(Ident),Semiring)),Vector(Dim(Ident),Semiring),Accum(Ident,Ident),Return(Ident)))
 
 # For (const)
 func ForConst() -> int {
@@ -102,3 +122,284 @@ func ForDim(a: Matrix<s, s, int>) -> Matrix<s, s, int> {
 ==>
 
 Program(Func(Ident,Param(Ident,Matrix(Dim(Ident),Dim(Ident),Semiring)),Matrix(Dim(Ident),Dim(Ident),Semiring),For(Ident,RangeDim(NrowsExpr(Ident))),Return(Ident)))
+
+# For with until
+func forUntil(a: Matrix<s, s, int>) -> Matrix<s, s, int> {
+  for i in a.nrows {
+  } until bool(false);
+  return a;
+}
+
+==>
+
+Program(Func(Ident,Param(Ident,Matrix(Dim(Ident),Dim(Ident),Semiring)),Matrix(Dim(Ident),Dim(Ident),Semiring),For(Ident,RangeDim(NrowsExpr(Ident)),LiteralExpr(Semiring,Boolean)),Return(Ident)))
+
+# Transpose
+func Trans(a: Matrix<s, s, int>) -> Matrix<s, s, int> {
+  return a.T;
+}
+
+==>
+
+Program(Func(Ident,Param(Ident,Matrix(Dim(Ident),Dim(Ident),Semiring)),Matrix(Dim(Ident),Dim(Ident),Semiring),Return(TransExpr(Ident))))
+
+# nrows
+func nrows(a: Matrix<s, s, int>) -> int {
+  return a.nrows;
+}
+
+==>
+
+Program(Func(Ident,Param(Ident,Matrix(Dim(Ident),Dim(Ident),Semiring)),Semiring,Return(NrowsExpr(Ident))))
+
+# ncols
+func ncols(a: Matrix<s, s, int>) -> int {
+  return a.ncols;
+}
+
+==>
+
+Program(Func(Ident,Param(Ident,Matrix(Dim(Ident),Dim(Ident),Semiring)),Semiring,Return(NcolsExpr(Ident))))
+
+# nvals
+func nvals(a: Matrix<s, s, int>) -> int {
+  return a.nvals;
+}
+
+==>
+
+Program(Func(Ident,Param(Ident,Matrix(Dim(Ident),Dim(Ident),Semiring)),Semiring,Return(NvalsExpr(Ident))))
+
+# arith (+ *)
+func arith(a:int, b:int, c:int) -> int {
+  return a + b * c;
+}
+
+==>
+
+Program(Func(Ident,Param(Ident,Semiring),Param(Ident,Semiring),Param(Ident,Semiring),Semiring,Return(AddExpr(Ident,MulExpr(Ident,Ident)))))
+
+# arith (- /)
+func arith(a:int, b:int, c:int) -> int {
+  return a - b / c;
+}
+
+==>
+
+Program(Func(Ident,Param(Ident,Semiring),Param(Ident,Semiring),Param(Ident,Semiring),Semiring,Return(SubExpr(Ident,DivExpr(Ident,Div,Ident)))))
+
+# compare (==)
+func compare(a:int, b:int) -> bool {
+  return a == b;
+}
+
+==>
+
+Program(Func(Ident,Param(Ident,Semiring),Param(Ident,Semiring),Semiring,Return(EqExpr(Ident,Ident))))
+
+# compare (!=)
+func compare(a:int, b:int) -> bool {
+  return a != b;
+}
+
+==>
+
+Program(Func(Ident,Param(Ident,Semiring),Param(Ident,Semiring),Semiring,Return(NeExpr(Ident,Ident))))
+
+# compare (<)
+func compare(a:int, b:int) -> bool {
+  return a < b;
+}
+
+==>
+
+Program(Func(Ident,Param(Ident,Semiring),Param(Ident,Semiring),Semiring,Return(LtExpr(Ident,Ident))))
+
+# compare (>)
+func compare(a:int, b:int) -> bool {
+  return a > b;
+}
+
+==>
+
+Program(Func(Ident,Param(Ident,Semiring),Param(Ident,Semiring),Semiring,Return(GtExpr(Ident,Ident))))
+
+# compare (<=)
+func compare(a:int, b:int) -> bool {
+  return a <= b;
+}
+
+==>
+
+Program(Func(Ident,Param(Ident,Semiring),Param(Ident,Semiring),Semiring,Return(LteExpr(Ident,Ident))))
+
+# compare (>=)
+func compare(a:int, b:int) -> bool {
+  return a >= b;
+}
+
+==>
+
+Program(Func(Ident,Param(Ident,Semiring),Param(Ident,Semiring),Semiring,Return(GteExpr(Ident,Ident))))
+
+# Not
+func not(a:bool) -> bool {
+  return !a;
+}
+
+==>
+
+Program(Func(Ident,Param(Ident,Semiring),Semiring,Return(NotExpr(Ident))))
+
+# Negation
+func neg(a:int) -> int {
+  return -a;
+}
+
+==>
+
+Program(Func(Ident,Param(Ident,Semiring),Semiring,Return(NegExpr(Ident))))
+
+# Matrix constructor
+func matrix(m: Matrix<r, c, int>) -> Matrix<r, c, int> {
+  return Matrix<int>(m.nrows, m.ncols);
+}
+
+==>
+
+Program(Func(Ident,Param(Ident,Matrix(Dim(Ident),Dim(Ident),Semiring)),Matrix(Dim(Ident),Dim(Ident),Semiring),Return(MatrixExpr(Semiring,NrowsExpr(Ident),NcolsExpr(Ident)))))
+
+# Vector constructor
+func vector(v: Vector<s, int>) -> Vector<s, int> {
+  return Vector<int>(v.nrows);
+}
+
+==>
+
+Program(Func(Ident,Param(Ident,Vector(Dim(Ident),Semiring)),Vector(Dim(Ident),Semiring),Return(VectorExpr(Semiring,NrowsExpr(Ident)))))
+
+# Diagonal
+func diagonal(a: Vector<s, int>) -> Matrix<s, s, int> {
+  return diag(a);
+}
+
+==>
+
+Program(Func(Ident,Param(Ident,Vector(Dim(Ident),Semiring)),Matrix(Dim(Ident),Dim(Ident),Semiring),Return(DiagExpr(Ident))))
+
+# Apply
+func applyOp(a: Matrix<s, s, int>) -> Matrix<s, s, int> {
+  return apply(add, a);
+}
+
+==>
+
+Program(Func(Ident,Param(Ident,Matrix(Dim(Ident),Dim(Ident),Semiring)),Matrix(Dim(Ident),Dim(Ident),Semiring),Return(ApplyExpr(Ident,Ident))))
+
+# Apply (extra arg)
+func applyOpAcc(a: Matrix<s, s, int>, b: int) -> Matrix<s, s, int> {
+  return apply(add, a, b);
+}
+
+==>
+
+Program(Func(Ident,Param(Ident,Matrix(Dim(Ident),Dim(Ident),Semiring)),Param(Ident,Semiring),Matrix(Dim(Ident),Dim(Ident),Semiring),Return(ApplyExpr(Ident,Ident,Ident))))
+
+# Select
+func selectOp(a: Matrix<s, s, int>) -> Matrix<s, s, int> {
+  return select(pred, a);
+}
+
+==>
+
+Program(Func(Ident,Param(Ident,Matrix(Dim(Ident),Dim(Ident),Semiring)),Matrix(Dim(Ident),Dim(Ident),Semiring),Return(SelectExpr(Ident,Ident))))
+
+# Select (extra arg)
+func selectOpThresh(a: Matrix<s, s, int>, t: int) -> Matrix<s, s, int> {
+  return select(pred, a, t);
+}
+
+==>
+
+Program(Func(Ident,Param(Ident,Matrix(Dim(Ident),Dim(Ident),Semiring)),Param(Ident,Semiring),Matrix(Dim(Ident),Dim(Ident),Semiring),Return(SelectExpr(Ident,Ident,Ident))))
+
+# Lower triangular
+func lowerTri(a: Matrix<s, s, int>) -> Matrix<s, s, int> {
+  return tril(a);
+}
+
+==>
+
+Program(Func(Ident,Param(Ident,Matrix(Dim(Ident),Dim(Ident),Semiring)),Matrix(Dim(Ident),Dim(Ident),Semiring),Return(TrilExpr(Ident))))
+
+# Upper triangular
+func upperTri(a: Matrix<s, s, int>) -> Matrix<s, s, int> {
+  return triu(a);
+}
+
+==>
+
+Program(Func(Ident,Param(Ident,Matrix(Dim(Ident),Dim(Ident),Semiring)),Matrix(Dim(Ident),Dim(Ident),Semiring),Return(TriuExpr(Ident))))
+
+# Reduce rows
+func reduceR(a: Matrix<s, s, int>) -> Vector<s, int> {
+  return reduceRows(a);
+}
+
+==>
+
+Program(Func(Ident,Param(Ident,Matrix(Dim(Ident),Dim(Ident),Semiring)),Vector(Dim(Ident),Semiring),Return(ReduceRowsExpr(Ident))))
+
+# Reduce columns
+func reduceC(a: Matrix<s, s, int>) -> Matrix<1, s, int> {
+  return reduceCols(a);
+}
+
+==>
+
+Program(Func(Ident,Param(Ident,Matrix(Dim(Ident),Dim(Ident),Semiring)),Matrix(Dim(DimOne),Dim(Ident),Semiring),Return(ReduceColsExpr(Ident))))
+
+# Reduce all
+func reduceAll(a: Matrix<s, s, int>) -> int {
+  return reduce(a);
+}
+
+==>
+
+Program(Func(Ident,Param(Ident,Matrix(Dim(Ident),Dim(Ident),Semiring)),Semiring,Return(ReduceExpr(Ident))))
+
+# Cast
+func castType(a: int) -> real {
+  return cast<real>(a);
+}
+
+==>
+
+Program(Func(Ident,Param(Ident,Semiring),Semiring,Return(CastExpr(Semiring,Ident))))
+
+# Zero
+func zeroVal() -> int {
+  return zero(int);
+}
+
+==>
+
+Program(Func(Ident,Semiring,Return(ZeroExpr(Semiring))))
+
+# One
+func oneVal() -> int {
+  return one(int);
+}
+
+==>
+
+Program(Func(Ident,Semiring,Return(OneExpr(Semiring))))
+
+# Pick any
+func pickAnyVal(a: Matrix<s, s, int>) -> int {
+  return pickAny(a);
+}
+
+==>
+
+Program(Func(Ident,Param(Ident,Matrix(Dim(Ident),Dim(Ident),Semiring)),Semiring,Return(PickAnyExpr(Ident))))

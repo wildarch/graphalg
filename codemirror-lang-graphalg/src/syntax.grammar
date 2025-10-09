@@ -51,13 +51,48 @@ until {
   @specialize<Ident, "until"> expr ";"
 }
 
+@precedence { 
+  dot @left,  
+  times @left
+  plus @left,
+  compare @left
+  ewise @left
+}
+
 expr {
-  Ident
+  "(" expr ")"
+  | Ident
+  | TransExpr { expr !dot "." "T" }
+  | NrowsExpr { expr !dot "." "nrows" }
+  | NcolsExpr { expr !dot "." "ncols" }
+  | NvalsExpr { expr !dot "." "nvals" }
+  | AddExpr { expr !plus "+" expr }
+  | SubExpr { expr !plus "-" expr }
+  | MulExpr { expr !times "*" expr }
+  | DivExpr { expr !times Div expr }
+  | EqExpr { expr !compare "==" expr }
+  | NeExpr { expr !compare "!=" expr }
+  | LtExpr { expr !compare "<" expr }
+  | GtExpr { expr !compare ">" expr }
+  | LteExpr { expr !compare "<=" expr }
+  | GteExpr { expr !compare ">=" expr }
+  | NotExpr { "!" expr }
+  | NegExpr { "-" expr }
+  | MatrixExpr { @specialize<Ident, "Matrix"> "<" Semiring ">" "(" expr "," expr ")" }
+  | VectorExpr { @specialize<Ident, "Vector"> "<" Semiring ">" "(" expr ")" }
+  | DiagExpr { @specialize<Ident, "diag"> "(" expr ")" }
+  | ApplyExpr { @specialize<Ident, "apply"> "(" Ident "," expr ("," expr)? ")" }
+  | SelectExpr { @specialize<Ident, "select"> "(" Ident "," expr ("," expr)? ")" }
+  | TrilExpr { @specialize<Ident, "tril"> "(" expr ")" }
+  | TriuExpr { @specialize<Ident, "triu"> "(" expr ")" }
+  | ReduceRowsExpr { @specialize<Ident, "reduceRows"> "(" expr ")" }
+  | ReduceColsExpr { @specialize<Ident, "reduceCols"> "(" expr ")" }
+  | ReduceExpr { @specialize<Ident, "reduce"> "(" expr ")" }
+  | CastExpr { @specialize<Ident, "cast"> "<" Semiring ">" "(" expr ")" }
   | LiteralExpr { Semiring "(" literal ")" }
-  | TransExpr { expr "." "T" }
-  | NrowsExpr { expr "." "nrows" }
-  | NcolsExpr { expr "." "ncols" }
-  | NvalsExpr { expr "." "nvals" }
+  | ZeroExpr { @specialize<Ident, "zero"> "(" Semiring ")" }
+  | OneExpr { @specialize<Ident, "one"> "(" Semiring ")" }
+  | PickAnyExpr { @specialize<Ident, "pickAny"> "(" expr ")" }
 }
 
 literal {
@@ -86,6 +121,9 @@ Semiring {
 
   space { @whitespace+ }
   Comment { "//" ![\n]* }
+
+  Div { "/" }
+  @precedence { Comment, Div }
 }
 
 @detectDelim
