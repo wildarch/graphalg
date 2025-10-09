@@ -1,0 +1,10 @@
+{
+  "dependencies": {
+    "@codemirror/lang-javascript": "^6.2.4",
+    "@lezer/generator": "^1.8.0",
+    "@replit/codemirror-vim": "^6.3.0",
+    "@rollup/plugin-node-resolve": "^16.0.2",
+    "codemirror": "^6.0.2",
+    "rollup": "^4.52.4"
+  }
+}
