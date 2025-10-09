@@ -1,0 +1,91 @@
+@top Program { Func* }
+
+Func {
+  "func" Ident params "->" type block
+}
+
+params {
+  "(" ")"
+  | "(" Param ("," Param)* ")"
+}
+
+Param {
+  Ident ":" type
+}
+
+type {
+  Semiring
+  | Matrix { @specialize<Ident, "Matrix"> "<" Dim "," Dim "," Semiring ">" }
+  | Vector { @specialize<Ident, "Vector"> "<" Dim "," Semiring ">" }
+}
+
+Dim {
+  DimOne { "1" } | Ident
+}
+
+block {
+  "{" stmt* "}"
+}
+
+stmt {
+  Assign { Ident mask? fill? "=" expr ";" }
+  | Accum { Ident "+" "=" expr ";" }
+  | For { @specialize<Ident, "for"> Ident "in" range block until? }
+  | Return { @specialize<Ident, "return"> expr ";" }
+}
+
+mask {
+  Mask { "<" "!"? Ident ">" }
+}
+
+fill {
+  Fill { "[" ":" ("," ":")? "]" }
+}
+
+range {
+  RangeConst { expr ":" expr }
+  | RangeDim { expr }
+}
+
+until {
+  @specialize<Ident, "until"> expr ";"
+}
+
+expr {
+  Ident
+  | LiteralExpr { Semiring "(" literal ")" }
+  | TransExpr { expr "." "T" }
+  | NrowsExpr { expr "." "nrows" }
+  | NcolsExpr { expr "." "ncols" }
+  | NvalsExpr { expr "." "nvals" }
+}
+
+literal {
+  Boolean | Number 
+}
+
+Semiring {
+  @specialize<Ident, "bool">
+  | @specialize<Ident, "int">
+  | @specialize<Ident, "real">
+  | @specialize<Ident, "trop_int">
+  | @specialize<Ident, "trop_real">
+  | @specialize<Ident, "max_trop_int">
+}
+
+@skip { space | Comment }
+
+@tokens {
+  
+  Ident { @asciiLetter $[a-zA-Z0-9_']* }
+
+  Boolean { "true" | "false" }
+  Number { '-'? int frac? }
+  int  { '0' | $[1-9] @digit* }
+  frac { '.' @digit+ }
+
+  space { @whitespace+ }
+  Comment { "//" ![\n]* }
+}
+
+@detectDelim

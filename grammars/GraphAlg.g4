@@ -1,3 +1,4 @@
+// ANTLR4 grammar
 grammar GraphAlg;
 
 program: func*;

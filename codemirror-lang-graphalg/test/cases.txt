@@ -1,0 +1,104 @@
+# Func (no params)
+
+func NoParams() -> int {
+  return int(42);
+}
+
+==>
+
+Program(Func(Ident,Semiring,Return(LiteralExpr(Semiring,Number))))
+
+# Func (one param)
+
+func OneParam(i:int) -> int {
+  return int(42);
+}
+
+==>
+
+Program(Func(Ident,Param(Ident,Semiring),Semiring,Return(LiteralExpr(Semiring,Number))))
+
+# Func (two params param)
+
+func OneParam(i:int, j:int) -> int {
+  return int(42);
+}
+
+==>
+
+Program(Func(Ident,Param(Ident,Semiring),Param(Ident,Semiring),Semiring,Return(LiteralExpr(Semiring,Number))))
+
+# Type (Matrix)
+
+func Mat(a: Matrix<s, 1, int>) -> int {
+  return int(42);
+}
+
+==>
+
+Program(Func(Ident,Param(Ident,Matrix(Dim(Ident),Dim(DimOne),Semiring)),Semiring,Return(LiteralExpr(Semiring,Number))))
+
+# Type (Vector)
+
+func Vec(a: Vector<s, int>) -> int {
+  return int(42);
+}
+
+==>
+
+Program(Func(Ident,Param(Ident,Vector(Dim(Ident),Semiring)),Semiring,Return(LiteralExpr(Semiring,Number))))
+
+# Assign (plain)
+
+func Assign(a: int) -> int {
+  b = a;
+  return b;
+}
+
+==>
+
+Program(Func(Ident,Param(Ident,Semiring),Semiring,Assign(Ident,Ident),Return(Ident)))
+
+# Assign (mask)
+
+func Assign(a: Vector<s, int>, m: Vector<s, int>, b: Vector<s, int>) -> Vector<s, int> {
+  a<m> = b;
+  return a;
+}
+
+==>
+
+Program(Func(Ident,Param(Ident,Vector(Dim(Ident),Semiring)),Param(Ident,Vector(Dim(Ident),Semiring)),Param(Ident,Vector(Dim(Ident),Semiring)),Vector(Dim(Ident),Semiring),Assign(Ident,Mask(Ident),Ident),Return(Ident)))
+
+# Assign (fill)
+
+func Assign(a: Vector<s, int>) -> Vector<s, int> {
+  a[:] = int(42);
+  return a;
+}
+
+==>
+
+Program(Func(Ident,Param(Ident,Vector(Dim(Ident),Semiring)),Vector(Dim(Ident),Semiring),Assign(Ident,Fill,LiteralExpr(Semiring,Number)),Return(Ident)))
+
+# For (const)
+func ForConst() -> int {
+  for i in int(0):int(10) {
+  }
+  return int(42);
+}
+
+==>
+
+Program(Func(Ident,Semiring,For(Ident,RangeConst(LiteralExpr(Semiring,Number),LiteralExpr(Semiring,Number))),Return(LiteralExpr(Semiring,Number))))
+
+# For (dim)
+func ForDim(a: Matrix<s, s, int>) -> Matrix<s, s, int> {
+  for i in a.nrows {
+  }
+  return a;
+}
+
+==>
+
+Program(Func(Ident,Param(Ident,Matrix(Dim(Ident),Dim(Ident),Semiring)),Matrix(Dim(Ident),Dim(Ident),Semiring),For(Ident,RangeDim(NrowsExpr(Ident))),Return(Ident)))
