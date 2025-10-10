@@ -6,7 +6,7 @@ func NoParams() -> int {
 
 ==>
 
-Program(Func(Ident,Semiring,Return(LiteralExpr(Semiring,Number))))
+Program(Func(Ident,Semiring,Block(LBrace,Return(LiteralExpr(Semiring,Number)),RBrace)))
 
 # Func (one param)
 
@@ -16,7 +16,7 @@ func OneParam(i:int) -> int {
 
 ==>
 
-Program(Func(Ident,Param(Ident,Semiring),Semiring,Return(LiteralExpr(Semiring,Number))))
+Program(Func(Ident,Param(Ident,Semiring),Semiring,Block(LBrace,Return(LiteralExpr(Semiring,Number)),RBrace)))
 
 # Func (two params param)
 
@@ -26,7 +26,7 @@ func OneParam(i:int, j:int) -> int {
 
 ==>
 
-Program(Func(Ident,Param(Ident,Semiring),Param(Ident,Semiring),Semiring,Return(LiteralExpr(Semiring,Number))))
+Program(Func(Ident,Param(Ident,Semiring),Param(Ident,Semiring),Semiring,Block(LBrace,Return(LiteralExpr(Semiring,Number)),RBrace)))
 
 # Type (Matrix)
 
@@ -36,7 +36,7 @@ func Mat(a: Matrix<s, 1, int>) -> int {
 
 ==>
 
-Program(Func(Ident,Param(Ident,Matrix(Dim(Ident),Dim(DimOne),Semiring)),Semiring,Return(LiteralExpr(Semiring,Number))))
+Program(Func(Ident,Param(Ident,MatrixType(Matrix,Dim(Ident),Dim(DimOne),Semiring)),Semiring,Block(LBrace,Return(LiteralExpr(Semiring,Number)),RBrace)))
 
 # Type (Vector)
 
@@ -46,7 +46,7 @@ func Vec(a: Vector<s, int>) -> int {
 
 ==>
 
-Program(Func(Ident,Param(Ident,Vector(Dim(Ident),Semiring)),Semiring,Return(LiteralExpr(Semiring,Number))))
+Program(Func(Ident,Param(Ident,VectorType(Vector,Dim(Ident),Semiring)),Semiring,Block(LBrace,Return(LiteralExpr(Semiring,Number)),RBrace)))
 
 # Assign (plain)
 
@@ -57,7 +57,7 @@ func Assign(a: int) -> int {
 
 ==>
 
-Program(Func(Ident,Param(Ident,Semiring),Semiring,Assign(Ident,Ident),Return(Ident)))
+Program(Func(Ident,Param(Ident,Semiring),Semiring,Block(LBrace,Assign(Ident,Ident),Return(Ident),RBrace)))
 
 # Assign (mask)
 
@@ -68,7 +68,7 @@ func Assign(a: Vector<s, int>, m: Vector<s, int>, b: Vector<s, int>) -> Vector<s
 
 ==>
 
-Program(Func(Ident,Param(Ident,Vector(Dim(Ident),Semiring)),Param(Ident,Vector(Dim(Ident),Semiring)),Param(Ident,Vector(Dim(Ident),Semiring)),Vector(Dim(Ident),Semiring),Assign(Ident,Mask(Ident),Ident),Return(Ident)))
+Program(Func(Ident,Param(Ident,VectorType(Vector,Dim(Ident),Semiring)),Param(Ident,VectorType(Vector,Dim(Ident),Semiring)),Param(Ident,VectorType(Vector,Dim(Ident),Semiring)),VectorType(Vector,Dim(Ident),Semiring),Block(LBrace,Assign(Ident,Mask(Ident),Ident),Return(Ident),RBrace)))
 
 # Assign (mask with negation) 
 func maskNeg(a: Vector<s, int>, m: Vector<s, int>, b: Vector<s, int>) -> Vector<s, int> {
@@ -78,7 +78,7 @@ func maskNeg(a: Vector<s, int>, m: Vector<s, int>, b: Vector<s, int>) -> Vector<
 
 ==>
 
-Program(Func(Ident,Param(Ident,Vector(Dim(Ident),Semiring)),Param(Ident,Vector(Dim(Ident),Semiring)),Param(Ident,Vector(Dim(Ident),Semiring)),Vector(Dim(Ident),Semiring),Assign(Ident,Mask(Ident),Ident),Return(Ident)))
+Program(Func(Ident,Param(Ident,VectorType(Vector,Dim(Ident),Semiring)),Param(Ident,VectorType(Vector,Dim(Ident),Semiring)),Param(Ident,VectorType(Vector,Dim(Ident),Semiring)),VectorType(Vector,Dim(Ident),Semiring),Block(LBrace,Assign(Ident,Mask(Not,Ident),Ident),Return(Ident),RBrace)))
 
 # Assign (fill)
 
@@ -89,7 +89,7 @@ func Assign(a: Vector<s, int>) -> Vector<s, int> {
 
 ==>
 
-Program(Func(Ident,Param(Ident,Vector(Dim(Ident),Semiring)),Vector(Dim(Ident),Semiring),Assign(Ident,Fill,LiteralExpr(Semiring,Number)),Return(Ident)))
+Program(Func(Ident,Param(Ident,VectorType(Vector,Dim(Ident),Semiring)),VectorType(Vector,Dim(Ident),Semiring),Block(LBrace,Assign(Ident,Fill,LiteralExpr(Semiring,Number)),Return(Ident),RBrace)))
 
 # Accumulate
 func accumulate(a: Vector<s, int>, b: Vector<s, int>) -> Vector<s, int> {
@@ -99,7 +99,7 @@ func accumulate(a: Vector<s, int>, b: Vector<s, int>) -> Vector<s, int> {
 
 ==>
 
-Program(Func(Ident,Param(Ident,Vector(Dim(Ident),Semiring)),Param(Ident,Vector(Dim(Ident),Semiring)),Vector(Dim(Ident),Semiring),Accum(Ident,Ident),Return(Ident)))
+Program(Func(Ident,Param(Ident,VectorType(Vector,Dim(Ident),Semiring)),Param(Ident,VectorType(Vector,Dim(Ident),Semiring)),VectorType(Vector,Dim(Ident),Semiring),Block(LBrace,Accum(Ident,Ident),Return(Ident),RBrace)))
 
 # For (const)
 func ForConst() -> int {
@@ -110,7 +110,7 @@ func ForConst() -> int {
 
 ==>
 
-Program(Func(Ident,Semiring,For(Ident,RangeConst(LiteralExpr(Semiring,Number),LiteralExpr(Semiring,Number))),Return(LiteralExpr(Semiring,Number))))
+Program(Func(Ident,Semiring,Block(LBrace,For(Ident,RangeConst(LiteralExpr(Semiring,Number),LiteralExpr(Semiring,Number)),Block(LBrace,RBrace)),Return(LiteralExpr(Semiring,Number)),RBrace)))
 
 # For (dim)
 func ForDim(a: Matrix<s, s, int>) -> Matrix<s, s, int> {
@@ -121,7 +121,7 @@ func ForDim(a: Matrix<s, s, int>) -> Matrix<s, s, int> {
 
 ==>
 
-Program(Func(Ident,Param(Ident,Matrix(Dim(Ident),Dim(Ident),Semiring)),Matrix(Dim(Ident),Dim(Ident),Semiring),For(Ident,RangeDim(NrowsExpr(Ident))),Return(Ident)))
+Program(Func(Ident,Param(Ident,MatrixType(Matrix,Dim(Ident),Dim(Ident),Semiring)),MatrixType(Matrix,Dim(Ident),Dim(Ident),Semiring),Block(LBrace,For(Ident,RangeDim(PropExpr(Ident,Dot,Property)),Block(LBrace,RBrace)),Return(Ident),RBrace)))
 
 # For with until
 func forUntil(a: Matrix<s, s, int>) -> Matrix<s, s, int> {
@@ -132,7 +132,7 @@ func forUntil(a: Matrix<s, s, int>) -> Matrix<s, s, int> {
 
 ==>
 
-Program(Func(Ident,Param(Ident,Matrix(Dim(Ident),Dim(Ident),Semiring)),Matrix(Dim(Ident),Dim(Ident),Semiring),For(Ident,RangeDim(NrowsExpr(Ident)),LiteralExpr(Semiring,Boolean)),Return(Ident)))
+Program(Func(Ident,Param(Ident,MatrixType(Matrix,Dim(Ident),Dim(Ident),Semiring)),MatrixType(Matrix,Dim(Ident),Dim(Ident),Semiring),Block(LBrace,For(Ident,RangeDim(PropExpr(Ident,Dot,Property)),Block(LBrace,RBrace),Until(LiteralExpr(Semiring,Boolean))),Return(Ident),RBrace)))
 
 # Transpose
 func Trans(a: Matrix<s, s, int>) -> Matrix<s, s, int> {
@@ -141,7 +141,7 @@ func Trans(a: Matrix<s, s, int>) -> Matrix<s, s, int> {
 
 ==>
 
-Program(Func(Ident,Param(Ident,Matrix(Dim(Ident),Dim(Ident),Semiring)),Matrix(Dim(Ident),Dim(Ident),Semiring),Return(TransExpr(Ident))))
+Program(Func(Ident,Param(Ident,MatrixType(Matrix,Dim(Ident),Dim(Ident),Semiring)),MatrixType(Matrix,Dim(Ident),Dim(Ident),Semiring),Block(LBrace,Return(PropExpr(Ident,Dot,Property)),RBrace)))
 
 # nrows
 func nrows(a: Matrix<s, s, int>) -> int {
@@ -150,7 +150,7 @@ func nrows(a: Matrix<s, s, int>) -> int {
 
 ==>
 
-Program(Func(Ident,Param(Ident,Matrix(Dim(Ident),Dim(Ident),Semiring)),Semiring,Return(NrowsExpr(Ident))))
+Program(Func(Ident,Param(Ident,MatrixType(Matrix,Dim(Ident),Dim(Ident),Semiring)),Semiring,Block(LBrace,Return(PropExpr(Ident,Dot,Property)),RBrace)))
 
 # ncols
 func ncols(a: Matrix<s, s, int>) -> int {
@@ -159,7 +159,7 @@ func ncols(a: Matrix<s, s, int>) -> int {
 
 ==>
 
-Program(Func(Ident,Param(Ident,Matrix(Dim(Ident),Dim(Ident),Semiring)),Semiring,Return(NcolsExpr(Ident))))
+Program(Func(Ident,Param(Ident,MatrixType(Matrix,Dim(Ident),Dim(Ident),Semiring)),Semiring,Block(LBrace,Return(PropExpr(Ident,Dot,Property)),RBrace)))
 
 # nvals
 func nvals(a: Matrix<s, s, int>) -> int {
@@ -168,7 +168,7 @@ func nvals(a: Matrix<s, s, int>) -> int {
 
 ==>
 
-Program(Func(Ident,Param(Ident,Matrix(Dim(Ident),Dim(Ident),Semiring)),Semiring,Return(NvalsExpr(Ident))))
+Program(Func(Ident,Param(Ident,MatrixType(Matrix,Dim(Ident),Dim(Ident),Semiring)),Semiring,Block(LBrace,Return(PropExpr(Ident,Dot,Property)),RBrace)))
 
 # arith (+ *)
 func arith(a:int, b:int, c:int) -> int {
@@ -177,7 +177,7 @@ func arith(a:int, b:int, c:int) -> int {
 
 ==>
 
-Program(Func(Ident,Param(Ident,Semiring),Param(Ident,Semiring),Param(Ident,Semiring),Semiring,Return(AddExpr(Ident,MulExpr(Ident,Ident)))))
+Program(Func(Ident,Param(Ident,Semiring),Param(Ident,Semiring),Param(Ident,Semiring),Semiring,Block(LBrace,Return(AddExpr(Ident,Plus,MulExpr(Ident,Times,Ident))),RBrace)))
 
 # arith (- /)
 func arith(a:int, b:int, c:int) -> int {
@@ -186,7 +186,7 @@ func arith(a:int, b:int, c:int) -> int {
 
 ==>
 
-Program(Func(Ident,Param(Ident,Semiring),Param(Ident,Semiring),Param(Ident,Semiring),Semiring,Return(SubExpr(Ident,DivExpr(Ident,Div,Ident)))))
+Program(Func(Ident,Param(Ident,Semiring),Param(Ident,Semiring),Param(Ident,Semiring),Semiring,Block(LBrace,Return(SubExpr(Ident,Minus,DivExpr(Ident,Div,Ident))),RBrace)))
 
 # compare (==)
 func compare(a:int, b:int) -> bool {
@@ -195,7 +195,7 @@ func compare(a:int, b:int) -> bool {
 
 ==>
 
-Program(Func(Ident,Param(Ident,Semiring),Param(Ident,Semiring),Semiring,Return(EqExpr(Ident,Ident))))
+Program(Func(Ident,Param(Ident,Semiring),Param(Ident,Semiring),Semiring,Block(LBrace,Return(CompareExpr(Ident,Comparator,Ident)),RBrace)))
 
 # compare (!=)
 func compare(a:int, b:int) -> bool {
@@ -204,7 +204,7 @@ func compare(a:int, b:int) -> bool {
 
 ==>
 
-Program(Func(Ident,Param(Ident,Semiring),Param(Ident,Semiring),Semiring,Return(NeExpr(Ident,Ident))))
+Program(Func(Ident,Param(Ident,Semiring),Param(Ident,Semiring),Semiring,Block(LBrace,Return(CompareExpr(Ident,Comparator,Ident)),RBrace)))
 
 # compare (<)
 func compare(a:int, b:int) -> bool {
@@ -213,7 +213,7 @@ func compare(a:int, b:int) -> bool {
 
 ==>
 
-Program(Func(Ident,Param(Ident,Semiring),Param(Ident,Semiring),Semiring,Return(LtExpr(Ident,Ident))))
+Program(Func(Ident,Param(Ident,Semiring),Param(Ident,Semiring),Semiring,Block(LBrace,Return(CompareExpr(Ident,Comparator,Ident)),RBrace)))
 
 # compare (>)
 func compare(a:int, b:int) -> bool {
@@ -222,7 +222,7 @@ func compare(a:int, b:int) -> bool {
 
 ==>
 
-Program(Func(Ident,Param(Ident,Semiring),Param(Ident,Semiring),Semiring,Return(GtExpr(Ident,Ident))))
+Program(Func(Ident,Param(Ident,Semiring),Param(Ident,Semiring),Semiring,Block(LBrace,Return(CompareExpr(Ident,Comparator,Ident)),RBrace)))
 
 # compare (<=)
 func compare(a:int, b:int) -> bool {
@@ -231,7 +231,7 @@ func compare(a:int, b:int) -> bool {
 
 ==>
 
-Program(Func(Ident,Param(Ident,Semiring),Param(Ident,Semiring),Semiring,Return(LteExpr(Ident,Ident))))
+Program(Func(Ident,Param(Ident,Semiring),Param(Ident,Semiring),Semiring,Block(LBrace,Return(CompareExpr(Ident,Comparator,Ident)),RBrace)))
 
 # compare (>=)
 func compare(a:int, b:int) -> bool {
@@ -240,7 +240,7 @@ func compare(a:int, b:int) -> bool {
 
 ==>
 
-Program(Func(Ident,Param(Ident,Semiring),Param(Ident,Semiring),Semiring,Return(GteExpr(Ident,Ident))))
+Program(Func(Ident,Param(Ident,Semiring),Param(Ident,Semiring),Semiring,Block(LBrace,Return(CompareExpr(Ident,Comparator,Ident)),RBrace)))
 
 # Not
 func not(a:bool) -> bool {
@@ -249,7 +249,7 @@ func not(a:bool) -> bool {
 
 ==>
 
-Program(Func(Ident,Param(Ident,Semiring),Semiring,Return(NotExpr(Ident))))
+Program(Func(Ident,Param(Ident,Semiring),Semiring,Block(LBrace,Return(NotExpr(Not,Ident)),RBrace)))
 
 # Negation
 func neg(a:int) -> int {
@@ -258,7 +258,7 @@ func neg(a:int) -> int {
 
 ==>
 
-Program(Func(Ident,Param(Ident,Semiring),Semiring,Return(NegExpr(Ident))))
+Program(Func(Ident,Param(Ident,Semiring),Semiring,Block(LBrace,Return(NegExpr(Minus,Ident)),RBrace)))
 
 # Matrix constructor
 func matrix(m: Matrix<r, c, int>) -> Matrix<r, c, int> {
@@ -267,7 +267,7 @@ func matrix(m: Matrix<r, c, int>) -> Matrix<r, c, int> {
 
 ==>
 
-Program(Func(Ident,Param(Ident,Matrix(Dim(Ident),Dim(Ident),Semiring)),Matrix(Dim(Ident),Dim(Ident),Semiring),Return(MatrixExpr(Semiring,NrowsExpr(Ident),NcolsExpr(Ident)))))
+Program(Func(Ident,Param(Ident,MatrixType(Matrix,Dim(Ident),Dim(Ident),Semiring)),MatrixType(Matrix,Dim(Ident),Dim(Ident),Semiring),Block(LBrace,Return(MatrixExpr(Matrix,Semiring,PropExpr(Ident,Dot,Property),PropExpr(Ident,Dot,Property))),RBrace)))
 
 # Vector constructor
 func vector(v: Vector<s, int>) -> Vector<s, int> {
@@ -276,7 +276,7 @@ func vector(v: Vector<s, int>) -> Vector<s, int> {
 
 ==>
 
-Program(Func(Ident,Param(Ident,Vector(Dim(Ident),Semiring)),Vector(Dim(Ident),Semiring),Return(VectorExpr(Semiring,NrowsExpr(Ident)))))
+Program(Func(Ident,Param(Ident,VectorType(Vector,Dim(Ident),Semiring)),VectorType(Vector,Dim(Ident),Semiring),Block(LBrace,Return(VectorExpr(Vector,Semiring,PropExpr(Ident,Dot,Property))),RBrace)))
 
 # Diagonal
 func diagonal(a: Vector<s, int>) -> Matrix<s, s, int> {
@@ -285,7 +285,7 @@ func diagonal(a: Vector<s, int>) -> Matrix<s, s, int> {
 
 ==>
 
-Program(Func(Ident,Param(Ident,Vector(Dim(Ident),Semiring)),Matrix(Dim(Ident),Dim(Ident),Semiring),Return(DiagExpr(Ident))))
+Program(Func(Ident,Param(Ident,VectorType(Vector,Dim(Ident),Semiring)),MatrixType(Matrix,Dim(Ident),Dim(Ident),Semiring),Block(LBrace,Return(CallExpr(BuiltInFunc,Ident)),RBrace)))
 
 # Apply
 func applyOp(a: Matrix<s, s, int>) -> Matrix<s, s, int> {
@@ -294,7 +294,7 @@ func applyOp(a: Matrix<s, s, int>) -> Matrix<s, s, int> {
 
 ==>
 
-Program(Func(Ident,Param(Ident,Matrix(Dim(Ident),Dim(Ident),Semiring)),Matrix(Dim(Ident),Dim(Ident),Semiring),Return(ApplyExpr(Ident,Ident))))
+Program(Func(Ident,Param(Ident,MatrixType(Matrix,Dim(Ident),Dim(Ident),Semiring)),MatrixType(Matrix,Dim(Ident),Dim(Ident),Semiring),Block(LBrace,Return(CallExpr(BuiltInFunc,Ident,Ident)),RBrace)))
 
 # Apply (extra arg)
 func applyOpAcc(a: Matrix<s, s, int>, b: int) -> Matrix<s, s, int> {
@@ -303,7 +303,7 @@ func applyOpAcc(a: Matrix<s, s, int>, b: int) -> Matrix<s, s, int> {
 
 ==>
 
-Program(Func(Ident,Param(Ident,Matrix(Dim(Ident),Dim(Ident),Semiring)),Param(Ident,Semiring),Matrix(Dim(Ident),Dim(Ident),Semiring),Return(ApplyExpr(Ident,Ident,Ident))))
+Program(Func(Ident,Param(Ident,MatrixType(Matrix,Dim(Ident),Dim(Ident),Semiring)),Param(Ident,Semiring),MatrixType(Matrix,Dim(Ident),Dim(Ident),Semiring),Block(LBrace,Return(CallExpr(BuiltInFunc,Ident,Ident,Ident)),RBrace)))
 
 # Select
 func selectOp(a: Matrix<s, s, int>) -> Matrix<s, s, int> {
@@ -312,7 +312,7 @@ func selectOp(a: Matrix<s, s, int>) -> Matrix<s, s, int> {
 
 ==>
 
-Program(Func(Ident,Param(Ident,Matrix(Dim(Ident),Dim(Ident),Semiring)),Matrix(Dim(Ident),Dim(Ident),Semiring),Return(SelectExpr(Ident,Ident))))
+Program(Func(Ident,Param(Ident,MatrixType(Matrix,Dim(Ident),Dim(Ident),Semiring)),MatrixType(Matrix,Dim(Ident),Dim(Ident),Semiring),Block(LBrace,Return(CallExpr(BuiltInFunc,Ident,Ident)),RBrace)))
 
 # Select (extra arg)
 func selectOpThresh(a: Matrix<s, s, int>, t: int) -> Matrix<s, s, int> {
@@ -321,7 +321,7 @@ func selectOpThresh(a: Matrix<s, s, int>, t: int) -> Matrix<s, s, int> {
 
 ==>
 
-Program(Func(Ident,Param(Ident,Matrix(Dim(Ident),Dim(Ident),Semiring)),Param(Ident,Semiring),Matrix(Dim(Ident),Dim(Ident),Semiring),Return(SelectExpr(Ident,Ident,Ident))))
+Program(Func(Ident,Param(Ident,MatrixType(Matrix,Dim(Ident),Dim(Ident),Semiring)),Param(Ident,Semiring),MatrixType(Matrix,Dim(Ident),Dim(Ident),Semiring),Block(LBrace,Return(CallExpr(BuiltInFunc,Ident,Ident,Ident)),RBrace)))
 
 # Lower triangular
 func lowerTri(a: Matrix<s, s, int>) -> Matrix<s, s, int> {
@@ -330,7 +330,7 @@ func lowerTri(a: Matrix<s, s, int>) -> Matrix<s, s, int> {
 
 ==>
 
-Program(Func(Ident,Param(Ident,Matrix(Dim(Ident),Dim(Ident),Semiring)),Matrix(Dim(Ident),Dim(Ident),Semiring),Return(TrilExpr(Ident))))
+Program(Func(Ident,Param(Ident,MatrixType(Matrix,Dim(Ident),Dim(Ident),Semiring)),MatrixType(Matrix,Dim(Ident),Dim(Ident),Semiring),Block(LBrace,Return(CallExpr(BuiltInFunc,Ident)),RBrace)))
 
 # Upper triangular
 func upperTri(a: Matrix<s, s, int>) -> Matrix<s, s, int> {
@@ -339,7 +339,7 @@ func upperTri(a: Matrix<s, s, int>) -> Matrix<s, s, int> {
 
 ==>
 
-Program(Func(Ident,Param(Ident,Matrix(Dim(Ident),Dim(Ident),Semiring)),Matrix(Dim(Ident),Dim(Ident),Semiring),Return(TriuExpr(Ident))))
+Program(Func(Ident,Param(Ident,MatrixType(Matrix,Dim(Ident),Dim(Ident),Semiring)),MatrixType(Matrix,Dim(Ident),Dim(Ident),Semiring),Block(LBrace,Return(CallExpr(BuiltInFunc,Ident)),RBrace)))
 
 # Reduce rows
 func reduceR(a: Matrix<s, s, int>) -> Vector<s, int> {
@@ -348,7 +348,7 @@ func reduceR(a: Matrix<s, s, int>) -> Vector<s, int> {
 
 ==>
 
-Program(Func(Ident,Param(Ident,Matrix(Dim(Ident),Dim(Ident),Semiring)),Vector(Dim(Ident),Semiring),Return(ReduceRowsExpr(Ident))))
+Program(Func(Ident,Param(Ident,MatrixType(Matrix,Dim(Ident),Dim(Ident),Semiring)),VectorType(Vector,Dim(Ident),Semiring),Block(LBrace,Return(CallExpr(BuiltInFunc,Ident)),RBrace)))
 
 # Reduce columns
 func reduceC(a: Matrix<s, s, int>) -> Matrix<1, s, int> {
@@ -357,7 +357,7 @@ func reduceC(a: Matrix<s, s, int>) -> Matrix<1, s, int> {
 
 ==>
 
-Program(Func(Ident,Param(Ident,Matrix(Dim(Ident),Dim(Ident),Semiring)),Matrix(Dim(DimOne),Dim(Ident),Semiring),Return(ReduceColsExpr(Ident))))
+Program(Func(Ident,Param(Ident,MatrixType(Matrix,Dim(Ident),Dim(Ident),Semiring)),MatrixType(Matrix,Dim(DimOne),Dim(Ident),Semiring),Block(LBrace,Return(CallExpr(BuiltInFunc,Ident)),RBrace)))
 
 # Reduce all
 func reduceAll(a: Matrix<s, s, int>) -> int {
@@ -366,7 +366,7 @@ func reduceAll(a: Matrix<s, s, int>) -> int {
 
 ==>
 
-Program(Func(Ident,Param(Ident,Matrix(Dim(Ident),Dim(Ident),Semiring)),Semiring,Return(ReduceExpr(Ident))))
+Program(Func(Ident,Param(Ident,MatrixType(Matrix,Dim(Ident),Dim(Ident),Semiring)),Semiring,Block(LBrace,Return(CallExpr(BuiltInFunc,Ident)),RBrace)))
 
 # Cast
 func castType(a: int) -> real {
@@ -375,7 +375,7 @@ func castType(a: int) -> real {
 
 ==>
 
-Program(Func(Ident,Param(Ident,Semiring),Semiring,Return(CastExpr(Semiring,Ident))))
+Program(Func(Ident,Param(Ident,Semiring),Semiring,Block(LBrace,Return(CastExpr(Cast,Semiring,Ident)),RBrace)))
 
 # Zero
 func zeroVal() -> int {
@@ -384,7 +384,7 @@ func zeroVal() -> int {
 
 ==>
 
-Program(Func(Ident,Semiring,Return(ZeroExpr(Semiring))))
+Program(Func(Ident,Semiring,Block(LBrace,Return(ZeroExpr(Semiring)),RBrace)))
 
 # One
 func oneVal() -> int {
@@ -393,7 +393,7 @@ func oneVal() -> int {
 
 ==>
 
-Program(Func(Ident,Semiring,Return(OneExpr(Semiring))))
+Program(Func(Ident,Semiring,Block(LBrace,Return(OneExpr(Semiring)),RBrace)))
 
 # Pick any
 func pickAnyVal(a: Matrix<s, s, int>) -> int {
@@ -402,4 +402,4 @@ func pickAnyVal(a: Matrix<s, s, int>) -> int {
 
 ==>
 
-Program(Func(Ident,Param(Ident,Matrix(Dim(Ident),Dim(Ident),Semiring)),Semiring,Return(PickAnyExpr(Ident))))
+Program(Func(Ident,Param(Ident,MatrixType(Matrix,Dim(Ident),Dim(Ident),Semiring)),Semiring,Block(LBrace,Return(CallExpr(BuiltInFunc,Ident)),RBrace)))

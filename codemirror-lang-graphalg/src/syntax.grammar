@@ -1,7 +1,7 @@
 @top Program { Func* }
 
 Func {
-  "func" Ident params "->" type block
+  "func" Ident params "->" type Block
 }
 
 params {
@@ -15,27 +15,30 @@ Param {
 
 type {
   Semiring
-  | Matrix { @specialize<Ident, "Matrix"> "<" Dim "," Dim "," Semiring ">" }
-  | Vector { @specialize<Ident, "Vector"> "<" Dim "," Semiring ">" }
+  | MatrixType { Matrix "<" Dim "," Dim "," Semiring ">" }
+  | VectorType { Vector "<" Dim "," Semiring ">" }
 }
+
+Matrix { @specialize<Ident, "Matrix"> } 
+Vector { @specialize<Ident, "Vector"> } 
 
 Dim {
   DimOne { "1" } | Ident
 }
 
-block {
-  "{" stmt* "}"
+Block {
+  LBrace stmt* RBrace
 }
 
 stmt {
   Assign { Ident mask? fill? "=" expr ";" }
   | Accum { Ident "+" "=" expr ";" }
-  | For { @specialize<Ident, "for"> Ident "in" range block until? }
+  | For { @specialize<Ident, "for"> Ident "in" range Block Until? }
   | Return { @specialize<Ident, "return"> expr ";" }
 }
 
 mask {
-  Mask { "<" "!"? Ident ">" }
+  Mask { "<" Not? Ident ">" }
 }
 
 fill {
@@ -47,7 +50,7 @@ range {
   | RangeDim { expr }
 }
 
-until {
+Until {
   @specialize<Ident, "until"> expr ";"
 }
 
@@ -62,37 +65,36 @@ until {
 expr {
   "(" expr ")"
   | Ident
-  | TransExpr { expr !dot "." "T" }
-  | NrowsExpr { expr !dot "." "nrows" }
-  | NcolsExpr { expr !dot "." "ncols" }
-  | NvalsExpr { expr !dot "." "nvals" }
-  | AddExpr { expr !plus "+" expr }
-  | SubExpr { expr !plus "-" expr }
-  | MulExpr { expr !times "*" expr }
+  | PropExpr { expr !dot Dot Property }
+  | AddExpr { expr !plus Plus expr }
+  | SubExpr { expr !plus Minus expr }
+  | MulExpr { expr !times Times expr }
   | DivExpr { expr !times Div expr }
-  | EqExpr { expr !compare "==" expr }
-  | NeExpr { expr !compare "!=" expr }
-  | LtExpr { expr !compare "<" expr }
-  | GtExpr { expr !compare ">" expr }
-  | LteExpr { expr !compare "<=" expr }
-  | GteExpr { expr !compare ">=" expr }
-  | NotExpr { "!" expr }
-  | NegExpr { "-" expr }
-  | MatrixExpr { @specialize<Ident, "Matrix"> "<" Semiring ">" "(" expr "," expr ")" }
-  | VectorExpr { @specialize<Ident, "Vector"> "<" Semiring ">" "(" expr ")" }
-  | DiagExpr { @specialize<Ident, "diag"> "(" expr ")" }
-  | ApplyExpr { @specialize<Ident, "apply"> "(" Ident "," expr ("," expr)? ")" }
-  | SelectExpr { @specialize<Ident, "select"> "(" Ident "," expr ("," expr)? ")" }
-  | TrilExpr { @specialize<Ident, "tril"> "(" expr ")" }
-  | TriuExpr { @specialize<Ident, "triu"> "(" expr ")" }
-  | ReduceRowsExpr { @specialize<Ident, "reduceRows"> "(" expr ")" }
-  | ReduceColsExpr { @specialize<Ident, "reduceCols"> "(" expr ")" }
-  | ReduceExpr { @specialize<Ident, "reduce"> "(" expr ")" }
-  | CastExpr { @specialize<Ident, "cast"> "<" Semiring ">" "(" expr ")" }
+  | CompareExpr { expr !compare Comparator expr }
+  | NotExpr { Not expr }
+  | NegExpr { Minus expr }
+  | MatrixExpr { Matrix "<" Semiring ">" "(" expr "," expr ")" }
+  | VectorExpr { Vector "<" Semiring ">" "(" expr ")" }
+  | CastExpr { Cast "<" Semiring ">" "(" expr ")" }
   | LiteralExpr { Semiring "(" literal ")" }
   | ZeroExpr { @specialize<Ident, "zero"> "(" Semiring ")" }
   | OneExpr { @specialize<Ident, "one"> "(" Semiring ")" }
-  | PickAnyExpr { @specialize<Ident, "pickAny"> "(" expr ")" }
+  | CallExpr { BuiltInFunc "(" expr ("," expr)* ")" }
+}
+
+Property { "T" | "nrows" | "ncols" | "nvals" }
+Comparator { "==" | "!=" | "<" | ">" | "<=" | ">=" }
+Cast { @specialize<Ident, "cast"> }
+BuiltInFunc {
+  @specialize<Ident, "diag">
+  | @specialize<Ident, "apply">
+  | @specialize<Ident, "select">
+  | @specialize<Ident, "tril">
+  | @specialize<Ident, "triu">
+  | @specialize<Ident, "reduceRows">
+  | @specialize<Ident, "reduceCols">
+  | @specialize<Ident, "reduce">
+  | @specialize<Ident, "pickAny">
 }
 
 literal {
@@ -122,8 +124,16 @@ Semiring {
   space { @whitespace+ }
   Comment { "//" ![\n]* }
 
+  Dot { "." }
+  Plus { "+" }
+  Minus { "-" }
+  Times { "*" }
   Div { "/" }
+  Not { "!" }
   @precedence { Comment, Div }
+
+  LBrace { "{" }
+  RBrace { "}" }
 }
 
 @detectDelim

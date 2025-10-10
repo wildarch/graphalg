@@ -1,0 +1,7 @@
+{
+    "name": "graphalg",
+    "workspaces": [
+        "website",
+        "codemirror-lang-graphalg"
+    ]
+}
