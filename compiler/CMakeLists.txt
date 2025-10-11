@@ -56,7 +56,7 @@ add_library(graphalg_lib STATIC
     src/graphalg/GraphAlgLoopAggregate.cpp
 )
 target_include_directories(graphalg_lib PUBLIC include)
-target_include_directories(graphalg_lib PUBLIC ${PROJECT_BINARY_DIR}/include)
+target_include_directories(graphalg_lib SYSTEM PRIVATE ${PROJECT_BINARY_DIR}/include)
 add_dependencies(graphalg_lib
     MLIRGraphAlgOpsIncGen
     MLIRGraphAlgPassesIncGen

@@ -11,30 +11,25 @@
 namespace graphalg {
 
 struct CallArgumentDimensions {
-    std::uint64_t rows = 1;
-    std::uint64_t cols = 1;
+  std::uint64_t rows = 1;
+  std::uint64_t cols = 1;
 };
 
 } // namespace graphalg
 
 namespace llvm::cl {
 
-template<>
+template <>
 class parser<graphalg::CallArgumentDimensions>
-        : public basic_parser<graphalg::CallArgumentDimensions> {
+    : public basic_parser<graphalg::CallArgumentDimensions> {
 public:
-    parser(Option& o) : basic_parser(o) {}
+  parser(Option &o) : basic_parser(o) {}
 
-    bool parse(
-            Option& o,
-            StringRef
-            argName,
-            StringRef arg,
-            graphalg::CallArgumentDimensions& out);
+  bool parse(Option &o, StringRef argName, StringRef arg,
+             graphalg::CallArgumentDimensions &out);
 
-    static void print(
-            llvm::raw_ostream& os,
-            const graphalg::CallArgumentDimensions& value);
+  static void print(llvm::raw_ostream &os,
+                    const graphalg::CallArgumentDimensions &value);
 };
 
 } // namespace llvm::cl
@@ -48,19 +43,15 @@ namespace graphalg {
  *
  * @return The result of applying \c op to \c lhs and \c rhs.
  */
-mlir::FailureOr<mlir::Value> createScalarOpFor(
-        mlir::Location loc,
-        BinaryOp op,
-        mlir::Value lhs,
-        mlir::Value rhs,
-        mlir::OpBuilder& builder);
+mlir::FailureOr<mlir::Value> createScalarOpFor(mlir::Location loc, BinaryOp op,
+                                               mlir::Value lhs, mlir::Value rhs,
+                                               mlir::OpBuilder &builder);
 
 #define GEN_PASS_DECL
 #include "graphalg/GraphAlgPasses.h.inc"
 
 #define GEN_PASS_REGISTRATION
 #include "graphalg/GraphAlgPasses.h.inc"
-
 
 // Testing only:
 void registerTestDensePass();

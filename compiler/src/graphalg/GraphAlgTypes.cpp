@@ -22,258 +22,220 @@
 namespace graphalg {
 
 MatrixType MatrixType::scalarOf(mlir::Type semiring) {
-    auto* ctx = semiring.getContext();
-    auto dim1 = DimAttr::getOne(ctx);
-    return MatrixType::get(ctx, dim1, dim1, semiring);
+  auto *ctx = semiring.getContext();
+  auto dim1 = DimAttr::getOne(ctx);
+  return MatrixType::get(ctx, dim1, dim1, semiring);
 }
 
-bool MatrixType::isScalar() const {
-    return isRowVector() && isColumnVector();
-}
+bool MatrixType::isScalar() const { return isRowVector() && isColumnVector(); }
 
-bool MatrixType::isRowVector() const {
-    return getRows().isOne();
-}
+bool MatrixType::isRowVector() const { return getRows().isOne(); }
 
-bool MatrixType::isColumnVector() const {
-    return getCols().isOne();
-}
+bool MatrixType::isColumnVector() const { return getCols().isOne(); }
 
 bool MatrixType::isBoolean() const {
-    return getSemiring() == SemiringTypes::forBool(getContext());
+  return getSemiring() == SemiringTypes::forBool(getContext());
 }
 
 std::pair<DimAttr, DimAttr> MatrixType::getDims() const {
-    return { getRows(), getCols() };
+  return {getRows(), getCols()};
 }
 
-MatrixType MatrixType::asScalar() {
-    return scalarOf(getSemiring());
-}
+MatrixType MatrixType::asScalar() { return scalarOf(getSemiring()); }
 
 MatrixType MatrixType::withSemiring(mlir::Type semiring) {
-    return MatrixType::get(getContext(), getRows(), getCols(), semiring);
+  return MatrixType::get(getContext(), getRows(), getCols(), semiring);
 }
 
-mlir::LogicalResult MatrixType::verify(
-        llvm::function_ref<mlir::InFlightDiagnostic()> emitError,
-        graphalg::DimAttr rows,
-        graphalg::DimAttr cols,
-        mlir::Type semiring) {
-    if (!llvm::isa<SemiringTypeInterface>(semiring)) {
-        return emitError() << semiring << " is not a semiring";
-    }
+mlir::LogicalResult
+MatrixType::verify(llvm::function_ref<mlir::InFlightDiagnostic()> emitError,
+                   graphalg::DimAttr rows, graphalg::DimAttr cols,
+                   mlir::Type semiring) {
+  if (!llvm::isa<SemiringTypeInterface>(semiring)) {
+    return emitError() << semiring << " is not a semiring";
+  }
 
-    return mlir::success();
+  return mlir::success();
 }
 
 mlir::TypedAttr TropI64Type::addIdentity() const {
-    return TropInfAttr::get(getContext(), *this);
+  return TropInfAttr::get(getContext(), *this);
 }
 
-mlir::TypedAttr TropI64Type::add(
-        mlir::TypedAttr lhs,
-        mlir::TypedAttr rhs) const {
-    if (llvm::isa<TropInfAttr>(lhs)) {
-        return rhs;
-    } else if (llvm::isa<TropInfAttr>(rhs)) {
-        return lhs;
-    }
+mlir::TypedAttr TropI64Type::add(mlir::TypedAttr lhs,
+                                 mlir::TypedAttr rhs) const {
+  if (llvm::isa<TropInfAttr>(lhs)) {
+    return rhs;
+  } else if (llvm::isa<TropInfAttr>(rhs)) {
+    return lhs;
+  }
 
-    auto lhsVal = llvm::cast<TropIntAttr>(lhs).getValue().getValue();
-    auto rhsVal = llvm::cast<TropIntAttr>(rhs).getValue().getValue();
-    auto resVal = llvm::APIntOps::smin(lhsVal, rhsVal);
-    auto intType = SemiringTypes::forInt(getContext());
-    return TropIntAttr::get(
-            getContext(),
-            *this,
-            mlir::IntegerAttr::get(intType, resVal));
+  auto lhsVal = llvm::cast<TropIntAttr>(lhs).getValue().getValue();
+  auto rhsVal = llvm::cast<TropIntAttr>(rhs).getValue().getValue();
+  auto resVal = llvm::APIntOps::smin(lhsVal, rhsVal);
+  auto intType = SemiringTypes::forInt(getContext());
+  return TropIntAttr::get(getContext(), *this,
+                          mlir::IntegerAttr::get(intType, resVal));
 }
 
 mlir::TypedAttr TropI64Type::mulIdentity() const {
-    return TropIntAttr::get(
-            getContext(),
-            *this,
-            mlir::IntegerAttr::get(SemiringTypes::forInt(getContext()), 0));
+  return TropIntAttr::get(
+      getContext(), *this,
+      mlir::IntegerAttr::get(SemiringTypes::forInt(getContext()), 0));
 }
 
-mlir::TypedAttr TropI64Type::mul(
-        mlir::TypedAttr lhs,
-        mlir::TypedAttr rhs) const {
-    if (llvm::isa<TropInfAttr>(lhs)) {
-        return lhs;
-    } else if (llvm::isa<TropInfAttr>(rhs)) {
-        return rhs;
-    }
+mlir::TypedAttr TropI64Type::mul(mlir::TypedAttr lhs,
+                                 mlir::TypedAttr rhs) const {
+  if (llvm::isa<TropInfAttr>(lhs)) {
+    return lhs;
+  } else if (llvm::isa<TropInfAttr>(rhs)) {
+    return rhs;
+  }
 
-    auto lhsVal = llvm::cast<TropIntAttr>(lhs).getValue().getValue();
-    auto rhsVal = llvm::cast<TropIntAttr>(rhs).getValue().getValue();
-    auto resVal = lhsVal + rhsVal;
-    auto intType = SemiringTypes::forInt(getContext());
-    return TropIntAttr::get(
-            getContext(),
-            *this,
-            mlir::IntegerAttr::get(intType, resVal));
+  auto lhsVal = llvm::cast<TropIntAttr>(lhs).getValue().getValue();
+  auto rhsVal = llvm::cast<TropIntAttr>(rhs).getValue().getValue();
+  auto resVal = lhsVal + rhsVal;
+  auto intType = SemiringTypes::forInt(getContext());
+  return TropIntAttr::get(getContext(), *this,
+                          mlir::IntegerAttr::get(intType, resVal));
 }
 
 mlir::TypedAttr TropF64Type::addIdentity() const {
-    return TropInfAttr::get(getContext(), *this);
+  return TropInfAttr::get(getContext(), *this);
 }
 
-mlir::TypedAttr TropF64Type::add(
-        mlir::TypedAttr lhs,
-        mlir::TypedAttr rhs) const {
-    if (llvm::isa<TropInfAttr>(lhs)) {
-        return rhs;
-    } else if (llvm::isa<TropInfAttr>(rhs)) {
-        return lhs;
-    }
+mlir::TypedAttr TropF64Type::add(mlir::TypedAttr lhs,
+                                 mlir::TypedAttr rhs) const {
+  if (llvm::isa<TropInfAttr>(lhs)) {
+    return rhs;
+  } else if (llvm::isa<TropInfAttr>(rhs)) {
+    return lhs;
+  }
 
-    auto lhsVal = llvm::cast<TropFloatAttr>(lhs).getValue().getValue();
-    auto rhsVal = llvm::cast<TropFloatAttr>(rhs).getValue().getValue();
-    auto resVal = lhsVal < rhsVal ? lhsVal : rhsVal;
-    auto realType = SemiringTypes::forReal(getContext());
-    return TropFloatAttr::get(
-            getContext(),
-            *this,
-            mlir::FloatAttr::get(realType, resVal));
+  auto lhsVal = llvm::cast<TropFloatAttr>(lhs).getValue().getValue();
+  auto rhsVal = llvm::cast<TropFloatAttr>(rhs).getValue().getValue();
+  auto resVal = lhsVal < rhsVal ? lhsVal : rhsVal;
+  auto realType = SemiringTypes::forReal(getContext());
+  return TropFloatAttr::get(getContext(), *this,
+                            mlir::FloatAttr::get(realType, resVal));
 }
 
 mlir::TypedAttr TropF64Type::mulIdentity() const {
-    return TropFloatAttr::get(
-            getContext(),
-            *this,
-            mlir::FloatAttr::get(SemiringTypes::forReal(getContext()), 0));
+  return TropFloatAttr::get(
+      getContext(), *this,
+      mlir::FloatAttr::get(SemiringTypes::forReal(getContext()), 0));
 }
 
-mlir::TypedAttr TropF64Type::mul(
-        mlir::TypedAttr lhs,
-        mlir::TypedAttr rhs) const {
-    if (llvm::isa<TropInfAttr>(lhs)) {
-        return lhs;
-    } else if (llvm::isa<TropInfAttr>(rhs)) {
-        return rhs;
-    }
+mlir::TypedAttr TropF64Type::mul(mlir::TypedAttr lhs,
+                                 mlir::TypedAttr rhs) const {
+  if (llvm::isa<TropInfAttr>(lhs)) {
+    return lhs;
+  } else if (llvm::isa<TropInfAttr>(rhs)) {
+    return rhs;
+  }
 
-    auto lhsVal = llvm::cast<TropFloatAttr>(lhs).getValue().getValue();
-    auto rhsVal = llvm::cast<TropFloatAttr>(rhs).getValue().getValue();
-    auto resVal = lhsVal + rhsVal;
-    auto realType = SemiringTypes::forReal(getContext());
-    return TropFloatAttr::get(
-            getContext(),
-            *this,
-            mlir::FloatAttr::get(realType, resVal));
+  auto lhsVal = llvm::cast<TropFloatAttr>(lhs).getValue().getValue();
+  auto rhsVal = llvm::cast<TropFloatAttr>(rhs).getValue().getValue();
+  auto resVal = lhsVal + rhsVal;
+  auto realType = SemiringTypes::forReal(getContext());
+  return TropFloatAttr::get(getContext(), *this,
+                            mlir::FloatAttr::get(realType, resVal));
 }
 
 mlir::TypedAttr TropMaxI64Type::addIdentity() const {
-    return TropInfAttr::get(getContext(), *this);
+  return TropInfAttr::get(getContext(), *this);
 }
 
-mlir::TypedAttr TropMaxI64Type::add(
-        mlir::TypedAttr lhs,
-        mlir::TypedAttr rhs) const {
-    if (llvm::isa<TropInfAttr>(lhs)) {
-        return rhs;
-    } else if (llvm::isa<TropInfAttr>(rhs)) {
-        return lhs;
-    }
+mlir::TypedAttr TropMaxI64Type::add(mlir::TypedAttr lhs,
+                                    mlir::TypedAttr rhs) const {
+  if (llvm::isa<TropInfAttr>(lhs)) {
+    return rhs;
+  } else if (llvm::isa<TropInfAttr>(rhs)) {
+    return lhs;
+  }
 
-    auto lhsVal = llvm::cast<TropIntAttr>(lhs).getValue().getValue();
-    auto rhsVal = llvm::cast<TropIntAttr>(rhs).getValue().getValue();
-    auto resVal = llvm::APIntOps::smax(lhsVal, rhsVal);
-    auto intType = SemiringTypes::forInt(getContext());
-    return TropIntAttr::get(
-            getContext(),
-            *this,
-            mlir::IntegerAttr::get(intType, resVal));
+  auto lhsVal = llvm::cast<TropIntAttr>(lhs).getValue().getValue();
+  auto rhsVal = llvm::cast<TropIntAttr>(rhs).getValue().getValue();
+  auto resVal = llvm::APIntOps::smax(lhsVal, rhsVal);
+  auto intType = SemiringTypes::forInt(getContext());
+  return TropIntAttr::get(getContext(), *this,
+                          mlir::IntegerAttr::get(intType, resVal));
 }
 
 mlir::TypedAttr TropMaxI64Type::mulIdentity() const {
-    return TropIntAttr::get(
-            getContext(),
-            *this,
-            mlir::IntegerAttr::get(SemiringTypes::forInt(getContext()), 0));
+  return TropIntAttr::get(
+      getContext(), *this,
+      mlir::IntegerAttr::get(SemiringTypes::forInt(getContext()), 0));
 }
 
-mlir::TypedAttr TropMaxI64Type::mul(
-        mlir::TypedAttr lhs,
-        mlir::TypedAttr rhs) const {
-    if (llvm::isa<TropInfAttr>(lhs)) {
-        return lhs;
-    } else if (llvm::isa<TropInfAttr>(rhs)) {
-        return rhs;
-    }
+mlir::TypedAttr TropMaxI64Type::mul(mlir::TypedAttr lhs,
+                                    mlir::TypedAttr rhs) const {
+  if (llvm::isa<TropInfAttr>(lhs)) {
+    return lhs;
+  } else if (llvm::isa<TropInfAttr>(rhs)) {
+    return rhs;
+  }
 
-    auto lhsVal = llvm::cast<TropIntAttr>(lhs).getValue().getValue();
-    auto rhsVal = llvm::cast<TropIntAttr>(rhs).getValue().getValue();
-    auto resVal = lhsVal + rhsVal;
-    auto intType = SemiringTypes::forInt(getContext());
-    return TropIntAttr::get(
-            getContext(),
-            *this,
-            mlir::IntegerAttr::get(intType, resVal));
+  auto lhsVal = llvm::cast<TropIntAttr>(lhs).getValue().getValue();
+  auto rhsVal = llvm::cast<TropIntAttr>(rhs).getValue().getValue();
+  auto resVal = lhsVal + rhsVal;
+  auto intType = SemiringTypes::forInt(getContext());
+  return TropIntAttr::get(getContext(), *this,
+                          mlir::IntegerAttr::get(intType, resVal));
 }
 
 namespace {
 
-struct IntegerSemiringInterface : public SemiringTypeInterface::ExternalModel<
-        IntegerSemiringInterface,
-        mlir::IntegerType> {
-    static inline mlir::TypedAttr addIdentity(::mlir::Type type) {
-        return mlir::IntegerAttr::get(type, 0);
-    }
+struct IntegerSemiringInterface
+    : public SemiringTypeInterface::ExternalModel<IntegerSemiringInterface,
+                                                  mlir::IntegerType> {
+  static inline mlir::TypedAttr addIdentity(::mlir::Type type) {
+    return mlir::IntegerAttr::get(type, 0);
+  }
 
-    static inline mlir::TypedAttr add(
-            ::mlir::Type type,
-            mlir::TypedAttr lhs,
-            mlir::TypedAttr rhs) {
-        auto v = llvm::cast<mlir::IntegerAttr>(lhs).getValue()
-                + llvm::cast<mlir::IntegerAttr>(rhs).getValue();
-        return mlir::IntegerAttr::get(type, v);
-    }
+  static inline mlir::TypedAttr add(::mlir::Type type, mlir::TypedAttr lhs,
+                                    mlir::TypedAttr rhs) {
+    auto v = llvm::cast<mlir::IntegerAttr>(lhs).getValue() +
+             llvm::cast<mlir::IntegerAttr>(rhs).getValue();
+    return mlir::IntegerAttr::get(type, v);
+  }
 
-    static inline mlir::TypedAttr mulIdentity(::mlir::Type type) {
-        return mlir::IntegerAttr::get(type, 1);
-    }
+  static inline mlir::TypedAttr mulIdentity(::mlir::Type type) {
+    return mlir::IntegerAttr::get(type, 1);
+  }
 
-    static inline mlir::TypedAttr mul(
-            ::mlir::Type type,
-            mlir::TypedAttr lhs,
-            mlir::TypedAttr rhs) {
-        auto v = llvm::cast<mlir::IntegerAttr>(lhs).getValue()
-                * llvm::cast<mlir::IntegerAttr>(rhs).getValue();
-        return mlir::IntegerAttr::get(type, v);
-    }
+  static inline mlir::TypedAttr mul(::mlir::Type type, mlir::TypedAttr lhs,
+                                    mlir::TypedAttr rhs) {
+    auto v = llvm::cast<mlir::IntegerAttr>(lhs).getValue() *
+             llvm::cast<mlir::IntegerAttr>(rhs).getValue();
+    return mlir::IntegerAttr::get(type, v);
+  }
 };
 
-struct F64SemiringInterface : public SemiringTypeInterface::ExternalModel<
-        F64SemiringInterface,
-        mlir::Float64Type> {
-    static inline mlir::TypedAttr addIdentity(::mlir::Type type) {
-        return mlir::FloatAttr::get(type, 0);
-    }
+struct F64SemiringInterface
+    : public SemiringTypeInterface::ExternalModel<F64SemiringInterface,
+                                                  mlir::Float64Type> {
+  static inline mlir::TypedAttr addIdentity(::mlir::Type type) {
+    return mlir::FloatAttr::get(type, 0);
+  }
 
-    static inline mlir::TypedAttr add(
-            ::mlir::Type type,
-            mlir::TypedAttr lhs,
-            mlir::TypedAttr rhs) {
-        auto v = llvm::cast<mlir::FloatAttr>(lhs).getValue()
-                + llvm::cast<mlir::FloatAttr>(rhs).getValue();
-        return mlir::FloatAttr::get(type, v);
-    }
+  static inline mlir::TypedAttr add(::mlir::Type type, mlir::TypedAttr lhs,
+                                    mlir::TypedAttr rhs) {
+    auto v = llvm::cast<mlir::FloatAttr>(lhs).getValue() +
+             llvm::cast<mlir::FloatAttr>(rhs).getValue();
+    return mlir::FloatAttr::get(type, v);
+  }
 
-    static inline mlir::TypedAttr mulIdentity(::mlir::Type type) {
-        return mlir::FloatAttr::get(type, 1);
-    }
+  static inline mlir::TypedAttr mulIdentity(::mlir::Type type) {
+    return mlir::FloatAttr::get(type, 1);
+  }
 
-    static inline mlir::TypedAttr mul(
-            ::mlir::Type type,
-            mlir::TypedAttr lhs,
-            mlir::TypedAttr rhs) {
-        auto v = llvm::cast<mlir::FloatAttr>(lhs).getValue()
-                * llvm::cast<mlir::FloatAttr>(rhs).getValue();
-        return mlir::FloatAttr::get(type, v);
-    }
+  static inline mlir::TypedAttr mul(::mlir::Type type, mlir::TypedAttr lhs,
+                                    mlir::TypedAttr rhs) {
+    auto v = llvm::cast<mlir::FloatAttr>(lhs).getValue() *
+             llvm::cast<mlir::FloatAttr>(rhs).getValue();
+    return mlir::FloatAttr::get(type, v);
+  }
 };
 
 } // namespace
@@ -281,13 +243,13 @@ struct F64SemiringInterface : public SemiringTypeInterface::ExternalModel<
 // Need to define this here to avoid depending on IPRTypes in
 // IPRDialect and creating a cycle.
 void GraphAlgDialect::registerTypes() {
-    addTypes<
+  addTypes<
 #define GET_TYPEDEF_LIST
 #include "graphalg/GraphAlgOpsTypes.cpp.inc"
-            >();
+      >();
 
-    mlir::IntegerType::attachInterface<IntegerSemiringInterface>(*getContext());
-    mlir::Float64Type::attachInterface<F64SemiringInterface>(*getContext());
+  mlir::IntegerType::attachInterface<IntegerSemiringInterface>(*getContext());
+  mlir::Float64Type::attachInterface<F64SemiringInterface>(*getContext());
 }
 
-}
+} // namespace graphalg

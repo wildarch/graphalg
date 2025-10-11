@@ -1,7 +1,7 @@
 #pragma once
 
-#include <mlir/Interfaces/SideEffectInterfaces.h>
 #include <mlir/IR/Dialect.h>
+#include <mlir/Interfaces/SideEffectInterfaces.h>
 
 #include <graphalg/GraphAlgCast.h>
 
