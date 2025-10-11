@@ -2,9 +2,63 @@
 cmake_minimum_required(VERSION 3.15...4.0)
 
 project(
-    GraphAlgCompiler 
+    GraphAlgCompiler
     VERSION 0.1
     DESCRIPTION "Compiler for the GraphAlg language"
     LANGUAGES CXX)
 
+# LLVM
+find_package(LLVM REQUIRED CONFIG)
+message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
+message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
+include_directories(${LLVM_INCLUDE_DIRS})
+separate_arguments(LLVM_DEFINITIONS_LIST NATIVE_COMMAND ${LLVM_DEFINITIONS})
+add_definitions(${LLVM_DEFINITIONS_LIST})
+list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_DIR}")
+include(TableGen)
+include(AddLLVM)
+
+llvm_map_components_to_libnames(llvm_libs support)
+
+# MLIR
+find_package(MLIR ${LLVM_PACKAGE_VERSION} REQUIRED CONFIG
+    HINTS "${LLVM_INSTALL_PREFIX}/lib/cmake"
+)
+message(STATUS "Using MLIRConfig.cmake in: ${MLIR_DIR}")
+set(MLIR_BINARY_DIR ${CMAKE_BINARY_DIR})
+list(APPEND CMAKE_MODULE_PATH "${MLIR_CMAKE_DIR}")
+include(AddMLIR)
+
+# Directories with MLIR dialects
+add_subdirectory(include/graphalg)
+
 add_executable(parse src/parse.cpp)
+
+# graphalg_lib
+add_library(graphalg_lib STATIC
+    src/graphalg/GraphAlgSplitAggregate.cpp
+    src/graphalg/GraphAlgPrepareInlinePass.cpp
+    src/graphalg/GraphAlgExplicateSparsity.cpp
+    src/graphalg/GraphAlgVerifyDimensions.cpp
+    src/graphalg/GraphAlgCanonicalize.cpp
+    src/graphalg/GraphAlgDialect.cpp
+    src/graphalg/GraphAlgCast.cpp
+    src/graphalg/GraphAlgTypes.cpp
+    src/graphalg/GraphAlgToCore.cpp
+    src/graphalg/GraphAlgInterfaces.cpp
+    src/graphalg/SemiringTypes.cpp
+    src/graphalg/GraphAlgAttr.cpp
+    src/graphalg/analysis
+    src/graphalg/analysis/DenseAnalysis.cpp
+    src/graphalg/GraphAlgOps.cpp
+    src/graphalg/GraphAlgSetDimensions.cpp
+    src/graphalg/GraphAlgScalarizeApply.cpp
+    src/graphalg/GraphAlgLoopAggregate.cpp
+)
+target_include_directories(graphalg_lib PUBLIC include)
+target_include_directories(graphalg_lib PUBLIC ${PROJECT_BINARY_DIR}/include)
+add_dependencies(graphalg_lib
+    MLIRGraphAlgOpsIncGen
+    MLIRGraphAlgPassesIncGen
+    MLIRGraphAlgInterfacesIncGen
+)
