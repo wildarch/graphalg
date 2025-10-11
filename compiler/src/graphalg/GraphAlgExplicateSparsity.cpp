@@ -236,8 +236,8 @@ void GraphAlgExplicateSparsity::runOnOperation() {
   mlir::RewritePatternSet patterns(&getContext());
   patterns.add(extractElementWiseAdd);
 
-  if (mlir::failed(mlir::applyPatternsAndFoldGreedily(getOperation(),
-                                                      std::move(patterns)))) {
+  if (mlir::failed(
+          mlir::applyPatternsGreedily(getOperation(), std::move(patterns)))) {
     getOperation()->emitError("failed to make sparsity explicit");
     signalPassFailure();
   }

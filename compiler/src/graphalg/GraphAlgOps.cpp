@@ -116,7 +116,8 @@ mlir::CallInterfaceCallable ApplyUnaryOp::getCallableForCallee() {
 
 static mlir::FlatSymbolRefAttr
 castToFunctionRef(mlir::CallInterfaceCallable callee) {
-  return llvm::cast<mlir::FlatSymbolRefAttr>(callee.get<mlir::SymbolRefAttr>());
+  return llvm::cast<mlir::FlatSymbolRefAttr>(
+      llvm::cast<mlir::SymbolRefAttr>(callee));
 }
 
 // Set the callee for the generic call operation, this is required by the call

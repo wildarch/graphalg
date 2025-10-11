@@ -62,3 +62,6 @@ add_dependencies(graphalg_lib
     MLIRGraphAlgPassesIncGen
     MLIRGraphAlgInterfacesIncGen
 )
+# Suppress -Wdangling-assignment-gsl for generated code from MLIR tablegen
+# The warning is triggered by template instantiations in GraphAlgOps.cpp.inc
+target_compile_options(graphalg_lib PRIVATE -Wno-dangling-assignment-gsl)
