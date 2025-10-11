@@ -23,6 +23,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
   gdb \
   git \
   libmlir-20-dev \
+  libzstd-dev \
   llvm-20 \
   mlir-20-tools \
   mold \

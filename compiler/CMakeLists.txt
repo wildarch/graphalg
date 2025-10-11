@@ -32,8 +32,6 @@ include(AddMLIR)
 # Directories with MLIR dialects
 add_subdirectory(include/graphalg)
 
-add_executable(parse src/parse.cpp)
-
 # graphalg_lib
 add_library(graphalg_lib STATIC
     src/graphalg/GraphAlgSplitAggregate.cpp
@@ -48,7 +46,6 @@ add_library(graphalg_lib STATIC
     src/graphalg/GraphAlgInterfaces.cpp
     src/graphalg/SemiringTypes.cpp
     src/graphalg/GraphAlgAttr.cpp
-    src/graphalg/analysis
     src/graphalg/analysis/DenseAnalysis.cpp
     src/graphalg/GraphAlgOps.cpp
     src/graphalg/GraphAlgSetDimensions.cpp
@@ -62,6 +59,23 @@ add_dependencies(graphalg_lib
     MLIRGraphAlgPassesIncGen
     MLIRGraphAlgInterfacesIncGen
 )
+target_link_libraries(
+    graphalg_lib
+    PRIVATE
+    MLIRIR
+)
 # Suppress -Wdangling-assignment-gsl for generated code from MLIR tablegen
 # The warning is triggered by template instantiations in GraphAlgOps.cpp.inc
 target_compile_options(graphalg_lib PRIVATE -Wno-dangling-assignment-gsl)
+
+add_library(graphalg_parse STATIC
+    src/graphalg/parse/Lexer.cpp
+)
+target_include_directories(graphalg_parse PUBLIC include)
+
+add_executable(parse src/parse.cpp)
+target_link_libraries(parse PRIVATE
+    graphalg_parse
+    ${llvm_libs}
+    graphalg_lib
+)
