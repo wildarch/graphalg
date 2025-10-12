@@ -34,26 +34,27 @@ add_subdirectory(include/graphalg)
 
 # graphalg_lib
 add_library(graphalg_lib STATIC
-    src/graphalg/GraphAlgSplitAggregate.cpp
-    src/graphalg/GraphAlgPrepareInlinePass.cpp
-    src/graphalg/GraphAlgExplicateSparsity.cpp
-    src/graphalg/GraphAlgVerifyDimensions.cpp
-    src/graphalg/GraphAlgCanonicalize.cpp
-    src/graphalg/GraphAlgDialect.cpp
-    src/graphalg/GraphAlgCast.cpp
-    src/graphalg/GraphAlgTypes.cpp
-    src/graphalg/GraphAlgToCore.cpp
-    src/graphalg/GraphAlgInterfaces.cpp
-    src/graphalg/SemiringTypes.cpp
-    src/graphalg/GraphAlgAttr.cpp
     src/graphalg/analysis/DenseAnalysis.cpp
-    src/graphalg/GraphAlgOps.cpp
-    src/graphalg/GraphAlgSetDimensions.cpp
-    src/graphalg/GraphAlgScalarizeApply.cpp
+    src/graphalg/GraphAlgAttr.cpp
+    src/graphalg/GraphAlgAttr.cpp
+    src/graphalg/GraphAlgCanonicalize.cpp
+    src/graphalg/GraphAlgCast.cpp
+    src/graphalg/GraphAlgDialect.cpp
+    src/graphalg/GraphAlgExplicateSparsity.cpp
+    src/graphalg/GraphAlgInterfaces.cpp
     src/graphalg/GraphAlgLoopAggregate.cpp
+    src/graphalg/GraphAlgOps.cpp
+    src/graphalg/GraphAlgPrepareInlinePass.cpp
+    src/graphalg/GraphAlgScalarizeApply.cpp
+    src/graphalg/GraphAlgSetDimensions.cpp
+    src/graphalg/GraphAlgSplitAggregate.cpp
+    src/graphalg/GraphAlgToCore.cpp
+    src/graphalg/GraphAlgTypes.cpp
+    src/graphalg/GraphAlgVerifyDimensions.cpp
+    src/graphalg/SemiringTypes.cpp
 )
 target_include_directories(graphalg_lib PUBLIC include)
-target_include_directories(graphalg_lib SYSTEM PRIVATE ${PROJECT_BINARY_DIR}/include)
+target_include_directories(graphalg_lib SYSTEM PUBLIC ${PROJECT_BINARY_DIR}/include)
 add_dependencies(graphalg_lib
     MLIRGraphAlgOpsIncGen
     MLIRGraphAlgPassesIncGen
@@ -63,6 +64,9 @@ target_link_libraries(
     graphalg_lib
     PRIVATE
     MLIRIR
+    MLIRFuncDialect
+    MLIRAnalysis
+    MLIRPass
 )
 # Suppress -Wdangling-assignment-gsl for generated code from MLIR tablegen
 # The warning is triggered by template instantiations in GraphAlgOps.cpp.inc
@@ -73,6 +77,8 @@ add_library(graphalg_parse STATIC
     src/graphalg/parse/Parser.cpp
 )
 target_include_directories(graphalg_parse PUBLIC include)
+# TODO: Nasty, should be provided by graphalg_lib dep
+target_include_directories(graphalg_parse SYSTEM PRIVATE ${PROJECT_BINARY_DIR}/include)
 
 add_executable(parse src/parse.cpp)
 target_link_libraries(parse PRIVATE

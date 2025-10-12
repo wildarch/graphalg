@@ -21,8 +21,8 @@ private:
   mlir::StringAttr _filename;
   llvm::StringRef _buffer;
   std::size_t _offset = 0;
-  std::size_t _line = 1;
-  std::size_t _col = 1;
+  std::size_t _line;
+  std::size_t _col;
 
   std::optional<char> cur() {
     if (_offset < _buffer.size()) {

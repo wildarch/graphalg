@@ -19,7 +19,7 @@ int main(int argc, char *argv[]) {
             sourceMgr.getMemoryBuffer(sourceMgr.getMainFileID());
         auto filename = sourceBuf->getBufferIdentifier();
         auto loc = mlir::FileLineColLoc::get(context, filename,
-                                             /*line=*/0, /*column=*/0);
+                                             /*line=*/1, /*column=*/0);
         mlir::OwningOpRef<mlir::ModuleOp> moduleOp(
             mlir::ModuleOp::create(loc, filename));
 
