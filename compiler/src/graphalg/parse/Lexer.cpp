@@ -1,9 +1,11 @@
 #include <optional>
+#include <vector>
 
 #include <llvm/ADT/StringExtras.h>
 #include <llvm/ADT/StringRef.h>
 #include <llvm/ADT/StringSwitch.h>
 #include <mlir/IR/Attributes.h>
+#include <mlir/IR/BuiltinAttributes.h>
 #include <mlir/IR/Diagnostics.h>
 #include <mlir/IR/MLIRContext.h>
 #include <mlir/Support/LLVM.h>
@@ -11,6 +13,71 @@
 #include "graphalg/parse/Lexer.h"
 
 namespace graphalg {
+
+namespace {
+
+class Lexer {
+private:
+  mlir::StringAttr _filename;
+  llvm::StringRef _buffer;
+  std::size_t _offset = 0;
+  std::size_t _line = 1;
+  std::size_t _col = 1;
+
+  std::optional<char> cur() {
+    if (_offset < _buffer.size()) {
+      return _buffer[_offset];
+    } else {
+      return std::nullopt;
+    }
+  }
+
+  std::optional<llvm::StringRef> peek(std::size_t n) {
+    if (_offset + n < _buffer.size()) {
+      return _buffer.substr(_offset, n);
+    } else {
+      return std::nullopt;
+    }
+  }
+
+  mlir::Location currentLocation() {
+    return mlir::FileLineColLoc::get(_filename, _line, _col);
+  }
+
+  void eat() {
+    if (cur() == '\n') {
+      _col = 1;
+      _line += 1;
+    } else {
+      _col += 1;
+    }
+
+    _offset++;
+  }
+
+  bool tryEat(char c) {
+    if (cur() == c) {
+      eat();
+      return true;
+    } else {
+      return false;
+    }
+  }
+
+  void eatWhitespace();
+
+  Token nextToken();
+
+public:
+  Lexer(mlir::MLIRContext *ctx, llvm::StringRef buffer,
+        llvm::StringRef filename, int startLine, int startCol)
+      : _filename(mlir::StringAttr::get(ctx, filename)), _buffer(buffer),
+        _line(startLine), _col(startCol) {}
+
+  mlir::LogicalResult lex(std::vector<Token> &tokens);
+};
+
+} // namespace
 
 llvm::StringLiteral Token::kindName(Kind k) {
   switch (k) {
@@ -37,6 +104,27 @@ static std::optional<Token::Kind> tokenForKeyword(llvm::StringRef s) {
     return std::nullopt;
   } else {
     return token;
+  }
+}
+
+void Lexer::eatWhitespace() {
+  while (true) {
+    if (cur() && llvm::isSpace(*cur())) {
+      // Simple whitespace
+      eat();
+      continue;
+    } else if (peek(2) == "//") {
+      // Line comment
+      while (cur() != '\n') {
+        eat();
+      }
+
+      assert(cur() == '\n');
+      eat();
+      continue;
+    }
+
+    break;
   }
 }
 
@@ -135,10 +223,6 @@ Token Lexer::nextToken() {
   return Token{Token::INVALID, currentLocation(), _buffer.substr(_offset, 1)};
 }
 
-Lexer::Lexer(mlir::MLIRContext *ctx, llvm::StringRef buffer,
-             llvm::StringRef filename)
-    : _filename(mlir::StringAttr::get(ctx, filename)), _buffer(buffer) {}
-
 mlir::LogicalResult Lexer::lex(std::vector<Token> &tokens) {
   while (true) {
     auto token = nextToken();
@@ -152,6 +236,13 @@ mlir::LogicalResult Lexer::lex(std::vector<Token> &tokens) {
   }
 
   return mlir::success();
+}
+
+mlir::LogicalResult lex(mlir::MLIRContext *ctx, llvm::StringRef buffer,
+                        llvm::StringRef filename, int startLine, int startCol,
+                        std::vector<Token> &tokens) {
+  Lexer lexer(ctx, buffer, filename, startLine, startCol);
+  return lexer.lex(tokens);
 }
 
 } // namespace graphalg

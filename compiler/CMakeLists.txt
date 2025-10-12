@@ -70,6 +70,7 @@ target_compile_options(graphalg_lib PRIVATE -Wno-dangling-assignment-gsl)
 
 add_library(graphalg_parse STATIC
     src/graphalg/parse/Lexer.cpp
+    src/graphalg/parse/Parser.cpp
 )
 target_include_directories(graphalg_parse PUBLIC include)
 
@@ -78,4 +79,6 @@ target_link_libraries(parse PRIVATE
     graphalg_parse
     ${llvm_libs}
     graphalg_lib
+    MLIRTranslateLib
+
 )
