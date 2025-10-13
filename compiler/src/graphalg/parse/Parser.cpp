@@ -1,3 +1,5 @@
+#include <llvm-20/llvm/Support/raw_ostream.h>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -91,16 +93,31 @@ private:
   mlir::ParseResult eatOrError(Token::Kind kind) {
     if (cur().type == kind) {
       _offset++;
+      assert(_offset < _tokens.size() && "No next token");
       return mlir::success();
     } else {
       return mlir::emitError(cur().loc) << "expected " << Token::kindName(kind);
     }
   }
 
+  /*
+  std::optional<Token> tryEat(Token::Kind kind) {
+    if (cur().type == kind) {
+      auto token = cur();
+      _offset++;
+      return token;
+    }
+
+    return std::nullopt;
+  }
+  */
+
   std::string typeToString(mlir::Type t);
 
   mlir::LogicalResult assign(mlir::Location loc, llvm::StringRef name,
                              mlir::Value value);
+
+  DimAttr inferDim(mlir::Value v, mlir::Location refLoc);
 
   mlir::ParseResult parseIdent(llvm::StringRef &s);
   mlir::ParseResult parseType(mlir::Type &t);
@@ -116,6 +133,21 @@ private:
                                 llvm::SmallVectorImpl<mlir::Location> &locs);
 
   mlir::ParseResult parseBlock();
+  mlir::ParseResult parseStmt();
+  mlir::ParseResult parseStmtFor();
+  mlir::ParseResult parseStmtReturn();
+  mlir::ParseResult parseStmtAssign();
+
+  struct ParsedRange {
+    mlir::Value begin;
+    mlir::Value end;
+    DimAttr dim;
+  };
+  mlir::ParseResult parseRange(ParsedRange &r);
+
+  mlir::ParseResult parseExpr(mlir::Value &v);
+
+  mlir::ParseResult parseAtom(mlir::Value &v);
 
 public:
   Parser(llvm::ArrayRef<Token> tokens, mlir::ModuleOp module)
@@ -246,6 +278,17 @@ mlir::LogicalResult Parser::assign(mlir::Location loc, llvm::StringRef name,
   return mlir::success();
 }
 
+DimAttr Parser::inferDim(mlir::Value v, mlir::Location refLoc) {
+  auto dimOp = v.getDefiningOp<DimOp>();
+  if (!dimOp) {
+    auto diag = mlir::emitError(refLoc) << "not a dimension type";
+    diag.attachNote(v.getLoc()) << "defined here";
+    return nullptr;
+  }
+
+  return dimOp.getDim();
+}
+
 mlir::ParseResult Parser::parseIdent(llvm::StringRef &s) {
   if (cur().type != Token::IDENT) {
     return mlir::emitError(cur().loc) << "expected identifier";
@@ -332,6 +375,7 @@ mlir::ParseResult Parser::parseSemiring(mlir::Type &s) {
 }
 
 mlir::ParseResult Parser::parseProgram() {
+  _builder.setInsertionPointToStart(_module.getBody());
   while (cur().type == Token::FUNC) {
     if (mlir::failed(parseFunction())) {
       return mlir::failure();
@@ -431,6 +475,11 @@ mlir::ParseResult Parser::parseBlock() {
   }
 
   // TODO: parse body
+  while (cur().type != Token::RBRACE && cur().type != Token::END_OF_FILE) {
+    if (parseStmt()) {
+      return mlir::failure();
+    }
+  }
 
   if (eatOrError(Token::RBRACE)) {
     return mlir::failure();
@@ -439,8 +488,116 @@ mlir::ParseResult Parser::parseBlock() {
   return mlir::success();
 }
 
+mlir::ParseResult Parser::parseStmt() {
+  switch (cur().type) {
+  case Token::FOR:
+    return parseStmtFor();
+  case Token::RETURN:
+    return parseStmtReturn();
+  case Token::IDENT:
+    return parseStmtAssign();
+  default:
+    return mlir::emitError(cur().loc) << "invalid start for statement";
+  }
+}
+
+mlir::ParseResult Parser::parseStmtFor() {
+  auto loc = cur().loc;
+  llvm::StringRef iterVar;
+  ParsedRange range;
+  if (eatOrError(Token::FOR) || parseIdent(iterVar) || eatOrError(Token::IN) ||
+      parseRange(range)) {
+    return mlir::failure();
+  }
+
+  // TODO: find the variables modified inside the loop
+  // TODO: Create the for op
+  // TODO: Parse body block
+  // TODO: Parse until
+  // TODO: Use updated values from the loop
+  return mlir::emitError(loc) << "not implemented";
+}
+
+mlir::ParseResult Parser::parseStmtReturn() {
+  auto loc = cur().loc;
+  mlir::Value returnValue;
+  if (eatOrError(Token::RETURN) || parseExpr(returnValue) ||
+      eatOrError(Token::SEMI)) {
+    return mlir::failure();
+  }
+
+  // TODO: Check function return type matches.
+  _builder.create<mlir::func::ReturnOp>(loc, returnValue);
+  return mlir::success();
+}
+
+mlir::ParseResult Parser::parseStmtAssign() {
+  return mlir::emitError(cur().loc) << "not implemented";
+}
+
+mlir::ParseResult Parser::parseRange(ParsedRange &r) {
+  auto exprLoc = cur().loc;
+  mlir::Value expr;
+  if (parseExpr(expr)) {
+    return mlir::failure();
+  }
+
+  if (cur().type == Token::COLON) {
+    // Const range
+    r.begin = expr;
+    if (eatOrError(Token::COLON) || parseExpr(r.end)) {
+      return mlir::failure();
+    }
+
+    return mlir::success();
+  } else {
+    r.dim = inferDim(expr, exprLoc);
+    if (!r.dim) {
+      return mlir::failure();
+    }
+
+    return mlir::success();
+  }
+}
+
+mlir::ParseResult Parser::parseExpr(mlir::Value &v) {
+  mlir::Value atomLhs;
+  if (parseAtom(atomLhs)) {
+    return mlir::failure();
+  }
+
+  // TODO: operators with precedence climbing
+
+  v = atomLhs;
+  return mlir::success();
+}
+
+mlir::ParseResult Parser::parseAtom(mlir::Value &v) {
+  auto loc = cur().loc;
+  switch (cur().type) {
+  case Token::IDENT: {
+    llvm::StringRef name;
+    if (parseIdent(name)) {
+      return mlir::failure();
+    }
+
+    // TODO: Handle keywords and function calls
+    auto var = _symbolTable.lookup(name);
+    if (!var.value) {
+      return mlir::emitError(loc) << "unrecognized variable";
+    }
+
+    v = var.value;
+    return mlir::success();
+  }
+  default:
+    return mlir::emitError(cur().loc) << "invalid expression";
+  }
+}
+
 mlir::LogicalResult Parser::parse() {
   auto *ctx = _builder.getContext();
+  ctx->getOrLoadDialect<graphalg::GraphAlgDialect>();
   ctx->getOrLoadDialect<mlir::func::FuncDialect>();
   return parseProgram();
 }

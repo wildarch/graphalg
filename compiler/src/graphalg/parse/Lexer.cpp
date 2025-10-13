@@ -226,13 +226,12 @@ Token Lexer::nextToken() {
 mlir::LogicalResult Lexer::lex(std::vector<Token> &tokens) {
   while (true) {
     auto token = nextToken();
+    tokens.push_back(token);
     if (token.type == Token::END_OF_FILE) {
       break;
     } else if (token.type == Token::INVALID) {
       return mlir::failure();
     }
-
-    tokens.push_back(token);
   }
 
   return mlir::success();
