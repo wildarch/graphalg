@@ -1,0 +1,7 @@
+func Loop() -> int {
+    for i in int(1):int(10) {
+        a = a + int(1);
+    }
+
+    return a;
+}

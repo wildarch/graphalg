@@ -1,18 +1,24 @@
-#include <llvm-20/llvm/Support/raw_ostream.h>
 #include <optional>
 #include <utility>
 #include <vector>
 
+#include <llvm/ADT/APFloat.h>
+#include <llvm/ADT/APInt.h>
 #include <llvm/ADT/ArrayRef.h>
+#include <llvm/ADT/DenseSet.h>
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/ScopedHashTable.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/StringRef.h>
 #include <llvm/ADT/StringSwitch.h>
 #include <llvm/Support/Casting.h>
+#include <llvm/Support/Error.h>
+#include <llvm/Support/ErrorHandling.h>
 #include <llvm/Support/StringSaver.h>
+#include <llvm/Support/raw_ostream.h>
 #include <mlir/Dialect/Func/IR/FuncOps.h>
 #include <mlir/IR/Builders.h>
+#include <mlir/IR/BuiltinAttributeInterfaces.h>
 #include <mlir/IR/BuiltinOps.h>
 #include <mlir/IR/Diagnostics.h>
 #include <mlir/IR/Location.h>
@@ -90,10 +96,15 @@ private:
 
   Token cur() { return _tokens[_offset]; }
 
+  void eat() {
+    _offset++;
+    // NOTE: We should never eat the end of file token
+    assert(_offset < _tokens.size() && "No next token");
+  }
+
   mlir::ParseResult eatOrError(Token::Kind kind) {
     if (cur().type == kind) {
-      _offset++;
-      assert(_offset < _tokens.size() && "No next token");
+      eat();
       return mlir::success();
     } else {
       return mlir::emitError(cur().loc) << "expected " << Token::kindName(kind);
@@ -116,6 +127,7 @@ private:
 
   mlir::LogicalResult assign(mlir::Location loc, llvm::StringRef name,
                              mlir::Value value);
+  bool isVarDefined(llvm::StringRef name) { return _symbolTable.count(name); }
 
   DimAttr inferDim(mlir::Value v, mlir::Location refLoc);
 
@@ -148,6 +160,8 @@ private:
   mlir::ParseResult parseExpr(mlir::Value &v);
 
   mlir::ParseResult parseAtom(mlir::Value &v);
+
+  mlir::ParseResult parseLiteral(mlir::Type ring, mlir::Value &v);
 
 public:
   Parser(llvm::ArrayRef<Token> tokens, mlir::ModuleOp module)
@@ -340,7 +354,7 @@ mlir::ParseResult Parser::parseDim(DimAttr &t) {
     return mlir::success();
   } else if (cur().type == Token::IDENT) {
     t = _dimMapper.getOrAllocate(cur().body);
-    return mlir::success();
+    return eatOrError(Token::IDENT);
   }
 
   return mlir::emitError(cur().loc)
@@ -501,6 +515,48 @@ mlir::ParseResult Parser::parseStmt() {
   }
 }
 
+static void
+findModifiedBindingsInBlock(llvm::ArrayRef<Token> tokens, std::size_t offset,
+                            llvm::SmallVectorImpl<llvm::StringRef> &bindings) {
+  llvm::SmallDenseSet<llvm::StringRef> uniqueBindings;
+  if (tokens[offset].type != Token::LBRACE) {
+    // Block must start with {
+    return;
+  }
+
+  offset++;
+  std::size_t depth = 1;
+  for (; offset + 1 < tokens.size() && depth > 0; offset++) {
+    auto cur = tokens[offset];
+    switch (cur.type) {
+    case Token::IDENT: {
+      auto name = cur.body;
+      auto next = tokens[offset + 1];
+      if (next.type == Token::EQUAL || next.type == Token::ACCUM) {
+        // An assignment or accumulate op
+        auto [_, newlyAdded] = uniqueBindings.insert(name);
+        if (newlyAdded) {
+          bindings.emplace_back(name);
+        }
+      }
+    }
+    case Token::LBRACE: {
+      // Enter nested block.
+      depth++;
+      break;
+    }
+    case Token::RBRACE: {
+      // End of block.
+      depth--;
+      break;
+    }
+    default:
+      // Skip
+      break;
+    }
+  }
+}
+
 mlir::ParseResult Parser::parseStmtFor() {
   auto loc = cur().loc;
   llvm::StringRef iterVar;
@@ -510,7 +566,12 @@ mlir::ParseResult Parser::parseStmtFor() {
     return mlir::failure();
   }
 
-  // TODO: find the variables modified inside the loop
+  // Find the variables modified inside the loop.
+  llvm::SmallVector<llvm::StringRef> loopVars;
+  findModifiedBindingsInBlock(_tokens, _offset, loopVars);
+  // Only the variables that exist outside the loop are proper loop variables.
+  llvm::remove_if(
+      loopVars, [&](llvm::StringRef name) { return _symbolTable.count(name); });
   // TODO: Create the for op
   // TODO: Parse body block
   // TODO: Parse until
@@ -576,6 +637,16 @@ mlir::ParseResult Parser::parseAtom(mlir::Value &v) {
   auto loc = cur().loc;
   switch (cur().type) {
   case Token::IDENT: {
+    if (auto ring = tryParseSemiring()) {
+      // e.g. int(42)
+      if (eatOrError(Token::LPAREN) || parseLiteral(ring, v) ||
+          eatOrError(Token::RPAREN)) {
+        return mlir::failure();
+      }
+
+      return mlir::success();
+    }
+
     llvm::StringRef name;
     if (parseIdent(name)) {
       return mlir::failure();
@@ -593,6 +664,81 @@ mlir::ParseResult Parser::parseAtom(mlir::Value &v) {
   default:
     return mlir::emitError(cur().loc) << "invalid expression";
   }
+}
+
+static std::optional<llvm::APInt> parseInt(llvm::StringRef s) {
+  // The largest possible 64-bit signed integer has 19 characters.
+  constexpr int maxCharacters = 19;
+  assert(std::to_string(std::numeric_limits<std::int64_t>::max()).size() ==
+         maxCharacters);
+  if (s.size() <= maxCharacters) {
+    // 128 bits is enough for any 19 character radix 10 integer.
+    llvm::APInt v(128, s, 10);
+    if (v.getSignificantBits() <= 64) {
+      // Fits in 64 bits.
+      return v.trunc(64);
+    }
+  }
+
+  return std::nullopt;
+}
+
+static std::optional<llvm::APFloat> parseFloat(llvm::StringRef s) {
+  llvm::APFloat v(llvm::APFloat::IEEEdouble());
+  auto result = v.convertFromString(s, llvm::APFloat::rmNearestTiesToEven);
+  // Note: decimal literals may not be representable in exact form in IEEE
+  // double format.
+  auto allowedStatusMask = llvm::APFloat::opOK | llvm::APFloat::opInexact;
+  if (result.takeError() || (*result & (~allowedStatusMask)) != 0) {
+    return std::nullopt;
+  }
+
+  return v;
+}
+
+mlir::ParseResult Parser::parseLiteral(mlir::Type ring, mlir::Value &v) {
+  auto *ctx = _builder.getContext();
+  mlir::TypedAttr attr;
+  if (ring == SemiringTypes::forBool(ctx)) {
+    if (cur().type == Token::FALSE) {
+      attr = _builder.getBoolAttr(false);
+    } else if (cur().type == Token::TRUE) {
+      attr = _builder.getBoolAttr(true);
+    } else {
+      return mlir::emitError(cur().loc) << "expected 'true' or 'false'";
+    }
+  } else if (ring == SemiringTypes::forInt(ctx) ||
+             ring == SemiringTypes::forTropInt(ctx) ||
+             ring == SemiringTypes::forTropMaxInt(ctx)) {
+    if (cur().type != Token::INT) {
+      return mlir::emitError(cur().loc) << "expected an integer value";
+    }
+
+    if (auto v = parseInt(cur().body)) {
+      attr = _builder.getIntegerAttr(ring, *v);
+    } else {
+      return mlir::emitError(cur().loc) << "integer does not fit in 64 bits";
+    }
+  } else if (ring == SemiringTypes::forReal(ctx) ||
+             ring == SemiringTypes::forTropReal(ctx)) {
+    if (cur().type != Token::FLOAT) {
+      return mlir::emitError(cur().loc) << "expected a floating-point value";
+    }
+
+    if (auto v = parseFloat(cur().body)) {
+      attr = _builder.getFloatAttr(ring, *v);
+    } else {
+      return mlir::emitError(cur().loc) << "invalid floating-point literal";
+    }
+  } else {
+    llvm_unreachable("Invalid semiring");
+  }
+
+  assert(!!attr);
+  // Eat the literal token
+  eat();
+  v = _builder.create<LiteralOp>(cur().loc, MatrixType::scalarOf(ring), attr);
+  return mlir::success();
 }
 
 mlir::LogicalResult Parser::parse() {
