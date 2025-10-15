@@ -157,7 +157,7 @@ private:
   };
   mlir::ParseResult parseRange(ParsedRange &r);
 
-  mlir::ParseResult parseExpr(mlir::Value &v);
+  mlir::ParseResult parseExpr(mlir::Value &v, int minPrec = 1);
 
   mlir::ParseResult parseAtom(mlir::Value &v);
 
@@ -709,7 +709,35 @@ mlir::ParseResult Parser::parseStmtReturn() {
 }
 
 mlir::ParseResult Parser::parseStmtAssign() {
-  return mlir::emitError(cur().loc) << "not implemented";
+  auto loc = cur().loc;
+  llvm::StringRef baseName;
+  if (parseIdent(baseName)) {
+    return mlir::failure();
+  }
+
+  if (cur().type == Token::ACCUM) {
+    return mlir::emitError(cur().loc) << "not implemented";
+  }
+
+  if (eatOrError(Token::ASSIGN)) {
+    return mlir::failure();
+  }
+
+  if (cur().type == Token::LANGLE) {
+    return mlir::emitError(cur().loc) << "not implemented";
+  }
+
+  if (cur().type == Token::LSBRACKET) {
+    return mlir::emitError(cur().loc) << "not implemented";
+  }
+
+  // Simple assign
+  mlir::Value v;
+  if (parseExpr(v) || eatOrError(Token::SEMI)) {
+    return mlir::failure();
+  }
+
+  return assign(loc, baseName, v);
 }
 
 mlir::ParseResult Parser::parseRange(ParsedRange &r) {
@@ -737,10 +765,125 @@ mlir::ParseResult Parser::parseRange(ParsedRange &r) {
   }
 }
 
-mlir::ParseResult Parser::parseExpr(mlir::Value &v) {
+static int precedenceForOp(Token::Kind op) {
+  switch (op) {
+  case Token::DOT:
+    return 1;
+  case Token::PLUS:
+  case Token::MINUS:
+    return 2;
+  case Token::TIMES:
+  case Token::DIVIDE:
+    return 3;
+  case Token::EQUAL:
+  case Token::NOT_EQUAL:
+  case Token::LANGLE:
+  case Token::RANGLE:
+  case Token::LEQ:
+  case Token::GEQ:
+    return 4;
+  default:
+    return 0;
+  }
+}
+
+mlir::ParseResult Parser::parseExpr(mlir::Value &v, int minPrec) {
   mlir::Value atomLhs;
   if (parseAtom(atomLhs)) {
     return mlir::failure();
+  }
+
+  while (true) {
+    bool ewise = cur().type == Token::LPAREN && _offset + 1 < _tokens.size() &&
+                 _tokens[_offset + 1].type == Token::DOT;
+    int prec = ewise ? 5 : precedenceForOp(cur().type);
+    if (!prec || prec < minPrec) {
+      break;
+    }
+
+    int nextMinPrec = prec + 1;
+    if (cur().type == Token::DOT) {
+      // Matrix property
+      eat();
+      if (cur().type != Token::IDENT) {
+        return mlir::emitError(cur().loc)
+               << "expected matrix property such as 'nrows'";
+      } else if (!llvm::isa<MatrixType>(atomLhs.getType())) {
+        return mlir::emitError(cur().loc) << "value is not of type matrix: "
+                                          << typeToString(atomLhs.getType());
+      }
+
+      if (cur().body == "T") {
+        atomLhs = _builder.create<TransposeOp>(cur().loc, atomLhs);
+      } else if (cur().body == "nrows") {
+        auto matType = llvm::cast<MatrixType>(atomLhs.getType());
+        atomLhs = _builder.create<DimOp>(cur().loc, matType.getRows());
+      } else if (cur().body == "ncols") {
+        auto matType = llvm::cast<MatrixType>(atomLhs.getType());
+        atomLhs = _builder.create<DimOp>(cur().loc, matType.getCols());
+      } else if (cur().body == "nvals") {
+        atomLhs = _builder.create<NValsOp>(cur().loc, atomLhs);
+      } else {
+        return mlir::emitError(cur().loc) << "invalid matrix property";
+      }
+
+      eat();
+    } else if (ewise) {
+      return mlir::emitError(cur().loc) << "not implemented";
+    } else {
+      // binop
+      auto loc = cur().loc;
+      BinaryOp binop;
+      switch (cur().type) {
+      case Token::PLUS:
+        binop = BinaryOp::ADD;
+        break;
+      case Token::MINUS:
+        binop = BinaryOp::SUB;
+        break;
+      case Token::TIMES:
+        binop = BinaryOp::MUL;
+        break;
+      case Token::DIVIDE:
+        binop = BinaryOp::DIV;
+        break;
+      case Token::EQUAL:
+        binop = BinaryOp::EQ;
+        break;
+      case Token::NOT_EQUAL:
+        binop = BinaryOp::NE;
+        break;
+      case Token::LANGLE:
+        binop = BinaryOp::LT;
+        break;
+      case Token::RANGLE:
+        binop = BinaryOp::GT;
+        break;
+      case Token::LEQ:
+        binop = BinaryOp::LE;
+        break;
+      case Token::GEQ:
+        binop = BinaryOp::GE;
+        break;
+      default:
+        llvm_unreachable("op with precendence but not included here");
+      }
+
+      if (binop == BinaryOp::MUL) {
+        // Matmul special case
+        return mlir::emitError(cur().loc) << "not implemented";
+      }
+
+      eat(); // binop
+
+      mlir::Value atomRhs;
+      if (parseExpr(atomRhs, nextMinPrec)) {
+        return mlir::failure();
+      }
+
+      // TODO: check scalar matrix types
+      atomLhs = _builder.create<ElementWiseOp>(loc, atomLhs, binop, atomRhs);
+    }
   }
 
   // TODO: operators with precedence climbing

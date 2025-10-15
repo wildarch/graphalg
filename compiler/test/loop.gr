@@ -1,4 +1,5 @@
 func Loop() -> int {
+    a = int(42);
     for i in int(1):int(10) {
         a = a + int(1);
     }
