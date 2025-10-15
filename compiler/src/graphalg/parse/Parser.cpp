@@ -559,24 +559,140 @@ findModifiedBindingsInBlock(llvm::ArrayRef<Token> tokens, std::size_t offset,
 
 mlir::ParseResult Parser::parseStmtFor() {
   auto loc = cur().loc;
-  llvm::StringRef iterVar;
+  llvm::StringRef iterVarName;
   ParsedRange range;
-  if (eatOrError(Token::FOR) || parseIdent(iterVar) || eatOrError(Token::IN) ||
-      parseRange(range)) {
+  if (eatOrError(Token::FOR) || parseIdent(iterVarName) ||
+      eatOrError(Token::IN) || parseRange(range)) {
     return mlir::failure();
   }
 
   // Find the variables modified inside the loop.
-  llvm::SmallVector<llvm::StringRef> loopVars;
-  findModifiedBindingsInBlock(_tokens, _offset, loopVars);
+  llvm::SmallVector<llvm::StringRef> varNames;
+  findModifiedBindingsInBlock(_tokens, _offset, varNames);
   // Only the variables that exist outside the loop are proper loop variables.
-  llvm::remove_if(
-      loopVars, [&](llvm::StringRef name) { return _symbolTable.count(name); });
-  // TODO: Create the for op
-  // TODO: Parse body block
-  // TODO: Parse until
-  // TODO: Use updated values from the loop
-  return mlir::emitError(loc) << "not implemented";
+  llvm::remove_if(varNames,
+                  [&](llvm::StringRef name) { return !isVarDefined(name); });
+  llvm::SmallVector<mlir::Value> initArgs;
+  llvm::SmallVector<mlir::Type> varTypes;
+  for (auto name : varNames) {
+    auto [value, loc] = _symbolTable.lookup(name);
+    assert(!!value);
+    initArgs.emplace_back(value);
+    varTypes.emplace_back(value.getType());
+  }
+
+  // Create the for op.
+  mlir::Region *bodyRegion;
+  mlir::Region *untilRegion;
+  mlir::ValueRange results;
+  if (range.dim) {
+    auto forOp = _builder.create<ForDimOp>(loc, varTypes, initArgs, range.dim);
+    bodyRegion = &forOp.getBody();
+    untilRegion = &forOp.getUntil();
+    results = forOp->getResults();
+  } else {
+    assert(range.begin && range.end);
+    auto forOp = _builder.create<ForConstOp>(loc, varTypes, initArgs,
+                                             range.begin, range.end);
+    bodyRegion = &forOp.getBody();
+    untilRegion = &forOp.getUntil();
+    results = forOp->getResults();
+  }
+
+  // Create body.
+  assert(bodyRegion->getBlocks().empty());
+  auto &bodyBlock = bodyRegion->emplaceBlock();
+
+  {
+    // Builder and variable scope for this block
+    VariableScope bodyScope(_symbolTable);
+    mlir::OpBuilder::InsertionGuard guard(_builder);
+    _builder.setInsertionPointToStart(&bodyBlock);
+    // Define the iteration variable
+    auto iterVar = bodyBlock.addArgument(
+        MatrixType::scalarOf(SemiringTypes::forInt(_builder.getContext())),
+        loc);
+    if (mlir::failed(assign(loc, iterVarName, iterVar))) {
+      return mlir::failure();
+    }
+
+    // Map variables to their values in the body block
+    for (const auto &[name, type] : llvm::zip_equal(varNames, varTypes)) {
+      auto var = bodyBlock.addArgument(type, loc);
+      if (mlir::failed(assign(loc, name, var))) {
+        return mlir::failure();
+      }
+    }
+
+    // Parse body block.
+    if (mlir::failed(parseBlock())) {
+      return mlir::failure();
+    }
+
+    // yield the new values for the variables
+    llvm::SmallVector<mlir::Value> yieldInputs;
+    for (const auto &name : varNames) {
+      auto [newValue, _] = _symbolTable.lookup(name);
+      assert(!!newValue);
+      yieldInputs.emplace_back(newValue);
+    }
+    _builder.create<YieldOp>(loc, yieldInputs);
+  }
+
+  if (cur().type == Token::UNTIL) {
+    auto loc = cur().loc;
+    eat();
+
+    // Add until block
+    assert(untilRegion->getBlocks().empty());
+    auto &untilBlock = untilRegion->emplaceBlock();
+
+    // Builder and variable scope for this block
+    VariableScope bodyScope(_symbolTable);
+    mlir::OpBuilder::InsertionGuard guard(_builder);
+    _builder.setInsertionPointToStart(&untilBlock);
+    // Define the iteration variable
+    auto iterVar = untilBlock.addArgument(
+        MatrixType::scalarOf(_builder.getI64Type()), loc);
+    if (mlir::failed(assign(loc, iterVarName, iterVar))) {
+      return mlir::failure();
+    }
+
+    // Map variables to their values in the until block
+    for (const auto &[name, type] : llvm::zip_equal(varNames, varTypes)) {
+      auto var = untilBlock.addArgument(type, loc);
+      if (mlir::failed(assign(loc, name, var))) {
+        return mlir::failure();
+      }
+    }
+
+    // Parse condtion expression.
+    mlir::Value result;
+    loc = cur().loc;
+    if (parseExpr(result) || eatOrError(Token::SEMI)) {
+      return mlir::failure();
+    }
+
+    auto resultType = llvm::dyn_cast<MatrixType>(result.getType());
+    if (!resultType || !resultType.isScalar() || !resultType.isBoolean()) {
+      return mlir::emitError(loc)
+             << "loop condition does not produce a boolean scalar, got "
+             << typeToString(resultType);
+    }
+
+    _builder.create<YieldOp>(loc, result);
+  }
+
+  // Use the updated variables from the block
+  assert(results.size() == varNames.size());
+  assert(results.getTypes() == varTypes);
+  for (auto [name, value] : llvm::zip_equal(varNames, results)) {
+    if (mlir::failed(assign(loc, name, value))) {
+      return mlir::failure();
+    }
+  }
+
+  return mlir::success();
 }
 
 mlir::ParseResult Parser::parseStmtReturn() {
