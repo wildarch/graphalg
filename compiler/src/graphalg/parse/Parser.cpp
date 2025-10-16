@@ -144,6 +144,7 @@ private:
   mlir::ParseResult parseStmtFor();
   mlir::ParseResult parseStmtReturn();
   mlir::ParseResult parseStmtAssign();
+  mlir::ParseResult parseStmtAccum(llvm::StringRef baseName);
 
   struct ParsedMask {
     std::optional<llvm::StringRef> name = std::nullopt;
@@ -154,12 +155,12 @@ private:
   mlir::ParseResult parseMask(ParsedMask &mask);
 
   enum class ParsedFill {
+    /** A = v */
+    NONE,
     /** A[:] = v */
     VECTOR,
     /** A[:, :] = v */
     MATRIX,
-    /** A = v */
-    NONE,
   };
   mlir::ParseResult parseFill(ParsedFill &fill);
 
@@ -728,12 +729,8 @@ mlir::ParseResult Parser::parseStmtAssign() {
     return mlir::failure();
   }
 
-  bool accum = false;
   if (cur().type == Token::ACCUM) {
-    accum = true;
-    eat();
-  } else if (eatOrError(Token::ASSIGN)) {
-    return mlir::failure();
+    return parseStmtAccum(baseName);
   }
 
   if (cur().type == Token::LANGLE) {
@@ -744,30 +741,38 @@ mlir::ParseResult Parser::parseStmtAssign() {
     return mlir::emitError(cur().loc) << "not implemented";
   }
 
-  // Simple assign
-  mlir::Value v;
-  if (parseExpr(v) || eatOrError(Token::SEMI)) {
+  if (eatOrError(Token::ASSIGN)) {
     return mlir::failure();
   }
 
-  if (accum) {
-    auto [baseValue, _] = _symbolTable.lookup(baseName);
-    if (!baseValue) {
-      return mlir::emitError(loc) << "undefined variable";
-    } else if (baseValue.getType() != v.getType()) {
-      return mlir::emitError(loc)
-             << "Type of base does not match the expression to accumulate: ("
-             << typeToString(baseValue.getType()) << " vs. "
-             << typeToString(v.getType());
-    }
-
-    // Rewrite a += b; to a = a (.+) b;
-    auto result = mlir::Value(
-        _builder.create<ElementWiseOp>(loc, baseValue, BinaryOp::ADD, v));
-    return assign(loc, baseName, result);
-  } else {
-    return assign(loc, baseName, v);
+  mlir::Value expr;
+  if (parseExpr(expr) || eatOrError(Token::SEMI)) {
+    return mlir::failure();
   }
+
+  return assign(loc, baseName, expr);
+}
+
+mlir::ParseResult Parser::parseStmtAccum(llvm::StringRef baseName) {
+  mlir::Value expr;
+  if (eatOrError(Token::ACCUM) || parseExpr(expr) || eatOrError(Token::SEMI)) {
+    return mlir::failure();
+  }
+
+  auto [baseValue, _] = _symbolTable.lookup(baseName);
+  if (!baseValue) {
+    return mlir::emitError(loc) << "undefined variable";
+  } else if (baseValue.getType() != expr.getType()) {
+    return mlir::emitError(loc)
+           << "Type of base does not match the expression to accumulate: ("
+           << typeToString(baseValue.getType()) << " vs. "
+           << typeToString(expr.getType());
+  }
+
+  // Rewrite a += b; to a = a (.+) b;
+  auto result = mlir::Value(
+      _builder.create<ElementWiseOp>(loc, baseValue, BinaryOp::ADD, expr));
+  return assign(loc, baseName, result);
 }
 
 mlir::ParseResult Parser::parseRange(ParsedRange &r) {

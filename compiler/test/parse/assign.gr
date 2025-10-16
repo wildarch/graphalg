@@ -17,6 +17,12 @@ func Reassign() -> int {
     return a;
 }
 
-// TODO: Mask
+// CHECK-LABEL: @Mask
+func Mask(a:Matrix<s, s, int>, m:Matrix<s, s, bool>, b:Matrix<s, s, int>) -> int {
+    a<m> = b;
+}
+
+// TODO: Complement
+
 // TODO: Fill
 // TODO: Fill & Mask
