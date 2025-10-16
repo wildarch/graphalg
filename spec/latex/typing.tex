@@ -1,0 +1,39 @@
+\documentclass{article}
+
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+% NOTE: needs texlive-latex-extra
+\usepackage{semantic}
+
+% From paper
+\DeclareMathOperator{\schema}{\mathcal{S}}
+\DeclareMathOperator{\sring}{\text{sring}}
+\DeclareMathOperator{\var}{\mathrm{var}}
+\DeclareMathOperator{\zero}{\underline{0}}
+\DeclareMathOperator{\one}{\underline{1}}
+\DeclareMathOperator{\diag}{\mathrm{diag}}
+\DeclareMathOperator{\feval}{\mathrm{feval}}
+\DeclareMathOperator{\type}{\mathrm{type}}
+\DeclareMathOperator{\mapply}{\mathrm{apply}}
+
+\DeclareMathOperator{\matR}{\mathrm{Mat}[R]}
+\DeclareMathOperator{\Symb}{\mathrm{Symb}}
+\DeclareMathOperator{\fschema}{\mathcal{F}}
+\DeclareMathOperator{\dschema}{\mathcal{D}}
+\DeclareMathOperator{\schemas}{\fschema, \dschema, \schema}
+\DeclareMathOperator{\mat}{\text{mat}}
+\DeclareMathOperator{\func}{\text{func}}
+
+
+\begin{document}
+
+\[
+  \inference[program]{
+    F \vdash f_1 : \tau_1 & F[f_1 := \tau_1] \vdash f_2 : \tau_2 \\
+  }{
+    F \vdash f_1 \ f_2
+  }
+\]
+
+\end{document}

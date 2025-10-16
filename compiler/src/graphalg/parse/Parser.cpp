@@ -78,11 +78,6 @@ private:
   mlir::ModuleOp _module;
   mlir::OpBuilder _builder;
 
-  /*
-  llvm::BumpPtrAllocator _stringAllocator;
-  llvm::UniqueStringSaver _stringPool;
-  */
-
   // Value and location where the assignment happened
   struct VariableAssignment {
     mlir::Value value;
@@ -315,7 +310,7 @@ mlir::ParseResult Parser::parseIdent(llvm::StringRef &s) {
 mlir::ParseResult Parser::parseType(mlir::Type &t) {
   auto *ctx = _builder.getContext();
   if (auto ring = tryParseSemiring()) {
-    t = ring;
+    t = MatrixType::scalarOf(ring);
     return mlir::success();
   } else if (cur().type == Token::IDENT && cur().body == "Matrix") {
     // Matrix
@@ -532,7 +527,7 @@ findModifiedBindingsInBlock(llvm::ArrayRef<Token> tokens, std::size_t offset,
     case Token::IDENT: {
       auto name = cur.body;
       auto next = tokens[offset + 1];
-      if (next.type == Token::EQUAL || next.type == Token::ACCUM) {
+      if (next.type == Token::ASSIGN || next.type == Token::ACCUM) {
         // An assignment or accumulate op
         auto [_, newlyAdded] = uniqueBindings.insert(name);
         if (newlyAdded) {
