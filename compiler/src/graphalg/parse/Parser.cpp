@@ -145,6 +145,24 @@ private:
   mlir::ParseResult parseStmtReturn();
   mlir::ParseResult parseStmtAssign();
 
+  struct ParsedMask {
+    std::optional<llvm::StringRef> name = std::nullopt;
+    bool complement = false;
+
+    bool isNone() const { return !name; }
+  };
+  mlir::ParseResult parseMask(ParsedMask &mask);
+
+  enum class ParsedFill {
+    /** A[:] = v */
+    VECTOR,
+    /** A[:, :] = v */
+    MATRIX,
+    /** A = v */
+    NONE,
+  };
+  mlir::ParseResult parseFill(ParsedFill &fill);
+
   struct ParsedRange {
     mlir::Value begin;
     mlir::Value end;
@@ -710,11 +728,11 @@ mlir::ParseResult Parser::parseStmtAssign() {
     return mlir::failure();
   }
 
+  bool accum = false;
   if (cur().type == Token::ACCUM) {
-    return mlir::emitError(cur().loc) << "not implemented";
-  }
-
-  if (eatOrError(Token::ASSIGN)) {
+    accum = true;
+    eat();
+  } else if (eatOrError(Token::ASSIGN)) {
     return mlir::failure();
   }
 
@@ -732,7 +750,24 @@ mlir::ParseResult Parser::parseStmtAssign() {
     return mlir::failure();
   }
 
-  return assign(loc, baseName, v);
+  if (accum) {
+    auto [baseValue, _] = _symbolTable.lookup(baseName);
+    if (!baseValue) {
+      return mlir::emitError(loc) << "undefined variable";
+    } else if (baseValue.getType() != v.getType()) {
+      return mlir::emitError(loc)
+             << "Type of base does not match the expression to accumulate: ("
+             << typeToString(baseValue.getType()) << " vs. "
+             << typeToString(v.getType());
+    }
+
+    // Rewrite a += b; to a = a (.+) b;
+    auto result = mlir::Value(
+        _builder.create<ElementWiseOp>(loc, baseValue, BinaryOp::ADD, v));
+    return assign(loc, baseName, result);
+  } else {
+    return assign(loc, baseName, v);
+  }
 }
 
 mlir::ParseResult Parser::parseRange(ParsedRange &r) {

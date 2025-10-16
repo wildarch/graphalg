@@ -178,7 +178,7 @@ Token Lexer::nextToken() {
   auto two = peek(2);
   auto loc = currentLocation();
 #define TWO(c, t)                                                              \
-  if (two == "->") {                                                           \
+  if (two == c) {                                                              \
     eat();                                                                     \
     eat();                                                                     \
     return Token{Token::t, loc, *two};                                         \

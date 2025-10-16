@@ -32,6 +32,8 @@ include(AddMLIR)
 # Directories with MLIR dialects
 add_subdirectory(include/graphalg)
 
+add_subdirectory(test)
+
 # graphalg_lib
 add_library(graphalg_lib STATIC
     src/graphalg/analysis/DenseAnalysis.cpp

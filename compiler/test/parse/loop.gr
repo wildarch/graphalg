@@ -1,0 +1,21 @@
+// RUN: parse --import-graphalg < %s | FileCheck %s
+func Loop() -> int {
+    // CHECK: %[[#INIT:]] = graphalg.literal 42
+    a = int(42);
+    // CHECK: %[[#BEGIN:]] = graphalg.literal 1
+    // CHECK: %[[#END:]] = graphalg.literal 10
+    // CHECK: %[[#LOOP:]] = graphalg.for_const range(%[[#BEGIN]], %[[#END]])
+    // CHECK:     init(%[[#INIT]])
+    // CHECK:     -> !graphalg.mat<1 x 1 x i64> body {
+    // CHECK: ^bb0(%arg0: !graphalg.mat<1 x 1 x i64>,
+    // CHECK:      %arg1: !graphalg.mat<1 x 1 x i64>):
+    for i in int(1):int(10) {
+        // CHECK: %[[#ONE:]] = graphalg.literal 1 : i64
+        // CHECK: %[[#ADD:]] = graphalg.ewise %arg1 ADD %[[#ONE]]
+        a = a + int(1);
+        // CHECK: graphalg.yield %[[#ADD]]
+    }
+
+    // CHECK: return %[[#LOOP]]
+    return a;
+}
