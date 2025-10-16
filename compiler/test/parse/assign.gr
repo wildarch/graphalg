@@ -1,0 +1,22 @@
+// RUN: parse --import-graphalg < %s | FileCheck %s
+
+// CHECK-LABEL: @Assign
+func Assign() -> int {
+    // CHECK: %[[#A:]] = graphalg.literal 42
+    a = int(42);
+    // CHECK: return %[[#A]]
+    return a;
+}
+
+// CHECK-LABEL: @Reassign
+func Reassign() -> int {
+    a = int(42);
+    // CHECK: %[[#A:]] = graphalg.literal 43
+    a = int(43);
+    // CHECK: return %[[#A]]
+    return a;
+}
+
+// TODO: Mask
+// TODO: Fill
+// TODO: Fill & Mask

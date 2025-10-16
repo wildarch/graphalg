@@ -1,5 +1,7 @@
 // RUN: parse --import-graphalg < %s | FileCheck %s
-func Loop() -> int {
+
+// CHECK-LABEL: @ForConst
+func ForConst() -> int {
     // CHECK: %[[#INIT:]] = graphalg.literal 42
     a = int(42);
     // CHECK: %[[#BEGIN:]] = graphalg.literal 1
@@ -12,6 +14,26 @@ func Loop() -> int {
     for i in int(1):int(10) {
         // CHECK: %[[#ONE:]] = graphalg.literal 1 : i64
         // CHECK: %[[#ADD:]] = graphalg.ewise %arg1 ADD %[[#ONE]]
+        a = a + int(1);
+        // CHECK: graphalg.yield %[[#ADD]]
+    }
+
+    // CHECK: return %[[#LOOP]]
+    return a;
+}
+
+// CHECK-LABEL: @ForDim
+func ForDim(m:Matrix<s, s, int>) -> int {
+    // CHECK: %[[#INIT:]] = graphalg.literal 42
+    a = int(42);
+    // CHECK: %[[#LOOP:]] = graphalg.for_dim range(#dim)
+    // CHECK:     init(%[[#INIT]])
+    // CHECK:     -> !graphalg.mat<1 x 1 x i64> body {
+    // CHECK: ^bb0(%arg1: !graphalg.mat<1 x 1 x i64>,
+    // CHECK:      %arg2: !graphalg.mat<1 x 1 x i64>):
+    for i in m.nrows {
+        // CHECK: %[[#ONE:]] = graphalg.literal 1 : i64
+        // CHECK: %[[#ADD:]] = graphalg.ewise %arg2 ADD %[[#ONE]]
         a = a + int(1);
         // CHECK: graphalg.yield %[[#ADD]]
     }
