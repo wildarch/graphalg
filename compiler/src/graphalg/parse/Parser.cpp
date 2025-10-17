@@ -182,6 +182,8 @@ private:
 
   mlir::ParseResult parseExpr(mlir::Value &v, int minPrec = 1);
 
+  mlir::Value buildMatMul(mlir::Location loc, mlir::Value lhs, mlir::Value rhs);
+
   mlir::ParseResult parseAtom(mlir::Value &v);
 
   mlir::ParseResult parseLiteral(mlir::Type ring, mlir::Value &v);
@@ -470,6 +472,8 @@ mlir::ParseResult Parser::parseFunction() {
   if (mlir::failed(parseBlock())) {
     return mlir::failure();
   }
+
+  // TODO: Check for return statement.
 
   return mlir::success();
 }
@@ -1071,11 +1075,6 @@ mlir::ParseResult Parser::parseExpr(mlir::Value &v, int minPrec) {
         llvm_unreachable("op with precendence but not included here");
       }
 
-      if (binop == BinaryOp::MUL) {
-        // Matmul special case
-        return mlir::emitError(cur().loc) << "not implemented";
-      }
-
       eat(); // binop
 
       mlir::Value atomRhs;
@@ -1083,21 +1082,65 @@ mlir::ParseResult Parser::parseExpr(mlir::Value &v, int minPrec) {
         return mlir::failure();
       }
 
-      // TODO: check scalar matrix types
-      atomLhs = _builder.create<ElementWiseOp>(loc, atomLhs, binop, atomRhs);
+      if (binop == BinaryOp::MUL) {
+        // Matmul special case
+        atomLhs = buildMatMul(loc, atomLhs, atomRhs);
+      } else {
+        // TODO: check scalar matrix types
+        atomLhs = _builder.create<ElementWiseOp>(loc, atomLhs, binop, atomRhs);
+      }
     }
   }
-
-  // TODO: operators with precedence climbing
 
   v = atomLhs;
   return mlir::success();
 }
 
+mlir::Value Parser::buildMatMul(mlir::Location loc, mlir::Value lhs,
+                                mlir::Value rhs) {
+  auto lhsType = llvm::cast<MatrixType>(lhs.getType());
+  auto rhsType = llvm::cast<MatrixType>(rhs.getType());
+  if (lhsType.getSemiring() != rhsType.getSemiring()) {
+    auto diag = mlir::emitError(loc)
+                << "incompatible semirings for matrix multiply";
+    diag.attachNote(lhs.getLoc())
+        << "left side has semiring " << typeToString(lhsType.getSemiring());
+    diag.attachNote(rhs.getLoc())
+        << "right side has semiring " << typeToString(rhsType.getSemiring());
+    return nullptr;
+  }
+
+  if (lhsType.getCols() == rhsType.getRows()) {
+    return _builder.create<MatMulOp>(loc, lhs, rhs);
+  } else if (lhsType.isColumnVector() &&
+             lhsType.getRows() == rhsType.getRows()) {
+    // Special case: Allow implicit column to row vector transpose.
+    return _builder.create<VecMatMulOp>(loc, lhs, rhs);
+  }
+
+  auto diag = mlir::emitError(loc)
+              << "incompatible dimensions for matrix multiply";
+  diag.attachNote(lhs.getLoc())
+      << "left side has dimensions " << dimsToString(lhsType.getDims());
+  diag.attachNote(rhs.getLoc())
+      << "right side has dimensions " << dimsToString(rhsType.getDims());
+  return nullptr;
+}
+
 mlir::ParseResult Parser::parseAtom(mlir::Value &v) {
   auto loc = cur().loc;
   switch (cur().type) {
+  case Token::LPAREN: {
+    // (<expr>)
+    if (eatOrError(Token::LPAREN) || parseExpr(v) ||
+        eatOrError(Token::RPAREN)) {
+      return mlir::failure();
+    }
+
+    return mlir::success();
+  }
   case Token::IDENT: {
+    // <ring>(<literal>)
     if (auto ring = tryParseSemiring()) {
       // e.g. int(42)
       if (eatOrError(Token::LPAREN) || parseLiteral(ring, v) ||
@@ -1176,7 +1219,12 @@ mlir::ParseResult Parser::parseLiteral(mlir::Type ring, mlir::Value &v) {
     }
 
     if (auto v = parseInt(cur().body)) {
-      attr = _builder.getIntegerAttr(ring, *v);
+      auto intAttr = _builder.getIntegerAttr(SemiringTypes::forInt(ctx), *v);
+      if (intAttr.getType() == ring) {
+        attr = intAttr;
+      } else {
+        attr = TropIntAttr::get(ctx, ring, intAttr);
+      }
     } else {
       return mlir::emitError(cur().loc) << "integer does not fit in 64 bits";
     }
@@ -1187,7 +1235,12 @@ mlir::ParseResult Parser::parseLiteral(mlir::Type ring, mlir::Value &v) {
     }
 
     if (auto v = parseFloat(cur().body)) {
-      attr = _builder.getFloatAttr(ring, *v);
+      auto floatAttr = _builder.getFloatAttr(SemiringTypes::forReal(ctx), *v);
+      if (floatAttr.getType() == ring) {
+        attr = floatAttr;
+      } else {
+        attr = TropFloatAttr::get(ctx, ring, floatAttr);
+      }
     } else {
       return mlir::emitError(cur().loc) << "invalid floating-point literal";
     }

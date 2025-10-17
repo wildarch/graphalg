@@ -1,0 +1,5 @@
+// RUN: parse --import-graphalg < %s | FileCheck %s
+
+func Nrows(m:Matrix<r, c, int>) -> int {
+    return m.nrows;
+}

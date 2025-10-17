@@ -1,0 +1,37 @@
+// RUN: parse --import-graphalg < %s | FileCheck %s
+
+// CHECK-LABEL: @LitFalse
+func LitFalse() -> bool {
+    // CHECK: graphalg.literal false
+    return bool(false);
+}
+
+// CHECK-LABEL: @LitTrue
+func LitTrue() -> bool {
+    // CHECK: graphalg.literal true
+    return bool(true);
+}
+
+// CHECK-LABEL: @LitInt
+func LitInt() -> int {
+    // CHECK: graphalg.literal 42 : i64
+    return int(42);
+}
+
+// CHECK-LABEL: @LitReal
+func LitReal() -> real {
+    // CHECK: graphalg.literal 4.200000e+00 : f64
+    return real(4.2);
+}
+
+// CHECK-LABEL: @LitTropInt
+func LitTropInt() -> trop_int {
+    // CHECK: graphalg.literal #graphalg.trop_int<42 : i64> : !graphalg.trop_i64
+    return trop_int(42);
+}
+
+// CHECK-LABEL: @LitTropReal
+func LitTropReal() -> trop_real {
+    // CHECK: graphalg.literal #graphalg.trop_float<4.200000e+00 : f64> : !graphalg.trop_f64
+    return trop_real(4.2);
+}

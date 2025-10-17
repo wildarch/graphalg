@@ -1,0 +1,25 @@
+// RUN: parse --import-graphalg < %s | FileCheck %s
+
+// CHECK-LABEL: @AddMul
+func AddMul(a:int, b:int, c:int) -> int {
+    // CHECK: %[[#MUL:]] = graphalg.mxm %arg1, %arg2
+    // CHECK: %[[#ADD:]] = graphalg.ewise %arg0 ADD %[[#MUL]]
+    // CHECK: return %[[#ADD]]
+    return a + b * c;
+}
+
+// CHECK-LABEL: @MulAdd
+func MulAdd(a:int, b:int, c:int) -> int {
+    // CHECK: %[[#MUL:]] = graphalg.mxm %arg0, %arg1
+    // CHECK: %[[#ADD:]] = graphalg.ewise %[[#MUL]] ADD %arg2
+    // CHECK: return %[[#ADD]]
+    return a * b + c;
+}
+
+// CHECK-LABEL: @AddParensMul
+func AddParensMul(a:int, b:int, c:int) -> int {
+    // CHECK: %[[#ADD:]] = graphalg.ewise %arg0 ADD %arg1
+    // CHECK: %[[#MUL:]] = graphalg.mxm %[[#ADD]], %arg2
+    // CHECK: return %[[#MUL]]
+    return (a + b) * c;
+}
