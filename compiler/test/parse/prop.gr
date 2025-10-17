@@ -1,5 +1,25 @@
 // RUN: parse --import-graphalg < %s | FileCheck %s
 
+// CHECK: #dim = #graphalg.dim<distinct[0]<>>
+// CHECK: #dim1 = #graphalg.dim<distinct[1]<>
+
+// CHECK-LABEL: @Nrows
 func Nrows(m:Matrix<r, c, int>) -> int {
+    // CHECK: %[[#DIM:]] = graphalg.cast_dim #dim
+    // CHECK: return %[[#DIM]]
     return m.nrows;
+}
+
+// CHECK-LABEL: @Ncols
+func Ncols(m:Matrix<r, c, int>) -> int {
+    // CHECK: %[[#DIM:]] = graphalg.cast_dim #dim1
+    // CHECK: return %[[#DIM]]
+    return m.ncols;
+}
+
+// CHECK-LABEL: @Nvals
+func Nvals(m:Matrix<r, c, int>) -> int {
+    // CHECK: %[[#NVALS:]] = graphalg.nvals %arg0 : <#dim x #dim1 x i64>
+    // CHECK: return %[[#NVALS]]
+    return m.nvals;
 }

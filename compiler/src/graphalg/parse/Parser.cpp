@@ -324,14 +324,14 @@ mlir::LogicalResult Parser::assign(mlir::Location loc, llvm::StringRef name,
 }
 
 DimAttr Parser::inferDim(mlir::Value v, mlir::Location refLoc) {
-  auto dimOp = v.getDefiningOp<DimOp>();
+  auto dimOp = v.getDefiningOp<CastDimOp>();
   if (!dimOp) {
     auto diag = mlir::emitError(refLoc) << "not a dimension type";
     diag.attachNote(v.getLoc()) << "defined here";
     return nullptr;
   }
 
-  return dimOp.getDim();
+  return dimOp.getInput();
 }
 
 mlir::ParseResult Parser::parseIdent(llvm::StringRef &s) {
@@ -1023,10 +1023,10 @@ mlir::ParseResult Parser::parseExpr(mlir::Value &v, int minPrec) {
         atomLhs = _builder.create<TransposeOp>(cur().loc, atomLhs);
       } else if (cur().body == "nrows") {
         auto matType = llvm::cast<MatrixType>(atomLhs.getType());
-        atomLhs = _builder.create<DimOp>(cur().loc, matType.getRows());
+        atomLhs = _builder.create<CastDimOp>(cur().loc, matType.getRows());
       } else if (cur().body == "ncols") {
         auto matType = llvm::cast<MatrixType>(atomLhs.getType());
-        atomLhs = _builder.create<DimOp>(cur().loc, matType.getCols());
+        atomLhs = _builder.create<CastDimOp>(cur().loc, matType.getCols());
       } else if (cur().body == "nvals") {
         atomLhs = _builder.create<NValsOp>(cur().loc, atomLhs);
       } else {
