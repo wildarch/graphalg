@@ -119,6 +119,7 @@ private:
   */
 
   std::string typeToString(mlir::Type t);
+  std::string dimsToString(std::pair<DimAttr, DimAttr> dims);
 
   mlir::LogicalResult assign(mlir::Location loc, llvm::StringRef name,
                              mlir::Value value);
@@ -144,15 +145,20 @@ private:
   mlir::ParseResult parseStmtFor();
   mlir::ParseResult parseStmtReturn();
   mlir::ParseResult parseStmtAssign();
-  mlir::ParseResult parseStmtAccum(llvm::StringRef baseName);
+  mlir::ParseResult parseStmtAccum(mlir::Location baseLoc,
+                                   llvm::StringRef baseName);
 
   struct ParsedMask {
-    std::optional<llvm::StringRef> name = std::nullopt;
+    mlir::Value mask = nullptr;
+    ;
     bool complement = false;
 
-    bool isNone() const { return !name; }
+    bool isNone() const { return !mask; }
   };
   mlir::ParseResult parseMask(ParsedMask &mask);
+  mlir::Value applyMask(mlir::Location baseLoc, mlir::Value base,
+                        mlir::Location maskLoc, const ParsedMask &mask,
+                        mlir::Location exprLoc, mlir::Value expr);
 
   enum class ParsedFill {
     /** A = v */
@@ -163,6 +169,9 @@ private:
     MATRIX,
   };
   mlir::ParseResult parseFill(ParsedFill &fill);
+  mlir::Value applyFill(mlir::Location baseLoc, mlir::Value base,
+                        mlir::Location fillLoc, ParsedFill fill,
+                        mlir::Location exprLoc, mlir::Value expr);
 
   struct ParsedRange {
     mlir::Value begin;
@@ -287,6 +296,12 @@ std::string Parser::typeToString(mlir::Type type) {
   TypeFormatter fmt(&_dimMapper);
   fmt.format(type);
   return fmt.take();
+}
+
+std::string Parser::dimsToString(std::pair<DimAttr, DimAttr> dims) {
+  auto [r, c] = dims;
+  return "(" + _dimMapper.getName(r).str() + " x " +
+         _dimMapper.getName(c).str() + ")";
 }
 
 mlir::LogicalResult Parser::assign(mlir::Location loc, llvm::StringRef name,
@@ -730,30 +745,185 @@ mlir::ParseResult Parser::parseStmtAssign() {
   }
 
   if (cur().type == Token::ACCUM) {
-    return parseStmtAccum(baseName);
+    return parseStmtAccum(loc, baseName);
   }
 
+  ParsedMask mask;
+  auto maskLoc = cur().loc;
   if (cur().type == Token::LANGLE) {
-    return mlir::emitError(cur().loc) << "not implemented";
+    if (mlir::failed(parseMask(mask))) {
+      return mlir::failure();
+    }
   }
 
+  auto fill = ParsedFill::NONE;
+  auto fillLoc = cur().loc;
   if (cur().type == Token::LSBRACKET) {
-    return mlir::emitError(cur().loc) << "not implemented";
+    if (mlir::failed(parseFill(fill))) {
+      return mlir::failure();
+    }
   }
 
   if (eatOrError(Token::ASSIGN)) {
     return mlir::failure();
   }
 
+  auto exprLoc = cur().loc;
   mlir::Value expr;
   if (parseExpr(expr) || eatOrError(Token::SEMI)) {
+    return mlir::failure();
+  }
+
+  auto [baseValue, _] = _symbolTable.lookup(baseName);
+  if (!baseValue) {
+    // New variable
+    if (fill != ParsedFill::NONE || !mask.isNone()) {
+      // Cannot fill or mask if base was not already defined.
+      return mlir::emitError(loc) << "undefined variable '" << baseName << "'";
+    }
+
+    // Regular assignment.
+    return assign(loc, baseName, expr);
+  }
+
+  expr = applyFill(loc, baseValue, fillLoc, fill, exprLoc, expr);
+  if (!expr) {
+    return mlir::failure();
+  }
+
+  expr = applyMask(loc, baseValue, maskLoc, mask, exprLoc, expr);
+  if (!expr) {
     return mlir::failure();
   }
 
   return assign(loc, baseName, expr);
 }
 
-mlir::ParseResult Parser::parseStmtAccum(llvm::StringRef baseName) {
+mlir::ParseResult Parser::parseMask(ParsedMask &mask) {
+  if (eatOrError(Token::LANGLE)) {
+    return mlir::failure();
+  }
+
+  if (cur().type == Token::NOT) {
+    eat();
+    mask.complement = true;
+  }
+
+  auto loc = cur().loc;
+  llvm::StringRef name;
+  if (parseIdent(name)) {
+    return mlir::failure();
+  }
+
+  auto [maskValue, _] = _symbolTable.lookup(name);
+  if (!maskValue) {
+    return mlir::emitError(loc) << "undefined variable '" << name << "'";
+  }
+
+  mask.mask = maskValue;
+  return eatOrError(Token::RANGLE);
+}
+
+mlir::Value Parser::applyMask(mlir::Location baseLoc, mlir::Value base,
+                              mlir::Location maskLoc, const ParsedMask &mask,
+                              mlir::Location exprLoc, mlir::Value expr) {
+  if (mask.isNone()) {
+    // no mask to apply
+    return expr;
+  }
+
+  auto baseType = llvm::cast<MatrixType>(base.getType());
+  auto maskType = llvm::cast<MatrixType>(mask.mask.getType());
+  auto exprType = llvm::cast<MatrixType>(expr.getType());
+
+  if (baseType != exprType) {
+    auto diag = mlir::emitError(baseLoc)
+                << "base type does not match the value to assign";
+    diag.attachNote(baseLoc) << "base type: " << typeToString(baseType);
+    diag.attachNote(exprLoc) << "expression type: " << typeToString(exprType);
+    return nullptr;
+  } else if (!maskType.isBoolean()) {
+    // TODO: Widen this to allow any semiring (using implicit cast)
+    mlir::emitError(maskLoc)
+        << "mask is not a boolean matrix: " << typeToString(maskType);
+    return nullptr;
+  }
+
+  auto baseDims = baseType.getDims();
+  auto maskDims = maskType.getDims();
+  if (baseDims != maskDims) {
+    auto diag = mlir::emitError(baseLoc)
+                << "base dimensions do not match the dimensions of the mask";
+    diag.attachNote(baseLoc) << "base dimension: " << dimsToString(baseDims);
+    diag.attachNote(maskLoc) << "mask dimensions: " << dimsToString(maskDims);
+    return nullptr;
+  }
+
+  return _builder.create<MaskOp>(maskLoc, base, mask.mask, expr,
+                                 mask.complement);
+}
+
+mlir::ParseResult Parser::parseFill(ParsedFill &fill) {
+  // [:
+  if (eatOrError(Token::LSBRACKET) || eatOrError(Token::COLON)) {
+    return mlir::failure();
+  }
+
+  if (cur().type == Token::COMMA) {
+    fill = ParsedFill::MATRIX;
+
+    // ,:]
+    if (eatOrError(Token::COMMA) || eatOrError(Token::COLON) ||
+        eatOrError(Token::RSBRACKET)) {
+      return mlir::failure();
+    }
+
+    return mlir::success();
+  } else {
+    fill = ParsedFill::VECTOR;
+    return eatOrError(Token::RSBRACKET);
+  }
+}
+
+mlir::Value Parser::applyFill(mlir::Location baseLoc, mlir::Value base,
+                              mlir::Location fillLoc, ParsedFill fill,
+                              mlir::Location exprLoc, mlir::Value expr) {
+  if (fill == ParsedFill::NONE) {
+    // No fill to apply
+    return expr;
+  }
+
+  auto baseType = llvm::cast<MatrixType>(base.getType());
+  auto exprType = llvm::cast<MatrixType>(expr.getType());
+  if (!exprType.isScalar()) {
+    auto diag = mlir::emitError(exprLoc) << "fill expression is not a scalar";
+    return nullptr;
+  }
+
+  auto baseRing = baseType.getSemiring();
+  auto exprRing = exprType.getSemiring();
+  if (baseRing != exprRing) {
+    auto diag = mlir::emitError(baseLoc)
+                << "base and fill expression have different semirings";
+    diag.attachNote(exprLoc)
+        << "fill expression has semiring " << typeToString(exprRing);
+    diag.attachNote(baseLoc)
+        << "base matrix has semiring " << typeToString(baseRing);
+    return nullptr;
+  }
+
+  if (fill == ParsedFill::VECTOR && !baseType.isColumnVector()) {
+    auto diag = mlir::emitError(fillLoc)
+                << "vector fill [:] used with non-vector base";
+    diag.attachNote(baseLoc) << "base has type " << typeToString(baseType);
+    return nullptr;
+  }
+
+  return _builder.create<BroadcastOp>(fillLoc, baseType, expr);
+}
+
+mlir::ParseResult Parser::parseStmtAccum(mlir::Location baseLoc,
+                                         llvm::StringRef baseName) {
   mlir::Value expr;
   if (eatOrError(Token::ACCUM) || parseExpr(expr) || eatOrError(Token::SEMI)) {
     return mlir::failure();
@@ -761,18 +931,18 @@ mlir::ParseResult Parser::parseStmtAccum(llvm::StringRef baseName) {
 
   auto [baseValue, _] = _symbolTable.lookup(baseName);
   if (!baseValue) {
-    return mlir::emitError(loc) << "undefined variable";
+    return mlir::emitError(baseLoc) << "undefined variable";
   } else if (baseValue.getType() != expr.getType()) {
-    return mlir::emitError(loc)
-           << "Type of base does not match the expression to accumulate: ("
+    return mlir::emitError(baseLoc)
+           << "type of base does not match the expression to accumulate: ("
            << typeToString(baseValue.getType()) << " vs. "
            << typeToString(expr.getType());
   }
 
   // Rewrite a += b; to a = a (.+) b;
   auto result = mlir::Value(
-      _builder.create<ElementWiseOp>(loc, baseValue, BinaryOp::ADD, expr));
-  return assign(loc, baseName, result);
+      _builder.create<ElementWiseOp>(baseLoc, baseValue, BinaryOp::ADD, expr));
+  return assign(baseLoc, baseName, result);
 }
 
 mlir::ParseResult Parser::parseRange(ParsedRange &r) {
@@ -843,9 +1013,6 @@ mlir::ParseResult Parser::parseExpr(mlir::Value &v, int minPrec) {
       if (cur().type != Token::IDENT) {
         return mlir::emitError(cur().loc)
                << "expected matrix property such as 'nrows'";
-      } else if (!llvm::isa<MatrixType>(atomLhs.getType())) {
-        return mlir::emitError(cur().loc) << "value is not of type matrix: "
-                                          << typeToString(atomLhs.getType());
       }
 
       if (cur().body == "T") {

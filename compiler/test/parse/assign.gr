@@ -18,11 +18,40 @@ func Reassign() -> int {
 }
 
 // CHECK-LABEL: @Mask
-func Mask(a:Matrix<s, s, int>, m:Matrix<s, s, bool>, b:Matrix<s, s, int>) -> int {
+func Mask(a:Matrix<s, s, int>, m:Matrix<s, s, bool>, b:Matrix<s, s, int>) -> Matrix<s, s, int> {
+    // CHECK: %[[#MASK:]] = graphalg.mask %arg0<%arg1 : <#dim x #dim x i1>>
+    // CHECK-SAME: = %arg2 : <#dim x #dim x i64> {complement = false}
     a<m> = b;
+    // CHECK: return %[[#MASK]]
+    return a;
 }
 
-// TODO: Complement
+// CHECK-LABEL: @MaskComplement
+func MaskComplement(a:Matrix<s, s, int>, m:Matrix<s, s, bool>, b:Matrix<s, s, int>) -> Matrix<s, s, int> {
+    // CHECK: %[[#MASK:]] = graphalg.mask %arg0<%arg1 : <#dim x #dim x i1>>
+    // CHECK-SAME: = %arg2 : <#dim x #dim x i64> {complement = true}
+    a<!m> = b;
+    // CHECK: return %[[#MASK]]
+    return a;
+}
 
-// TODO: Fill
-// TODO: Fill & Mask
+// CHECK-LABEL: @Fill
+func Fill(a:Matrix<s, s, int>, b:int) -> Matrix<s, s, int> {
+    // CHECK: %[[#FILL:]] = graphalg.broadcast
+    // CHECK-SAME: %arg1 : <1 x 1 x i64> -> <#dim x #dim x i64>
+    a[:,:] = b;
+    // CHECK: return %[[#FILL]]
+    return a;
+}
+
+// CHECK-LABEL: @MaskedFill
+func MaskedFill(a:Matrix<s, s, int>, m:Matrix<s, s, bool>, b:int) -> Matrix<s, s, int> {
+    // CHECK: %[[#FILL:]] = graphalg.broadcast
+    // CHECK-SAME: %arg2 : <1 x 1 x i64> -> <#dim x #dim x i64>
+    //
+    // CHECK: %[[#MASK:]] = graphalg.mask %arg0<%arg1 : <#dim x #dim x i1>>
+    // CHECK-SAME:= %[[#FILL]] : <#dim x #dim x i64> {complement = false}
+    a<m>[:, :] = b;
+    // CHECK: return %[[#MASK]]
+    return a;
+}
