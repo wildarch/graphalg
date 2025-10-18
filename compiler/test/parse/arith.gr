@@ -1,0 +1,43 @@
+// RUN: parse --import-graphalg < %s | FileCheck %s
+
+// CHECK-LABEL: @Add
+func Add(a:int, b:int, c:int) -> int {
+    // CHECK: %[[#ADD:]] = graphalg.ewise %arg0 ADD %arg1
+    // CHECK: return %[[#ADD]]
+    return a + b;
+}
+
+// CHECK-LABEL: @Sub
+func Sub(a:int, b:int, c:int) -> int {
+    // CHECK: %[[#SUB:]] = graphalg.ewise %arg0 SUB %arg1
+    // CHECK: return %[[#SUB]]
+    return a - b;
+}
+
+// CHECK-LABEL: @Mul
+func Mul(a:int, b:int, c:int) -> int {
+    // CHECK: %[[#MUL:]] = graphalg.mxm %arg0, %arg1
+    // CHECK: return %[[#MUL]]
+    return a * b;
+}
+
+// CHECK-LABEL: @Div
+func Div(a:int, b:int, c:int) -> int {
+    // CHECK: %[[#DIV:]] = graphalg.ewise %arg0 DIV %arg1
+    // CHECK: return %[[#DIV]]
+    return a / b;
+}
+
+// CHECK-LABEL: @Not
+func Not(a:bool) -> bool {
+    // CHECK: %[[#NOT:]] = graphalg.not %arg0
+    // CHECK: return %[[#NOT]]
+    return !a;
+}
+
+// CHECK-LABEL: @Neg
+func Neg(a:int) -> int {
+    // CHECK: %[[#NEG:]] = graphalg.neg %arg0
+    // CHECK: return %[[#NEG]]
+    return -a;
+}

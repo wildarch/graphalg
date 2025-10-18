@@ -23,3 +23,28 @@ func AddParensMul(a:int, b:int, c:int) -> int {
     // CHECK: return %[[#MUL]]
     return (a + b) * c;
 }
+
+// CHECK-LABEL: @MulDot
+func MulDot(a:int, m:Vector<s, int>) -> int {
+    // CHECK: %[[#DIM:]] = graphalg.cast_dim #dim
+    // CHECK: %[[#MUL:]] = graphalg.mxm %arg0, %[[#DIM]]
+    // CHECK: return %[[#MUL]]
+    return a * m.nrows;
+}
+
+// CHECK-LABEL: @EqAdd
+func EqAdd(a:int, b:int, c:int) -> bool {
+    // CHECK: %[[#ADD:]] = graphalg.ewise %arg1 ADD %arg2
+    // CHECK: %[[#EQ:]] = graphalg.ewise %arg0 EQ %[[#ADD]]
+    // CHECK: return %[[#EQ]]
+    return a == b + c;
+}
+
+func NotEq(a:bool, b:bool) -> bool {
+    // CHECK: %[[#NOT:]] = graphalg.not %arg0
+    // CHECK: %[[#EQ:]] = graphalg.ewise %[[#NOT]] EQ %arg1
+    // CHECK: return %[[#EQ]]
+    return !a == b;
+}
+
+// TODO: ewise

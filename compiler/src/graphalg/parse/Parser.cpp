@@ -976,22 +976,24 @@ mlir::ParseResult Parser::parseRange(ParsedRange &r) {
 
 static int precedenceForOp(Token::Kind op) {
   switch (op) {
-  case Token::DOT:
-    return 1;
-  case Token::PLUS:
-  case Token::MINUS:
-    return 2;
-  case Token::TIMES:
-  case Token::DIVIDE:
-    return 3;
+  // NOTE: 1 for ewise
   case Token::EQUAL:
   case Token::NOT_EQUAL:
   case Token::LANGLE:
   case Token::RANGLE:
   case Token::LEQ:
   case Token::GEQ:
+    return 2;
+  case Token::PLUS:
+  case Token::MINUS:
+    return 3;
+  case Token::TIMES:
+  case Token::DIVIDE:
     return 4;
+  case Token::DOT:
+    return 5;
   default:
+    // Not an op with precedence
     return 0;
   }
 }
@@ -1005,7 +1007,7 @@ mlir::ParseResult Parser::parseExpr(mlir::Value &v, int minPrec) {
   while (true) {
     bool ewise = cur().type == Token::LPAREN && _offset + 1 < _tokens.size() &&
                  _tokens[_offset + 1].type == Token::DOT;
-    int prec = ewise ? 5 : precedenceForOp(cur().type);
+    int prec = ewise ? 1 : precedenceForOp(cur().type);
     if (!prec || prec < minPrec) {
       break;
     }
@@ -1163,6 +1165,22 @@ mlir::ParseResult Parser::parseAtom(mlir::Value &v) {
     }
 
     v = var.value;
+    return mlir::success();
+  }
+  case Token::NOT: {
+    if (eatOrError(Token::NOT) || parseAtom(v)) {
+      return mlir::failure();
+    }
+
+    v = _builder.create<NotOp>(loc, v);
+    return mlir::success();
+  }
+  case Token::MINUS: {
+    if (eatOrError(Token::MINUS) || parseAtom(v)) {
+      return mlir::failure();
+    }
+
+    v = _builder.create<NegOp>(loc, v);
     return mlir::success();
   }
   default:

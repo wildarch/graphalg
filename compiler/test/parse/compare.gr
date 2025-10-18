@@ -1,0 +1,43 @@
+// RUN: parse --import-graphalg < %s | FileCheck %s
+
+// CHECK-LABEL: @Eq
+func Eq(a:int, b:int) -> bool {
+    // CHECK: %[[#CMP:]] = graphalg.ewise %arg0 EQ %arg1
+    // CHECK: return %[[#CMP]]
+    return a == b;
+}
+
+// CHECK-LABEL: @Ne
+func Ne(a:int, b:int) -> bool {
+    // CHECK: %[[#CMP:]] = graphalg.ewise %arg0 NE %arg1
+    // CHECK: return %[[#CMP]]
+    return a != b;
+}
+
+// CHECK-LABEL: @Lt
+func Lt(a:int, b:int) -> bool {
+    // CHECK: %[[#CMP:]] = graphalg.ewise %arg0 LT %arg1
+    // CHECK: return %[[#CMP]]
+    return a < b;
+}
+
+// CHECK-LABEL: @Gt
+func Gt(a:int, b:int) -> bool {
+    // CHECK: %[[#CMP:]] = graphalg.ewise %arg0 GT %arg1
+    // CHECK: return %[[#CMP]]
+    return a > b;
+}
+
+// CHECK-LABEL: @Le
+func Le(a:int, b:int) -> bool {
+    // CHECK: %[[#CMP:]] = graphalg.ewise %arg0 LE %arg1
+    // CHECK: return %[[#CMP]]
+    return a <= b;
+}
+
+// CHECK-LABEL: @Ge
+func Ge(a:int, b:int) -> bool {
+    // CHECK: %[[#CMP:]] = graphalg.ewise %arg0 GE %arg1
+    // CHECK: return %[[#CMP]]
+    return a >= b;
+}
