@@ -1,0 +1,18 @@
+// RUN: parse --import-graphalg < %s | FileCheck %s
+
+// CHECK: #dim = #graphalg.dim<distinct[0]<>>
+// CHECK: #dim1 = #graphalg.dim<distinct[1]<>
+
+// CHECK-LABEL: @NewMatrix
+func NewMatrix(m:Matrix<r, c, int>) -> Matrix<c, r, int> {
+    // CHECK: %[[#CONST:]] = graphalg.const_mat 0 : i64 -> <#dim1 x #dim x i64>
+    // CHECK: return %[[#CONST]]
+    return Matrix<int>(m.ncols, m.nrows);
+}
+
+// CHECK-LABEL: @NewVector
+func NewVector(v:Vector<r, int>) -> Vector<r, int> {
+    // CHECK: %[[#CONST:]] = graphalg.const_mat 0 : i64 -> <#dim x 1 x i64>
+    // CHECK: return %[[#CONST]]
+    return Vector<int>(v.nrows);
+}

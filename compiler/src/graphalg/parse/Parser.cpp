@@ -1158,6 +1158,52 @@ mlir::ParseResult Parser::parseAtom(mlir::Value &v) {
       return mlir::failure();
     }
 
+    if (name == "Matrix") {
+      mlir::Type ring;
+      mlir::Value rowsExpr;
+      mlir::Value colsExpr;
+      if (eatOrError(Token::LANGLE) || parseSemiring(ring) ||
+          eatOrError(Token::RANGLE) || eatOrError(Token::LPAREN) ||
+          parseExpr(rowsExpr) || eatOrError(Token::COMMA) ||
+          parseExpr(colsExpr) || eatOrError(Token::RPAREN)) {
+        return mlir::failure();
+      }
+
+      // TODO: Better ref locs
+      auto rows = inferDim(rowsExpr, loc);
+      auto cols = inferDim(colsExpr, loc);
+      if (!rows || !cols) {
+        return mlir::failure();
+      }
+
+      v = _builder.create<ConstantMatrixOp>(
+          loc, _builder.getType<MatrixType>(rows, cols, ring),
+          llvm::cast<SemiringTypeInterface>(ring).addIdentity());
+      return mlir::success();
+    }
+
+    if (name == "Vector") {
+      mlir::Type ring;
+      mlir::Value rowsExpr;
+      if (eatOrError(Token::LANGLE) || parseSemiring(ring) ||
+          eatOrError(Token::RANGLE) || eatOrError(Token::LPAREN) ||
+          parseExpr(rowsExpr) || eatOrError(Token::RPAREN)) {
+        return mlir::failure();
+      }
+
+      // TODO: Better ref locs
+      auto rows = inferDim(rowsExpr, loc);
+      if (!rows) {
+        return mlir::failure();
+      }
+
+      auto *ctx = _builder.getContext();
+      v = _builder.create<ConstantMatrixOp>(
+          loc, MatrixType::get(ctx, rows, DimAttr::getOne(ctx), ring),
+          llvm::cast<SemiringTypeInterface>(ring).addIdentity());
+      return mlir::success();
+    }
+
     // TODO: Handle keywords and function calls
     auto var = _symbolTable.lookup(name);
     if (!var.value) {
