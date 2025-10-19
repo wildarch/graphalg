@@ -1,0 +1,22 @@
+// RUN: parse --import-graphalg < %s | FileCheck %s
+
+// CHECK-LABEL: @EwiseAdd
+func EwiseAdd(a:Matrix<s, s, int>, b:Matrix<s, s, int>) -> Matrix<s, s, int> {
+    // CHECK: graphalg.ewise %arg0 ADD %arg1
+    return a (.+) b;
+}
+
+// CHECK-LABEL: @EwiseMul
+func EwiseMul(a:Matrix<s, s, int>, b:Matrix<s, s, int>) -> Matrix<s, s, int> {
+    // CHECK: graphalg.ewise %arg0 MUL %arg1
+    return a (.*) b;
+}
+
+// CHECK-LABEL: @EwiseApply
+func add(a:int, b:int) -> int {
+    return a + b;
+}
+func EwiseApply(a:Matrix<s, s, int>, b:Matrix<s, s, int>) -> Matrix<s, s, int> {
+    // CHECK: graphalg.apply_elementwise @add %arg0, %arg1
+    return a (.add) b;
+}

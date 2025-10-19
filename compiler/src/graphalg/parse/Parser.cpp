@@ -106,18 +106,6 @@ private:
     }
   }
 
-  /*
-  std::optional<Token> tryEat(Token::Kind kind) {
-    if (cur().type == kind) {
-      auto token = cur();
-      _offset++;
-      return token;
-    }
-
-    return std::nullopt;
-  }
-  */
-
   std::string typeToString(mlir::Type t);
   std::string dimsToString(std::pair<DimAttr, DimAttr> dims);
 
@@ -128,6 +116,7 @@ private:
   DimAttr inferDim(mlir::Value v, mlir::Location refLoc);
 
   mlir::ParseResult parseIdent(llvm::StringRef &s);
+  mlir::ParseResult parseFuncRef(mlir::func::FuncOp &funcOp);
   mlir::ParseResult parseType(mlir::Type &t);
   mlir::ParseResult parseDim(DimAttr &t);
 
@@ -181,6 +170,8 @@ private:
   mlir::ParseResult parseRange(ParsedRange &r);
 
   mlir::ParseResult parseExpr(mlir::Value &v, int minPrec = 1);
+
+  mlir::ParseResult parseBinaryOp(BinaryOp &op);
 
   mlir::Value buildMatMul(mlir::Location loc, mlir::Value lhs, mlir::Value rhs);
 
@@ -341,6 +332,22 @@ mlir::ParseResult Parser::parseIdent(llvm::StringRef &s) {
 
   s = cur().body;
   return eatOrError(Token::IDENT);
+}
+
+mlir::ParseResult Parser::parseFuncRef(mlir::func::FuncOp &funcOp) {
+  auto loc = cur().loc;
+  llvm::StringRef name;
+  if (parseIdent(name)) {
+    return mlir::failure();
+  }
+
+  funcOp =
+      llvm::dyn_cast_if_present<mlir::func::FuncOp>(_module.lookupSymbol(name));
+  if (!funcOp) {
+    return mlir::emitError(loc) << "unknown function '" << name << "'";
+  }
+
+  return mlir::success();
 }
 
 mlir::ParseResult Parser::parseType(mlir::Type &t) {
@@ -1037,50 +1044,38 @@ mlir::ParseResult Parser::parseExpr(mlir::Value &v, int minPrec) {
 
       eat();
     } else if (ewise) {
-      return mlir::emitError(cur().loc) << "not implemented";
+      eat(); // '('
+      eat(); // '.'
+      if (cur().type == Token::IDENT) {
+        // element-wise function
+        auto loc = cur().loc;
+        mlir::func::FuncOp funcOp;
+        mlir::Value atomRhs;
+        if (parseFuncRef(funcOp) || eatOrError(Token::RPAREN) ||
+            parseExpr(atomRhs, nextMinPrec)) {
+          return mlir::failure();
+        }
+
+        atomLhs =
+            _builder.create<ApplyElementWiseOp>(loc, funcOp, atomLhs, atomRhs);
+      } else {
+        // element-wise binop
+        auto loc = cur().loc;
+        BinaryOp binop;
+        mlir::Value atomRhs;
+        if (parseBinaryOp(binop) || eatOrError(Token::RPAREN) ||
+            parseExpr(atomRhs, nextMinPrec)) {
+          return mlir::failure();
+        }
+
+        atomLhs = _builder.create<ElementWiseOp>(loc, atomLhs, binop, atomRhs);
+      }
     } else {
-      // binop
+      // Binary operator
       auto loc = cur().loc;
       BinaryOp binop;
-      switch (cur().type) {
-      case Token::PLUS:
-        binop = BinaryOp::ADD;
-        break;
-      case Token::MINUS:
-        binop = BinaryOp::SUB;
-        break;
-      case Token::TIMES:
-        binop = BinaryOp::MUL;
-        break;
-      case Token::DIVIDE:
-        binop = BinaryOp::DIV;
-        break;
-      case Token::EQUAL:
-        binop = BinaryOp::EQ;
-        break;
-      case Token::NOT_EQUAL:
-        binop = BinaryOp::NE;
-        break;
-      case Token::LANGLE:
-        binop = BinaryOp::LT;
-        break;
-      case Token::RANGLE:
-        binop = BinaryOp::GT;
-        break;
-      case Token::LEQ:
-        binop = BinaryOp::LE;
-        break;
-      case Token::GEQ:
-        binop = BinaryOp::GE;
-        break;
-      default:
-        llvm_unreachable("op with precendence but not included here");
-      }
-
-      eat(); // binop
-
       mlir::Value atomRhs;
-      if (parseExpr(atomRhs, nextMinPrec)) {
+      if (parseBinaryOp(binop) || parseExpr(atomRhs, nextMinPrec)) {
         return mlir::failure();
       }
 
@@ -1095,6 +1090,46 @@ mlir::ParseResult Parser::parseExpr(mlir::Value &v, int minPrec) {
   }
 
   v = atomLhs;
+  return mlir::success();
+}
+
+mlir::ParseResult Parser::parseBinaryOp(BinaryOp &op) {
+  switch (cur().type) {
+  case Token::PLUS:
+    op = BinaryOp::ADD;
+    break;
+  case Token::MINUS:
+    op = BinaryOp::SUB;
+    break;
+  case Token::TIMES:
+    op = BinaryOp::MUL;
+    break;
+  case Token::DIVIDE:
+    op = BinaryOp::DIV;
+    break;
+  case Token::EQUAL:
+    op = BinaryOp::EQ;
+    break;
+  case Token::NOT_EQUAL:
+    op = BinaryOp::NE;
+    break;
+  case Token::LANGLE:
+    op = BinaryOp::LT;
+    break;
+  case Token::RANGLE:
+    op = BinaryOp::GT;
+    break;
+  case Token::LEQ:
+    op = BinaryOp::LE;
+    break;
+  case Token::GEQ:
+    op = BinaryOp::GE;
+    break;
+  default:
+    return mlir::emitError(cur().loc) << "expected a binary operator";
+  }
+
+  eat();
   return mlir::success();
 }
 
