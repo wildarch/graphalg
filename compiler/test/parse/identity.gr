@@ -1,0 +1,73 @@
+// RUN: parse --import-graphalg < %s | FileCheck %s
+
+// CHECK-LABEL: @ZeroBool
+func ZeroBool() -> bool {
+    // CHECK: graphalg.literal false
+    return zero(bool);
+}
+
+// CHECK-LABEL: @ZeroInt
+func ZeroInt() -> int {
+    // CHECK: graphalg.literal 0 : i64
+    return zero(int);
+}
+
+// CHECK-LABEL: @ZeroReal
+func ZeroReal() -> real {
+    // CHECK: graphalg.literal 0.000000e+00 : f64
+    return zero(real);
+}
+
+// CHECK-LABEL: @ZeroTropInt
+func ZeroTropInt() -> trop_int {
+    // CHECK: graphalg.literal #graphalg.trop_inf : !graphalg.trop_i64
+    return zero(trop_int);
+}
+
+// CHECK-LABEL: @ZeroTropReal
+func ZeroTropReal() -> trop_real {
+    // CHECK: graphalg.literal #graphalg.trop_inf : !graphalg.trop_f64
+    return zero(trop_real);
+}
+
+// CHECK-LABEL: @ZeroTropMaxInt
+func ZeroTropMaxInt() -> trop_max_int {
+    // CHECK: graphalg.literal #graphalg.trop_inf : !graphalg.trop_max_i64
+    return zero(trop_max_int);
+}
+
+// CHECK-LABEL: @OneBool
+func OneBool() -> bool {
+    // CHECK: graphalg.literal true
+    return one(bool);
+}
+
+// CHECK-LABEL: @OneInt
+func OneInt() -> int {
+    // CHECK: graphalg.literal 1 : i64
+    return one(int);
+}
+
+// CHECK-LABEL: @OneReal
+func OneReal() -> real {
+    // CHECK: graphalg.literal 1.000000e+00 : f64
+    return one(real);
+}
+
+// CHECK-LABEL: @OneTropInt
+func OneTropInt() -> trop_int {
+    // CHECK: graphalg.literal #graphalg.trop_int<0 : i64> : !graphalg.trop_i64
+    return one(trop_int);
+}
+
+// CHECK-LABEL: @OneTropReal
+func OneTropReal() -> trop_real {
+    // CHECK: graphalg.literal #graphalg.trop_float<0.000000e+00 : f64> : !graphalg.trop_f64
+    return one(trop_real);
+}
+
+// CHECK-LABEL: @OneTropMaxInt
+func OneTropMaxInt() -> trop_max_int {
+    // CHECK: graphalg.literal #graphalg.trop_int<0 : i64> : !graphalg.trop_max_i64
+    return one(trop_max_int);
+}

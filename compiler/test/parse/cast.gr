@@ -1,0 +1,8 @@
+// RUN: parse --import-graphalg < %s | FileCheck %s
+
+// CHECK-LABEL: @CastIntReal
+func CastIntReal(a:int) -> real {
+    // CHECK: %[[#CAST:]] = graphalg.cast %arg0 : <1 x 1 x i64> -> <1 x 1 x f64>
+    // CHECK: return %[[#CAST]]
+    return cast<real>(a);
+}

@@ -1204,7 +1204,56 @@ mlir::ParseResult Parser::parseAtom(mlir::Value &v) {
       return mlir::success();
     }
 
-    // TODO: Handle keywords and function calls
+    if (name == "cast") {
+      mlir::Type ring;
+      mlir::Value expr;
+      if (eatOrError(Token::LANGLE) || parseSemiring(ring) ||
+          eatOrError(Token::RANGLE) || eatOrError(Token::LPAREN) ||
+          parseExpr(expr) || eatOrError(Token::RPAREN)) {
+        return mlir::failure();
+      }
+
+      auto exprType = llvm::cast<MatrixType>(expr.getType());
+      auto *dialect =
+          _builder.getContext()->getLoadedDialect<GraphAlgDialect>();
+      if (!dialect->isCastLegal(exprType.getSemiring(), ring)) {
+        return mlir::emitError(loc)
+               << "invalid cast from " << typeToString(exprType.getSemiring())
+               << " to " << typeToString(ring);
+      }
+
+      v = _builder.create<CastOp>(
+          loc,
+          _builder.getType<MatrixType>(exprType.getRows(), exprType.getCols(),
+                                       ring),
+          expr);
+      return mlir::success();
+    }
+
+    if (name == "zero") {
+      mlir::Type ring;
+      if (eatOrError(Token::LPAREN) || parseSemiring(ring) ||
+          eatOrError(Token::RPAREN)) {
+        return mlir::failure();
+      }
+
+      auto value = llvm::cast<SemiringTypeInterface>(ring).addIdentity();
+      v = _builder.create<LiteralOp>(loc, value);
+      return mlir::success();
+    }
+
+    if (name == "one") {
+      mlir::Type ring;
+      if (eatOrError(Token::LPAREN) || parseSemiring(ring) ||
+          eatOrError(Token::RPAREN)) {
+        return mlir::failure();
+      }
+
+      auto value = llvm::cast<SemiringTypeInterface>(ring).mulIdentity();
+      v = _builder.create<LiteralOp>(loc, value);
+      return mlir::success();
+    }
+
     auto var = _symbolTable.lookup(name);
     if (!var.value) {
       return mlir::emitError(loc) << "unrecognized variable";
