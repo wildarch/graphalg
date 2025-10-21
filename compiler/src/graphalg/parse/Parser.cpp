@@ -53,8 +53,7 @@ public:
 
 class TypeFormatter {
 private:
-  // TODO: Can we always have this?
-  const DimMapper *_dimMapper = nullptr;
+  const DimMapper &_dimMapper;
 
   std::string _type;
 
@@ -63,7 +62,7 @@ private:
   void formatMatrix(MatrixType t);
 
 public:
-  TypeFormatter(const DimMapper *dimMapper) : _dimMapper(dimMapper) {}
+  TypeFormatter(const DimMapper &dimMapper) : _dimMapper(dimMapper) {}
 
   void format(mlir::Type t);
 
@@ -246,11 +245,9 @@ void TypeFormatter::formatColumnVector(MatrixType t) {
   assert(t.isColumnVector());
   _type += "Vector<";
 
-  if (_dimMapper) {
-    // Rows
-    _type += _dimMapper->getName(t.getRows());
-    _type += ", ";
-  }
+  // Rows
+  _type += _dimMapper.getName(t.getRows());
+  _type += ", ";
 
   formatScalar(t.getSemiring());
   _type += ">";
@@ -263,15 +260,13 @@ void TypeFormatter::formatMatrix(MatrixType t) {
 
   _type += "Matrix<";
 
-  if (_dimMapper) {
-    // Rows
-    _type += _dimMapper->getName(t.getRows());
-    _type += ", ";
+  // Rows
+  _type += _dimMapper.getName(t.getRows());
+  _type += ", ";
 
-    // Columns
-    _type += _dimMapper->getName(t.getCols());
-    _type += ", ";
-  }
+  // Columns
+  _type += _dimMapper.getName(t.getCols());
+  _type += ", ";
 
   formatScalar(t.getSemiring());
   _type += ">";
@@ -286,7 +281,7 @@ void TypeFormatter::format(mlir::Type t) {
 }
 
 std::string Parser::typeToString(mlir::Type type) {
-  TypeFormatter fmt(&_dimMapper);
+  TypeFormatter fmt(_dimMapper);
   fmt.format(type);
   return fmt.take();
 }
@@ -528,7 +523,6 @@ mlir::ParseResult Parser::parseBlock() {
     return mlir::failure();
   }
 
-  // TODO: parse body
   while (cur().type != Token::RBRACE && cur().type != Token::END_OF_FILE) {
     if (parseStmt()) {
       return mlir::failure();
@@ -743,7 +737,6 @@ mlir::ParseResult Parser::parseStmtReturn() {
     return mlir::failure();
   }
 
-  // TODO: Check function return type matches.
   _builder.create<mlir::func::ReturnOp>(loc, returnValue);
   return mlir::success();
 }
