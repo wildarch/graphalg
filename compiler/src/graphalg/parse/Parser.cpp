@@ -389,7 +389,7 @@ mlir::ParseResult Parser::parseType(mlir::Type &t) {
 mlir::ParseResult Parser::parseDim(DimAttr &t) {
   if (cur().type == Token::INT && cur().body == "1") {
     t = DimAttr::getOne(_builder.getContext());
-    return mlir::success();
+    return eatOrError(Token::INT);
   } else if (cur().type == Token::IDENT) {
     t = _dimMapper.getOrAllocate(cur().body);
     return eatOrError(Token::IDENT);
@@ -1286,6 +1286,123 @@ mlir::ParseResult Parser::parseAtom(mlir::Value &v) {
 
       auto value = llvm::cast<SemiringTypeInterface>(ring).mulIdentity();
       v = _builder.create<LiteralOp>(loc, value);
+      return mlir::success();
+    }
+
+    if (name == "apply") {
+      mlir::func::FuncOp func;
+      llvm::SmallVector<mlir::Value, 2> args(1);
+      if (eatOrError(Token::LPAREN) || parseFuncRef(func) ||
+          eatOrError(Token::COMMA) || parseExpr(args[0])) {
+        return mlir::failure();
+      }
+
+      if (cur().type == Token::COMMA) {
+        // Have a second arg.
+        auto &arg = args.emplace_back();
+        if (eatOrError(Token::COMMA) || parseExpr(arg)) {
+          return mlir::failure();
+        }
+      }
+
+      if (eatOrError(Token::RPAREN)) {
+        return mlir::failure();
+      }
+
+      if (args.size() == 1) {
+        v = _builder.create<ApplyUnaryOp>(loc, func, args[0]);
+      } else {
+        assert(args.size() == 2);
+        v = _builder.create<ApplyBinaryOp>(loc, func, args[0], args[1]);
+      }
+
+      return mlir::success();
+    }
+
+    if (name == "select") {
+      mlir::func::FuncOp func;
+      llvm::SmallVector<mlir::Value, 2> args(1);
+      if (eatOrError(Token::LPAREN) || parseFuncRef(func) ||
+          eatOrError(Token::COMMA) || parseExpr(args[0])) {
+        return mlir::failure();
+      }
+
+      if (cur().type == Token::COMMA) {
+        // Have a second arg.
+        auto &arg = args.emplace_back();
+        if (eatOrError(Token::COMMA) || parseExpr(arg)) {
+          return mlir::failure();
+        }
+      }
+
+      if (eatOrError(Token::RPAREN)) {
+        return mlir::failure();
+      }
+
+      if (args.size() == 1) {
+        v = _builder.create<SelectUnaryOp>(loc, func.getSymName(), args[0]);
+      } else {
+        assert(args.size() == 2);
+        v = _builder.create<SelectBinaryOp>(loc, func.getSymName(), args[0],
+                                            args[1]);
+      }
+
+      return mlir::success();
+    }
+
+    if (name == "reduceRows") {
+      mlir::Value arg;
+      if (eatOrError(Token::LPAREN) || parseExpr(arg) ||
+          eatOrError(Token::RPAREN)) {
+        return mlir::failure();
+      }
+
+      auto inputType = llvm::cast<MatrixType>(arg.getType());
+      auto *ctx = _builder.getContext();
+      auto resultType =
+          MatrixType::get(ctx, inputType.getRows(), DimAttr::getOne(ctx),
+                          inputType.getSemiring());
+      v = _builder.create<ReduceOp>(loc, resultType, arg);
+      return mlir::success();
+    }
+
+    if (name == "reduceCols") {
+      mlir::Value arg;
+      if (eatOrError(Token::LPAREN) || parseExpr(arg) ||
+          eatOrError(Token::RPAREN)) {
+        return mlir::failure();
+      }
+
+      auto inputType = llvm::cast<MatrixType>(arg.getType());
+      auto *ctx = _builder.getContext();
+      auto resultType =
+          MatrixType::get(ctx, DimAttr::getOne(ctx), inputType.getCols(),
+                          inputType.getSemiring());
+      v = _builder.create<ReduceOp>(loc, resultType, arg);
+      return mlir::success();
+    }
+
+    if (name == "reduce") {
+      mlir::Value arg;
+      if (eatOrError(Token::LPAREN) || parseExpr(arg) ||
+          eatOrError(Token::RPAREN)) {
+        return mlir::failure();
+      }
+
+      auto inputType = llvm::cast<MatrixType>(arg.getType());
+      v = _builder.create<ReduceOp>(loc, inputType.asScalar(), arg);
+      return mlir::success();
+    }
+
+    if (name == "pickAny") {
+      mlir::Value arg;
+      if (eatOrError(Token::LPAREN) || parseExpr(arg) ||
+          eatOrError(Token::RPAREN)) {
+        return mlir::failure();
+      }
+
+      auto inputType = llvm::cast<MatrixType>(arg.getType());
+      v = _builder.create<PickAnyOp>(loc, arg);
       return mlir::success();
     }
 

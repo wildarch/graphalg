@@ -1,0 +1,21 @@
+// RUN: parse --import-graphalg < %s | FileCheck %s
+
+func unary(a:int) -> bool {
+    return bool(true);
+}
+// CHECK-LABEL: @SelectUnary
+func SelectUnary(m:Matrix<s, s, int>) -> Matrix<s, s, int> {
+    // CHECK: %[[#SELECT:]] = graphalg.select_unary @unary %arg0
+    // CHECK: return %[[#SELECT]]
+    return select(unary, m);
+}
+
+func binary(a:int, b:int) -> bool {
+    return a == b;
+}
+// CHECK-LABEL: @SelectBinary
+func SelectBinary(a:Matrix<s, s, int>, b:int) -> Matrix<s, s, int> {
+    // CHECK: %[[#SELECT:]] = graphalg.select_binary @binary %arg0, %arg1
+    // CHECK: return %[[#SELECT]]
+    return select(binary, a, b);
+}

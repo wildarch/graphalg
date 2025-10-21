@@ -1,0 +1,22 @@
+// RUN: parse --import-graphalg < %s | FileCheck %s
+
+func unary(a:int) -> int {
+    return a;
+}
+// CHECK-LABEL: @ApplyUnary
+func ApplyUnary(m:Matrix<s, s, int>) -> Matrix<s, s, int> {
+    // CHECK: %[[#APPLY:]] = graphalg.apply_unary @unary
+    // CHECK-SAME: %arg0 : <#dim x #dim x i64> -> <#dim x #dim x i64>
+    // CHECK: return %[[#APPLY]]
+    return apply(unary, m);
+}
+
+func binary(a:int, b:int) -> int {
+    return a + b;
+}
+// CHECK-LABEL: @ApplyBinary
+func ApplyBinary(a:Matrix<s, s, int>, b:int) -> Matrix<s, s, int> {
+    // CHECK: %[[#APPLY:]] = graphalg.apply_binary @binary %arg0, %arg1
+    // CHECK: return %[[#APPLY]]
+    return apply(binary, a, b);
+}

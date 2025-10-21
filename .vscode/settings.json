@@ -1,0 +1,5 @@
+{
+    "mlir.tablegen_compilation_databases": [
+        "compiler/build/tablegen_compile_commands.yml"
+    ]
+}
