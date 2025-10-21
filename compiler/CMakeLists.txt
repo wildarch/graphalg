@@ -27,6 +27,13 @@ find_package(MLIR ${LLVM_PACKAGE_VERSION} REQUIRED CONFIG
 message(STATUS "Using MLIRConfig.cmake in: ${MLIR_DIR}")
 set(MLIR_BINARY_DIR ${CMAKE_BINARY_DIR})
 list(APPEND CMAKE_MODULE_PATH "${MLIR_CMAKE_DIR}")
+
+# Using a placeholder to set MLIR_TABLEGEN_EXE because find_package(MLIR)
+# overwrites the MLIR_TABLEGEN_EXE flag
+if(DEFINED SET_MLIR_TABLEGEN_PATH)
+    set(MLIR_TABLEGEN_EXE "${SET_MLIR_TABLEGEN_PATH}")
+endif()
+
 include(AddMLIR)
 
 # Directories with MLIR dialects

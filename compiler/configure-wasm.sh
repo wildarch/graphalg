@@ -4,4 +4,5 @@ BUILD_DIR=$WORKSPACE_ROOT/build-wasm
 rm -rf $BUILD_DIR
 emcmake cmake -S $WORKSPACE_ROOT -B $BUILD_DIR -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_CXX_FLAGS="-fno-rtti"
+    -DCMAKE_CXX_FLAGS="-fno-rtti" \
+    -DSET_MLIR_TABLEGEN_PATH="/usr/bin/mlir-tblgen-20"

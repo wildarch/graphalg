@@ -53,7 +53,7 @@ Warnings:
 Build the required libraries:
 
 ```bash
-cmake --build third-party/llvm-wasm/ --target MLIRIR MLIRFuncDialect MLIRAnalysis MLIRPass MLIRTranslateLib
+cmake --build third-party/llvm-wasm/ --target MLIRIR MLIRFuncDialect MLIRAnalysis MLIRPass MLIRTranslateLib cmake-exports mlir-cmake-exports
 ```
 
 Install them:
@@ -63,4 +63,6 @@ cmake --install third-party/llvm-wasm/ --component MLIRFuncDialect
 cmake --install third-party/llvm-wasm/ --component MLIRAnalysis
 cmake --install third-party/llvm-wasm/ --component MLIRPass
 cmake --install third-party/llvm-wasm/ --component MLIRTranslateLib
+cmake --install third-party/llvm-wasm/ --component cmake-exports
+cmake --install third-party/llvm-wasm/ --component mlir-cmake-exports
 ```
