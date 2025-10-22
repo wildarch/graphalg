@@ -97,13 +97,17 @@ target_link_libraries(parse PRIVATE
     MLIRTranslateLib
 )
 
-add_executable(wasm_parse src/wasm_parse.cpp)
-target_link_libraries(wasm_parse PRIVATE
-    graphalg_parse
-    ${llvm_libs}
-    graphalg_lib
-)
-target_link_options(wasm_parse PRIVATE
-    -sEXPORTED_FUNCTIONS=_ga_parse
-    -sEXPORTED_RUNTIME_METHODS=cwrap
-    -sMODULARIZE)
+set(ENABLE_WASM OFF CACHE BOOL "Enable wasm-only targets" FORCE)
+
+if(ENABLE_WASM)
+    add_executable(wasm_parse src/wasm_parse.cpp)
+    target_link_libraries(wasm_parse PRIVATE
+        graphalg_parse
+        ${llvm_libs}
+        graphalg_lib
+    )
+    target_link_options(wasm_parse PRIVATE
+        -sEXPORTED_FUNCTIONS=_ga_parse
+        -sEXPORTED_RUNTIME_METHODS=cwrap
+        -sMODULARIZE)
+endif()

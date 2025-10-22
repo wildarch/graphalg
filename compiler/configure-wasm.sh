@@ -8,3 +8,4 @@ emcmake cmake -S $WORKSPACE_ROOT -B $BUILD_DIR -G Ninja \
     -DSET_MLIR_TABLEGEN_PATH="/usr/bin/mlir-tblgen-20" \
     -DLLVM_DIR="$(pwd)/third-party/llvm-wasm-install/lib/cmake/llvm" \
     -DMLIR_DIR="$(pwd)/third-party/llvm-wasm-install/lib/cmake/mlir" \
+    -DENABLE_WASM=ON \
