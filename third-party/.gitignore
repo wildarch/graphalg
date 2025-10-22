@@ -1,3 +1,4 @@
 /emsdk/
 /llvm-project-*
-/llvm-wasm
+/llvm-wasm-build
+/llvm-wasm-install

@@ -18,7 +18,8 @@ General MLIR build instructions: https://mlir.llvm.org/getting_started/
 Some tips taken from https://github.com/MLIR-China/mlir-playground
 
 ```bash
-emcmake cmake -G Ninja -S third-party/llvm-project-20.1.0.src/llvm -B third-party/llvm-wasm \
+emcmake cmake -G Ninja -S third-party/llvm-project-20.1.0.src/llvm -B third-party/llvm-wasm-build \
+    -DCMAKE_INSTALL_PREFIX="$(pwd)/third-party/llvm-wasm-install" \
     -DLLVM_ENABLE_PROJECTS=mlir \
     -DLLVM_BUILD_EXAMPLES=OFF \
     -DLLVM_TARGETS_TO_BUILD="WebAssembly" \
@@ -42,7 +43,7 @@ emcmake cmake -G Ninja -S third-party/llvm-project-20.1.0.src/llvm -B third-part
 
 I have to add a few defines for `LLVM_ABI` and friends because they do not seem to be correctly defined.
 
-Warnings:
+Warnings that are safe to ignore:
 - ADD_LIBRARY called with SHARED option but the target platform does not
   support dynamic linking.  Building a STATIC library instead.
 - If you see build failures due to cross compilation, try setting
@@ -50,19 +51,9 @@ Warnings:
   * HAVE_POSIX_REGEX to 0
   * HAVE_STEADY_CLOCK to 0
 
-Build the required libraries:
+Build and install LLVM/MLIR:
 
 ```bash
-cmake --build third-party/llvm-wasm/ --target MLIRIR MLIRFuncDialect MLIRAnalysis MLIRPass MLIRTranslateLib cmake-exports mlir-cmake-exports
-```
-
-Install them:
-```bash
-cmake --install third-party/llvm-wasm/ --component MLIRIR
-cmake --install third-party/llvm-wasm/ --component MLIRFuncDialect
-cmake --install third-party/llvm-wasm/ --component MLIRAnalysis
-cmake --install third-party/llvm-wasm/ --component MLIRPass
-cmake --install third-party/llvm-wasm/ --component MLIRTranslateLib
-cmake --install third-party/llvm-wasm/ --component cmake-exports
-cmake --install third-party/llvm-wasm/ --component mlir-cmake-exports
+cmake --build third-party/llvm-wasm-build/
+cmake --install third-party/llvm-wasm-build/
 ```
