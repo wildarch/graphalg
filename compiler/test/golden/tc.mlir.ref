@@ -1,0 +1,15 @@
+#dim = #graphalg.dim<distinct[0]<>>
+module {
+  func.func @TriangleCount(%arg0: !graphalg.mat<#dim x #dim x i1>) -> !graphalg.mat<1 x 1 x i64> {
+    %0 = graphalg.cast %arg0 : <#dim x #dim x i1> -> <#dim x #dim x i64>
+    %1 = graphalg.tril %arg0 : <#dim x #dim x i1>
+    %2 = graphalg.tril %0 : <#dim x #dim x i64>
+    %3 = graphalg.triu %0 : <#dim x #dim x i64>
+    %4 = graphalg.const_mat 0 : i64 -> <#dim x #dim x i64>
+    %5 = graphalg.transpose %3 : <#dim x #dim x i64>
+    %6 = graphalg.mxm %2, %5 : <#dim x #dim x i64>, <#dim x #dim x i64>
+    %7 = graphalg.mask %4<%1 : <#dim x #dim x i1>> = %6 : <#dim x #dim x i64> {complement = false}
+    %8 = graphalg.reduce %7 : <#dim x #dim x i64> -> <1 x 1 x i64>
+    return %8 : !graphalg.mat<1 x 1 x i64>
+  }
+}

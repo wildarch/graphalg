@@ -1,0 +1,45 @@
+// RUN: parse --import-graphalg < %s | diff - %S/pr.mlir.ref
+
+func withDamping(degree:int, damping:real) -> real {
+    return cast<real>(degree) / damping;
+}
+
+func PageRank(
+        graph: Matrix<s1, s1, bool>,
+        damping: real,
+        iterations: int) -> Vector<s1, real> {
+    n = graph.nrows;
+    teleport = (real(1.0) - damping) / cast<real>(n);
+    rdiff = real(1.0);
+
+    // out degree
+    d_out = reduceRows(cast<int>(graph));
+
+    // L(pj) (out degree with damping)
+    d = apply(withDamping, d_out, damping);
+
+    connected = reduceRows(graph);
+    sinks = Vector<bool>(n);
+    sinks<!connected>[:] = bool(true);
+
+    pr = Vector<real>(n);
+    pr[:] = real(1.0) / cast<real>(n);
+
+    for i in int(0):iterations {
+        // redistributed from sinks
+        sink_pr = Vector<real>(n);
+        sink_pr<sinks> = pr;
+        redist = (damping / cast<real>(n)) * reduce(sink_pr);
+
+        // importance
+        w = pr (./) d;
+
+        pr[:] = teleport + redist;
+
+        // PR(pi;t+1) += \sum_{pj \in M(pi)} PR(pj;t) / L(pj)
+        // Where M(pi, pj) = true iff there is an edge.
+        pr += cast<real>(graph).T * w;
+    }
+
+    return pr;
+}

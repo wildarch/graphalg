@@ -1,0 +1,36 @@
+// RUN: parse --import-graphalg < %s | diff - %S/cdlp.mlir.ref
+func CDLP(graph: Matrix<s, s, bool>) -> Matrix<s, s, bool> {
+    iterations = int(10);
+    id = Vector<bool>(graph.nrows);
+    id[:] = bool(true);
+    L = diag(id);
+
+    for i in int(0):iterations {
+        step_forward = cast<int>(graph) * cast<int>(L);
+        step_backward = cast<int>(graph.T) * cast<int>(L);
+        step = step_forward (.+) step_backward;
+
+        // Max per row
+        max = cast<int>(reduceRows(cast<trop_max_int>(step)));
+
+        // Broadcast to all columns
+        b = Vector<int>(graph.ncols);
+        b[:] = int(1);
+        max_broadcast = max * b.T;
+
+        // Matrix with true at every position where L has max element.
+        step_max = step (.==) max_broadcast;
+
+        // Keep only one assigned label per vertex.
+        // The implementation always picks the one with the lowest id.
+        L = pickAny(step_max);
+    }
+
+    // Map isolated nodes to their own label.
+    connected = reduceRows(graph) (.+) reduceRows(graph.T);
+    isolated = Vector<bool>(graph.nrows);
+    isolated<!connected>[:] = bool(true);
+    L = diag(isolated) (.+) L;
+
+    return L;
+}

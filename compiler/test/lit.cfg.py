@@ -15,6 +15,7 @@ llvm_config.use_default_substitutions()
 # The tools we want to use in lit test (inside RUN)
 tools = [
     "parse",
+    "graphalg-opt",
 ]
 
 # Where we look for the tools

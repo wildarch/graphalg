@@ -1,0 +1,11 @@
+// RUN: parse --import-graphalg < %s | diff - %S/sssp.mlir.ref
+
+func SSSP(
+        graph: Matrix<s1, s1, trop_real>,
+        source: Vector<s1, bool>) -> Vector<s1, trop_real> {
+    v = cast<trop_real>(source);
+    for i in graph.nrows {
+        v += v * graph;
+    }
+    return v;
+}

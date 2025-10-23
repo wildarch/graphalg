@@ -1,0 +1,22 @@
+// RUN: parse --import-graphalg < %s | diff - %S/wcc.mlir.ref
+
+func WCC(graph: Matrix<s, s, bool>) -> Matrix<s, s, bool> {
+    id = Vector<bool>(graph.nrows);
+    id[:] = bool(true);
+    label = diag(id);
+
+    for i in graph.nrows {
+        // Keep current label
+        alternatives = label;
+        // Labels reachable with a forward step
+        alternatives += graph * label;
+        // Labels reachable with a backward step
+        // Note: not necessary for an undirected graph
+        alternatives += graph.T * label;
+
+        // Select a new label
+        label = pickAny(alternatives);
+    }
+
+    return label;
+}

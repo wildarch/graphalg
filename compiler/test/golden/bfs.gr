@@ -1,0 +1,24 @@
+// RUN: parse --import-graphalg < %s | diff - %S/bfs.mlir.ref
+func setDepth(b:bool, iter:int) -> int {
+  return cast<int>(b) * (iter + int(2));
+}
+
+func BFS(graph: Matrix<s, s, bool>, source: Vector<s, bool>) -> Vector<s, int> {
+  v = Vector<int>(graph.nrows);
+  v<source>[:] = int(1);
+
+  frontier = source;
+  reach = source;
+
+  for i in graph.nrows {
+    step = Vector<bool>(graph.nrows);
+    step<!reach> = frontier * graph;
+
+    v += apply(setDepth, step, i);
+
+    frontier = step;
+    reach += step;
+  } until frontier.nvals == int(0);
+
+  return v;
+}

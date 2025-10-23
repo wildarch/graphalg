@@ -1,0 +1,51 @@
+#dim = #graphalg.dim<distinct[0]<>>
+module {
+  func.func @combDir(%arg0: !graphalg.mat<1 x 1 x i64>) -> !graphalg.mat<1 x 1 x i64> {
+    %0 = graphalg.literal 1 : i64
+    %1 = graphalg.ewise %arg0 SUB %0 : <1 x 1 x i64>
+    %2 = graphalg.mxm %arg0, %1 : <1 x 1 x i64>, <1 x 1 x i64>
+    return %2 : !graphalg.mat<1 x 1 x i64>
+  }
+  func.func @LCCDir(%arg0: !graphalg.mat<#dim x #dim x i1>, %arg1: !graphalg.mat<#dim x #dim x i64>) -> !graphalg.mat<#dim x 1 x f64> {
+    %0 = graphalg.triu %arg1 : <#dim x #dim x i64>
+    %1 = graphalg.cast %arg0 : <#dim x #dim x i1> -> <#dim x #dim x i64>
+    %2 = graphalg.reduce %1 : <#dim x #dim x i64> -> <#dim x 1 x i64>
+    %3 = graphalg.apply_unary @combDir %2 : <#dim x 1 x i64> -> <#dim x 1 x i64>
+    %4 = graphalg.const_mat 0 : i64 -> <#dim x #dim x i64>
+    %5 = graphalg.cast %arg0 : <#dim x #dim x i1> -> <#dim x #dim x i64>
+    %6 = graphalg.transpose %0 : <#dim x #dim x i64>
+    %7 = graphalg.mxm %5, %6 : <#dim x #dim x i64>, <#dim x #dim x i64>
+    %8 = graphalg.mask %4<%arg0 : <#dim x #dim x i1>> = %7 : <#dim x #dim x i64> {complement = false}
+    %9 = graphalg.reduce %8 : <#dim x #dim x i64> -> <#dim x 1 x i64>
+    %10 = graphalg.cast %9 : <#dim x 1 x i64> -> <#dim x 1 x f64>
+    %11 = graphalg.cast %3 : <#dim x 1 x i64> -> <#dim x 1 x f64>
+    %12 = graphalg.ewise %10 DIV %11 : <#dim x 1 x f64>
+    return %12 : !graphalg.mat<#dim x 1 x f64>
+  }
+  func.func @combUndir(%arg0: !graphalg.mat<1 x 1 x i64>) -> !graphalg.mat<1 x 1 x f64> {
+    %0 = graphalg.literal 1 : i64
+    %1 = graphalg.ewise %arg0 SUB %0 : <1 x 1 x i64>
+    %2 = graphalg.mxm %arg0, %1 : <1 x 1 x i64>, <1 x 1 x i64>
+    %3 = graphalg.cast %2 : <1 x 1 x i64> -> <1 x 1 x f64>
+    %4 = graphalg.literal 2.000000e+00 : f64
+    %5 = graphalg.ewise %3 DIV %4 : <1 x 1 x f64>
+    return %5 : !graphalg.mat<1 x 1 x f64>
+  }
+  func.func @LCCUndir(%arg0: !graphalg.mat<#dim x #dim x i1>) -> !graphalg.mat<#dim x 1 x f64> {
+    %0 = graphalg.triu %arg0 : <#dim x #dim x i1>
+    %1 = graphalg.cast %arg0 : <#dim x #dim x i1> -> <#dim x #dim x i64>
+    %2 = graphalg.reduce %1 : <#dim x #dim x i64> -> <#dim x 1 x i64>
+    %3 = graphalg.apply_unary @combUndir %2 : <#dim x 1 x i64> -> <#dim x 1 x f64>
+    %4 = graphalg.const_mat 0 : i64 -> <#dim x #dim x i64>
+    %5 = graphalg.cast %arg0 : <#dim x #dim x i1> -> <#dim x #dim x i64>
+    %6 = graphalg.transpose %0 : <#dim x #dim x i1>
+    %7 = graphalg.cast %6 : <#dim x #dim x i1> -> <#dim x #dim x i64>
+    %8 = graphalg.mxm %5, %7 : <#dim x #dim x i64>, <#dim x #dim x i64>
+    %9 = graphalg.mask %4<%arg0 : <#dim x #dim x i1>> = %8 : <#dim x #dim x i64> {complement = false}
+    %10 = graphalg.reduce %9 : <#dim x #dim x i64> -> <#dim x 1 x i64>
+    %11 = graphalg.cast %10 : <#dim x 1 x i64> -> <#dim x 1 x f64>
+    %12 = graphalg.cast %3 : <#dim x 1 x f64> -> <#dim x 1 x f64>
+    %13 = graphalg.ewise %11 DIV %12 : <#dim x 1 x f64>
+    return %13 : !graphalg.mat<#dim x 1 x f64>
+  }
+}

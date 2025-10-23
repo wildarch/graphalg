@@ -1,0 +1,51 @@
+#dim = #graphalg.dim<distinct[0]<>>
+module {
+  func.func @withDamping(%arg0: !graphalg.mat<1 x 1 x i64>, %arg1: !graphalg.mat<1 x 1 x f64>) -> !graphalg.mat<1 x 1 x f64> {
+    %0 = graphalg.cast %arg0 : <1 x 1 x i64> -> <1 x 1 x f64>
+    %1 = graphalg.ewise %0 DIV %arg1 : <1 x 1 x f64>
+    return %1 : !graphalg.mat<1 x 1 x f64>
+  }
+  func.func @PageRank(%arg0: !graphalg.mat<#dim x #dim x i1>, %arg1: !graphalg.mat<1 x 1 x f64>, %arg2: !graphalg.mat<1 x 1 x i64>) -> !graphalg.mat<#dim x 1 x f64> {
+    %0 = graphalg.literal 1.000000e+00 : f64
+    %1 = graphalg.ewise %0 SUB %arg1 : <1 x 1 x f64>
+    %2 = graphalg.cast_dim #dim
+    %3 = graphalg.cast %2 : <1 x 1 x i64> -> <1 x 1 x f64>
+    %4 = graphalg.ewise %1 DIV %3 : <1 x 1 x f64>
+    %5 = graphalg.literal 1.000000e+00 : f64
+    %6 = graphalg.cast %arg0 : <#dim x #dim x i1> -> <#dim x #dim x i64>
+    %7 = graphalg.reduce %6 : <#dim x #dim x i64> -> <#dim x 1 x i64>
+    %8 = graphalg.apply_binary @withDamping %7, %arg1 : (!graphalg.mat<#dim x 1 x i64>, !graphalg.mat<1 x 1 x f64>) -> !graphalg.mat<#dim x 1 x f64>
+    %9 = graphalg.reduce %arg0 : <#dim x #dim x i1> -> <#dim x 1 x i1>
+    %10 = graphalg.const_mat false -> <#dim x 1 x i1>
+    %11 = graphalg.literal true
+    %12 = graphalg.broadcast %11 : <1 x 1 x i1> -> <#dim x 1 x i1>
+    %13 = graphalg.mask %10<%9 : <#dim x 1 x i1>> = %12 : <#dim x 1 x i1> {complement = true}
+    %14 = graphalg.const_mat 0.000000e+00 : f64 -> <#dim x 1 x f64>
+    %15 = graphalg.literal 1.000000e+00 : f64
+    %16 = graphalg.cast_dim #dim
+    %17 = graphalg.cast %16 : <1 x 1 x i64> -> <1 x 1 x f64>
+    %18 = graphalg.ewise %15 DIV %17 : <1 x 1 x f64>
+    %19 = graphalg.broadcast %18 : <1 x 1 x f64> -> <#dim x 1 x f64>
+    %20 = graphalg.literal 0 : i64
+    %21 = graphalg.for_const range(%20, %arg2) : <1 x 1 x i64> init(%19) : !graphalg.mat<#dim x 1 x f64> -> !graphalg.mat<#dim x 1 x f64> body {
+    ^bb0(%arg3: !graphalg.mat<1 x 1 x i64>, %arg4: !graphalg.mat<#dim x 1 x f64>):
+      %22 = graphalg.const_mat 0.000000e+00 : f64 -> <#dim x 1 x f64>
+      %23 = graphalg.mask %22<%13 : <#dim x 1 x i1>> = %arg4 : <#dim x 1 x f64> {complement = false}
+      %24 = graphalg.cast_dim #dim
+      %25 = graphalg.cast %24 : <1 x 1 x i64> -> <1 x 1 x f64>
+      %26 = graphalg.ewise %arg1 DIV %25 : <1 x 1 x f64>
+      %27 = graphalg.reduce %23 : <#dim x 1 x f64> -> <1 x 1 x f64>
+      %28 = graphalg.mxm %26, %27 : <1 x 1 x f64>, <1 x 1 x f64>
+      %29 = graphalg.ewise %arg4 DIV %8 : <#dim x 1 x f64>
+      %30 = graphalg.ewise %4 ADD %28 : <1 x 1 x f64>
+      %31 = graphalg.broadcast %30 : <1 x 1 x f64> -> <#dim x 1 x f64>
+      %32 = graphalg.cast %arg0 : <#dim x #dim x i1> -> <#dim x #dim x f64>
+      %33 = graphalg.transpose %32 : <#dim x #dim x f64>
+      %34 = graphalg.mxm %33, %29 : <#dim x #dim x f64>, <#dim x 1 x f64>
+      %35 = graphalg.ewise %31 ADD %34 : <#dim x 1 x f64>
+      graphalg.yield %35 : !graphalg.mat<#dim x 1 x f64>
+    } until {
+    }
+    return %21 : !graphalg.mat<#dim x 1 x f64>
+  }
+}

@@ -1,0 +1,45 @@
+// RUN: parse --import-graphalg < %s | diff - %S/lcc.mlir.ref
+
+// Helper for LCCDir
+func combDir(x:int) -> int {
+  return x * (x - int(1));
+}
+
+// Assumes graph is directed and not symmetric
+// (but still expects its undirected form as input).
+func LCCDir(
+    graph_undirected_struct: Matrix<s, s, bool>,
+    graph_undirected: Matrix<s, s, int>) -> Vector<s, real> {
+  C = graph_undirected_struct;
+  D = graph_undirected;
+  U = triu(D);
+
+  // Number of wedges per vertex
+  W = apply(combDir, reduceRows(cast<int>(C)));
+
+  CL = Matrix<int>(graph_undirected.nrows, graph_undirected.ncols);
+  CL<C> = cast<int>(C) * U.T;
+  LCC = cast<real>(reduceRows(CL)) (./) cast<real>(W);
+
+  return LCC;
+}
+
+// Helper for LCCUndir
+func combUndir(x:int) -> real {
+  return cast<real>(x * (x - int(1))) / real(2.0);
+}
+
+// Assumes graph is undirected and symmetric.
+func LCCUndir(graph: Matrix<s, s, bool>) -> Vector<s, real> {
+  C = graph;
+  U = triu(C);
+
+  // Number of wedges per vertex
+  W = apply(combUndir, reduceRows(cast<int>(C)));
+
+  CL = Matrix<int>(graph.nrows, graph.ncols);
+  CL<C> = cast<int>(C) * cast<int>(U.T);
+  LCC = cast<real>(reduceRows(CL)) (./) cast<real>(W);
+
+  return LCC;
+}

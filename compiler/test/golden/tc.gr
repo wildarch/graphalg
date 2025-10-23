@@ -1,0 +1,12 @@
+// RUN: parse --import-graphalg < %s | diff - %S/tc.mlir.ref
+func TriangleCount(graph: Matrix<s1, s1, bool>) -> int {
+    graph_one = cast<int>(graph);
+
+    Lb = tril(graph);
+    L = tril(graph_one);
+    U = triu(graph_one);
+    // Lb used as hadamard product
+    C = Matrix<int>(graph.nrows, graph.ncols);
+    C<Lb> = L * U.T;
+    return reduce(C);
+}

@@ -72,10 +72,15 @@ add_dependencies(graphalg_lib
 target_link_libraries(
     graphalg_lib
     PRIVATE
-    MLIRIR
-    MLIRFuncDialect
     MLIRAnalysis
+    MLIRFuncDialect
+    MLIRFuncInlinerExtension
+    MLIRInferTypeOpInterface
+    MLIRIR
     MLIRPass
+    MLIRPass
+    MLIRSupport
+    MLIRTransforms
 )
 # Suppress -Wdangling-assignment-gsl for generated code from MLIR tablegen
 # The warning is triggered by template instantiations in GraphAlgOps.cpp.inc
@@ -95,6 +100,13 @@ target_link_libraries(parse PRIVATE
     ${llvm_libs}
     graphalg_lib
     MLIRTranslateLib
+)
+
+add_executable(graphalg-opt src/graphalg-opt.cpp)
+target_link_libraries(graphalg-opt PRIVATE
+    ${llvm_libs}
+    graphalg_lib
+    MLIROptLib
 )
 
 set(ENABLE_WASM OFF CACHE BOOL "Enable wasm-only targets" FORCE)

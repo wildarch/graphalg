@@ -1,0 +1,33 @@
+#dim = #graphalg.dim<distinct[0]<>>
+module {
+  func.func @setDepth(%arg0: !graphalg.mat<1 x 1 x i1>, %arg1: !graphalg.mat<1 x 1 x i64>) -> !graphalg.mat<1 x 1 x i64> {
+    %0 = graphalg.cast %arg0 : <1 x 1 x i1> -> <1 x 1 x i64>
+    %1 = graphalg.literal 2 : i64
+    %2 = graphalg.ewise %arg1 ADD %1 : <1 x 1 x i64>
+    %3 = graphalg.mxm %0, %2 : <1 x 1 x i64>, <1 x 1 x i64>
+    return %3 : !graphalg.mat<1 x 1 x i64>
+  }
+  func.func @BFS(%arg0: !graphalg.mat<#dim x #dim x i1>, %arg1: !graphalg.mat<#dim x 1 x i1>) -> !graphalg.mat<#dim x 1 x i64> {
+    %0 = graphalg.const_mat 0 : i64 -> <#dim x 1 x i64>
+    %1 = graphalg.literal 1 : i64
+    %2 = graphalg.broadcast %1 : <1 x 1 x i64> -> <#dim x 1 x i64>
+    %3 = graphalg.mask %0<%arg1 : <#dim x 1 x i1>> = %2 : <#dim x 1 x i64> {complement = false}
+    %4:3 = graphalg.for_dim range(#dim) init(%arg1, %arg1, %3) : !graphalg.mat<#dim x 1 x i1>, !graphalg.mat<#dim x 1 x i1>, !graphalg.mat<#dim x 1 x i64> -> !graphalg.mat<#dim x 1 x i1>, !graphalg.mat<#dim x 1 x i1>, !graphalg.mat<#dim x 1 x i64> body {
+    ^bb0(%arg2: !graphalg.mat<1 x 1 x i64>, %arg3: !graphalg.mat<#dim x 1 x i1>, %arg4: !graphalg.mat<#dim x 1 x i1>, %arg5: !graphalg.mat<#dim x 1 x i64>):
+      %5 = graphalg.const_mat false -> <#dim x 1 x i1>
+      %6 = graphalg.vxm %arg3, %arg0 : <#dim x 1 x i1>, <#dim x #dim x i1>
+      %7 = graphalg.mask %5<%arg4 : <#dim x 1 x i1>> = %6 : <#dim x 1 x i1> {complement = true}
+      %8 = graphalg.apply_binary @setDepth %7, %arg2 : (!graphalg.mat<#dim x 1 x i1>, !graphalg.mat<1 x 1 x i64>) -> !graphalg.mat<#dim x 1 x i64>
+      %9 = graphalg.ewise %arg5 ADD %8 : <#dim x 1 x i64>
+      %10 = graphalg.ewise %arg4 ADD %7 : <#dim x 1 x i1>
+      graphalg.yield %7, %10, %9 : !graphalg.mat<#dim x 1 x i1>, !graphalg.mat<#dim x 1 x i1>, !graphalg.mat<#dim x 1 x i64>
+    } until {
+    ^bb0(%arg2: !graphalg.mat<1 x 1 x i64>, %arg3: !graphalg.mat<#dim x 1 x i1>, %arg4: !graphalg.mat<#dim x 1 x i1>, %arg5: !graphalg.mat<#dim x 1 x i64>):
+      %5 = graphalg.nvals %arg3 : <#dim x 1 x i1>
+      %6 = graphalg.literal 0 : i64
+      %7 = graphalg.ewise %5 EQ %6 : <1 x 1 x i64>
+      graphalg.yield %7 : !graphalg.mat<1 x 1 x i1>
+    }
+    return %4#2 : !graphalg.mat<#dim x 1 x i64>
+  }
+}

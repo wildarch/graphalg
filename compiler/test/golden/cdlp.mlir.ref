@@ -1,0 +1,45 @@
+#dim = #graphalg.dim<distinct[0]<>>
+module {
+  func.func @CDLP(%arg0: !graphalg.mat<#dim x #dim x i1>) -> !graphalg.mat<#dim x #dim x i1> {
+    %0 = graphalg.literal 10 : i64
+    %1 = graphalg.const_mat false -> <#dim x 1 x i1>
+    %2 = graphalg.literal true
+    %3 = graphalg.broadcast %2 : <1 x 1 x i1> -> <#dim x 1 x i1>
+    %4 = graphalg.diag %3 : !graphalg.mat<#dim x 1 x i1>
+    %5 = graphalg.literal 0 : i64
+    %6 = graphalg.for_const range(%5, %0) : <1 x 1 x i64> init(%4) : !graphalg.mat<#dim x #dim x i1> -> !graphalg.mat<#dim x #dim x i1> body {
+    ^bb0(%arg1: !graphalg.mat<1 x 1 x i64>, %arg2: !graphalg.mat<#dim x #dim x i1>):
+      %17 = graphalg.cast %arg0 : <#dim x #dim x i1> -> <#dim x #dim x i64>
+      %18 = graphalg.cast %arg2 : <#dim x #dim x i1> -> <#dim x #dim x i64>
+      %19 = graphalg.mxm %17, %18 : <#dim x #dim x i64>, <#dim x #dim x i64>
+      %20 = graphalg.transpose %arg0 : <#dim x #dim x i1>
+      %21 = graphalg.cast %20 : <#dim x #dim x i1> -> <#dim x #dim x i64>
+      %22 = graphalg.cast %arg2 : <#dim x #dim x i1> -> <#dim x #dim x i64>
+      %23 = graphalg.mxm %21, %22 : <#dim x #dim x i64>, <#dim x #dim x i64>
+      %24 = graphalg.ewise %19 ADD %23 : <#dim x #dim x i64>
+      %25 = graphalg.cast %24 : <#dim x #dim x i64> -> <#dim x #dim x !graphalg.trop_max_i64>
+      %26 = graphalg.reduce %25 : <#dim x #dim x !graphalg.trop_max_i64> -> <#dim x 1 x !graphalg.trop_max_i64>
+      %27 = graphalg.cast %26 : <#dim x 1 x !graphalg.trop_max_i64> -> <#dim x 1 x i64>
+      %28 = graphalg.const_mat 0 : i64 -> <#dim x 1 x i64>
+      %29 = graphalg.literal 1 : i64
+      %30 = graphalg.broadcast %29 : <1 x 1 x i64> -> <#dim x 1 x i64>
+      %31 = graphalg.transpose %30 : <#dim x 1 x i64>
+      %32 = graphalg.mxm %27, %31 : <#dim x 1 x i64>, <1 x #dim x i64>
+      %33 = graphalg.ewise %24 EQ %32 : <#dim x #dim x i64>
+      %34 = graphalg.pick_any %33 : <#dim x #dim x i1>
+      graphalg.yield %34 : !graphalg.mat<#dim x #dim x i1>
+    } until {
+    }
+    %7 = graphalg.reduce %arg0 : <#dim x #dim x i1> -> <#dim x 1 x i1>
+    %8 = graphalg.transpose %arg0 : <#dim x #dim x i1>
+    %9 = graphalg.reduce %8 : <#dim x #dim x i1> -> <#dim x 1 x i1>
+    %10 = graphalg.ewise %7 ADD %9 : <#dim x 1 x i1>
+    %11 = graphalg.const_mat false -> <#dim x 1 x i1>
+    %12 = graphalg.literal true
+    %13 = graphalg.broadcast %12 : <1 x 1 x i1> -> <#dim x 1 x i1>
+    %14 = graphalg.mask %11<%10 : <#dim x 1 x i1>> = %13 : <#dim x 1 x i1> {complement = true}
+    %15 = graphalg.diag %14 : !graphalg.mat<#dim x 1 x i1>
+    %16 = graphalg.ewise %15 ADD %6 : <#dim x #dim x i1>
+    return %16 : !graphalg.mat<#dim x #dim x i1>
+  }
+}
