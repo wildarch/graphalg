@@ -1,4 +1,4 @@
-// RUN: parse --import-graphalg < %s | FileCheck %s
+// RUN: graphalg-translate --import-graphalg < %s | FileCheck %s
 
 // CHECK: #dim = #graphalg.dim<distinct[0]<>>
 // CHECK: #dim1 = #graphalg.dim<distinct[1]<>

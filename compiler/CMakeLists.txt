@@ -94,8 +94,8 @@ target_include_directories(graphalg_parse PUBLIC include)
 # TODO: Nasty, should be provided by graphalg_lib dep
 target_include_directories(graphalg_parse SYSTEM PRIVATE ${PROJECT_BINARY_DIR}/include)
 
-add_executable(parse src/parse.cpp)
-target_link_libraries(parse PRIVATE
+add_executable(graphalg-translate src/graphalg-translate.cpp)
+target_link_libraries(graphalg-translate PRIVATE
     graphalg_parse
     ${llvm_libs}
     graphalg_lib
@@ -108,6 +108,14 @@ target_link_libraries(graphalg-opt PRIVATE
     graphalg_lib
     MLIROptLib
 )
+
+add_executable(graphalg-lsp-server src/graphalg-lsp-server.cpp)
+target_link_libraries(graphalg-lsp-server PRIVATE
+    ${llvm_libs}
+    graphalg_lib
+    MLIRLspServerLib
+)
+
 
 set(ENABLE_WASM OFF CACHE BOOL "Enable wasm-only targets" FORCE)
 

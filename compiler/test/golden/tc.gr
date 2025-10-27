@@ -1,4 +1,4 @@
-// RUN: parse --import-graphalg < %s | diff - %S/tc.mlir.ref
+// RUN: graphalg-translate --import-graphalg < %s | diff - %S/tc.mlir.ref
 func TriangleCount(graph: Matrix<s1, s1, bool>) -> int {
     graph_one = cast<int>(graph);
 

@@ -1,4 +1,4 @@
-// RUN: parse --import-graphalg < %s | diff - %S/cdlp.mlir.ref
+// RUN: graphalg-translate --import-graphalg < %s | diff - %S/cdlp.mlir.ref
 func CDLP(graph: Matrix<s, s, bool>) -> Matrix<s, s, bool> {
     iterations = int(10);
     id = Vector<bool>(graph.nrows);

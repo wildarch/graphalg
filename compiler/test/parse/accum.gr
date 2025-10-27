@@ -1,4 +1,4 @@
-// RUN: parse --import-graphalg < %s | FileCheck %s
+// RUN: graphalg-translate --import-graphalg < %s | FileCheck %s
 func Accum(a: Matrix<s, s, int>, b: Matrix<s, s, int>) -> Matrix<s, s, int> {
     // CHECK: %[[#ACCUM:]] = graphalg.ewise %arg0 ADD %arg1
     a += b;

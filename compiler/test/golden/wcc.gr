@@ -1,4 +1,4 @@
-// RUN: parse --import-graphalg < %s | diff - %S/wcc.mlir.ref
+// RUN: graphalg-translate --import-graphalg < %s | diff - %S/wcc.mlir.ref
 
 func WCC(graph: Matrix<s, s, bool>) -> Matrix<s, s, bool> {
     id = Vector<bool>(graph.nrows);

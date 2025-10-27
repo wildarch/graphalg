@@ -16,6 +16,6 @@ PARSE="$BUILD_DIR/parse"
 
 for f in $GOLDEN_DIR/*.gr; do
     out="${f%.gr}.mlir.ref"
-    $PARSE --import-graphalg "$f" > "$out"
+    $graphalg-translate --import-graphalg "$f" > "$out"
     echo "Wrote $out"
 done

@@ -1,4 +1,4 @@
-// RUN: parse --import-graphalg < %s | diff - %S/lcc.mlir.ref
+// RUN: graphalg-translate --import-graphalg < %s | diff - %S/lcc.mlir.ref
 
 // Helper for LCCDir
 func combDir(x:int) -> int {

@@ -1,4 +1,4 @@
-// RUN: parse --import-graphalg < %s | diff - %S/bfs.mlir.ref
+// RUN: graphalg-translate --import-graphalg < %s | diff - %S/bfs.mlir.ref
 func setDepth(b:bool, iter:int) -> int {
   return cast<int>(b) * (iter + int(2));
 }

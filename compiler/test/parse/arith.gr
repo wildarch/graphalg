@@ -1,4 +1,4 @@
-// RUN: parse --import-graphalg < %s | FileCheck %s
+// RUN: graphalg-translate --import-graphalg < %s | FileCheck %s
 
 // CHECK-LABEL: @Add
 func Add(a:int, b:int, c:int) -> int {

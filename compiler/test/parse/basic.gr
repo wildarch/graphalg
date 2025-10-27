@@ -1,4 +1,4 @@
-// RUN: parse --import-graphalg < %s | FileCheck %s
+// RUN: graphalg-translate --import-graphalg < %s | FileCheck %s
 
 // CHECK: func.func @Basic(
 // CHECK:     %arg0: !graphalg.mat<1 x 1 x i64>)

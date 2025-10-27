@@ -1,4 +1,4 @@
-// RUN: parse --import-graphalg < %s | FileCheck %s
+// RUN: graphalg-translate --import-graphalg < %s | FileCheck %s
 
 // CHECK-LABEL: @ReduceRows
 func ReduceRows(m:Matrix<s, s, int>) -> Matrix<s, s, int> {

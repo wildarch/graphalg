@@ -1,4 +1,4 @@
-// RUN: parse --import-graphalg < %s | diff - %S/pr.mlir.ref
+// RUN: graphalg-translate --import-graphalg < %s | diff - %S/pr.mlir.ref
 
 func withDamping(degree:int, damping:real) -> real {
     return cast<real>(degree) / damping;
