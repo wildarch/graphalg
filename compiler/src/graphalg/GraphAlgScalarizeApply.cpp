@@ -406,6 +406,11 @@ ApplyInlineTypeConverter::ApplyInlineTypeConverter() {
     // For op inputs and results.
     return matrix;
   });
+
+  // The type converter is called after we convert ApplyInlineOp to check that
+  // the argument types of the block are valid. Accept any scalar type that is
+  // a semiring.
+  addConversion([](SemiringTypeInterface ring) { return ring; });
 }
 
 static bool isScalarMatrix(mlir::Type t) {
