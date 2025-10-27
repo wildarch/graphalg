@@ -1,0 +1,7 @@
+// RUN: graphalg-translate --import-graphalg < %s | FileCheck %s
+
+// CHECK-LABEL: @Diag
+func Diag(v:Vector<s, int>) -> Matrix<s, s, int> {
+    // CHECK: graphalg.diag %arg0
+    return diag(v);
+}

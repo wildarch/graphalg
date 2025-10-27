@@ -604,13 +604,15 @@ mlir::ParseResult Parser::parseStmtFor() {
   llvm::SmallVector<llvm::StringRef> varNames;
   findModifiedBindingsInBlock(_tokens, _offset, varNames);
   // Only the variables that exist outside the loop are proper loop variables.
-  llvm::remove_if(varNames,
-                  [&](llvm::StringRef name) { return !isVarDefined(name); });
+  auto removeIt = llvm::remove_if(
+      varNames, [&](llvm::StringRef name) { return !isVarDefined(name); });
+  varNames.erase(removeIt, varNames.end());
   llvm::SmallVector<mlir::Value> initArgs;
   llvm::SmallVector<mlir::Type> varTypes;
   for (auto name : varNames) {
-    auto [value, loc] = _symbolTable.lookup(name);
+    auto [value, _] = _symbolTable.lookup(name);
     assert(!!value);
+
     initArgs.emplace_back(value);
     varTypes.emplace_back(value.getType());
   }
@@ -1394,8 +1396,42 @@ mlir::ParseResult Parser::parseAtom(mlir::Value &v) {
         return mlir::failure();
       }
 
-      auto inputType = llvm::cast<MatrixType>(arg.getType());
       v = _builder.create<PickAnyOp>(loc, arg);
+      return mlir::success();
+    }
+
+    if (name == "diag") {
+      mlir::Value arg;
+      if (eatOrError(Token::LPAREN) || parseExpr(arg) ||
+          eatOrError(Token::RPAREN)) {
+        return mlir::failure();
+      }
+
+      v = _builder.create<DiagOp>(loc, arg);
+      return mlir::success();
+    }
+
+    // TODO: Make a separate extension
+    if (name == "tril") {
+      mlir::Value arg;
+      if (eatOrError(Token::LPAREN) || parseExpr(arg) ||
+          eatOrError(Token::RPAREN)) {
+        return mlir::failure();
+      }
+
+      v = _builder.create<TrilOp>(loc, arg);
+      return mlir::success();
+    }
+
+    // TODO: Make a separate extension
+    if (name == "triu") {
+      mlir::Value arg;
+      if (eatOrError(Token::LPAREN) || parseExpr(arg) ||
+          eatOrError(Token::RPAREN)) {
+        return mlir::failure();
+      }
+
+      v = _builder.create<TriuOp>(loc, arg);
       return mlir::success();
     }
 

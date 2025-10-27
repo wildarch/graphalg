@@ -1,4 +1,4 @@
-// RUN: parse --import-graphalg < %s | diff - %S/sssp.mlir.ref
+// RUN: graphalg-translate --import-graphalg < %s | diff - %S/sssp.mlir.ref
 
 func SSSP(
         graph: Matrix<s1, s1, trop_real>,

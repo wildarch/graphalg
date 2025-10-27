@@ -1,0 +1,13 @@
+// RUN: graphalg-translate --import-graphalg < %s | FileCheck %s
+
+// CHECK-LABEL: @Tril
+func Tril(m:Matrix<s, s, int>) -> Matrix<s, s, int> {
+    // CHECK: graphalg.tril %arg0 : <#dim x #dim x i64>
+    return tril(m);
+}
+
+// CHECK-LABEL: @Triu
+func Triu(m:Matrix<s, s, int>) -> Matrix<s, s, int> {
+    // CHECK: graphalg.triu %arg0 : <#dim x #dim x i64>
+    return triu(m);
+}
