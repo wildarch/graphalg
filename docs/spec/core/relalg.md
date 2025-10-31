@@ -1,3 +1,10 @@
+---
+title: Conversion to Relational Algebra
+layout: page
+parent: Core Language
+nav_order: 3
+---
+
 # Conversion to Relational Algebra
 TODO:
 - Data model for the conversion

@@ -1,3 +1,10 @@
+---
+title: Syntax
+layout: page
+parent: Language Specification
+nav_order: 1
+---
+
 # GraphAlg Syntax
 
 ## Lexical Analysis

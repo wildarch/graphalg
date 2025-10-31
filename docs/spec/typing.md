@@ -1,3 +1,10 @@
+---
+title: Type System
+layout: page
+parent: Language Specification
+nav_order: 2
+---
+
 # Type System
 TODO:
 - Type enviroment and rule syntax

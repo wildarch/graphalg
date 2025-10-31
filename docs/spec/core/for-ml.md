@@ -1,3 +1,11 @@
+---
+title: Relation to for-MATLANG
+layout: page
+parent: Core Language
+nav_order: 4
+---
+
+
 # Relation to for-MATLANG
 GraphAlg Core is closely related to for-MATLANG (see the paper *[Expressive power of linear algebra query languages by Geerts et al.](https://arxiv.org/abs/2010.13717)*).
 The main departure from that paper is the definition of the loop construct:
