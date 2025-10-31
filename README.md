@@ -1,3 +1,3 @@
 # GraphAlg: A Embeddable Language for Writing Graph Algorithm in Linear Algebra
-Welcome to the main GraphAlg repository!
-There is not much content here yet, but we are working on fixing that!
+This website is under construction: we are working on an introduction to the language, along with an interactive playground.
+In anticipation of that, you may be interested to read the [language specification](./spec).
