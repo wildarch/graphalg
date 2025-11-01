@@ -22,13 +22,13 @@ exclude:
   - vendor/gems/
   - vendor/ruby/
   # For this project
-  - codemirror-lang-graphalg
-  - compiler
-  - docker
-  - docs-internal
-  - grammars
-  - third-party
-  - website
+  - codemirror-lang-graphalg/
+  - compiler/
+  - docker/
+  - docs/
+  - grammars/
+  - third-party/
+  - website/
   - LICENSE
   - package-lock.json
   - package.json
