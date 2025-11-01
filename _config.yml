@@ -22,8 +22,17 @@ exclude:
   - vendor/gems/
   - vendor/ruby/
   # For this project
-  - third-party
+  - codemirror-lang-graphalg
+  - compiler
+  - docker
   - docs-internal
+  - grammars
+  - third-party
+  - website
+  - LICENSE
+  - package-lock.json
+  - package.json
+  - README.md
 
 sass:
   quiet_deps: true # https://github.com/just-the-docs/just-the-docs/issues/1541
