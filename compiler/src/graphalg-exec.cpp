@@ -9,16 +9,12 @@
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/WithColor.h>
 #include <llvm/Support/raw_ostream.h>
-#include <mlir/Dialect/Func/Extensions/InlinerExtension.h>
 #include <mlir/Dialect/Func/IR/FuncOps.h>
 #include <mlir/IR/BuiltinOps.h>
-#include <mlir/IR/DialectRegistry.h>
 #include <mlir/IR/MLIRContext.h>
-#include <mlir/Pass/PassManager.h>
-#include <mlir/Transforms/Passes.h>
+#include <mlir/Parser/Parser.h>
 
-#include <graphalg/GraphAlgPasses.h>
-#include <graphalg/parse/Parser.h>
+#include <graphalg/GraphAlgDialect.h>
 
 namespace cmd {
 
@@ -37,38 +33,14 @@ cl::list<std::string> args(cl::Positional, cl::desc("<arguments...>"),
 
 int main(int argc, char **argv) {
   llvm::cl::ParseCommandLineOptions(argc, argv, "Execute GraphAlg program\n");
-  mlir::DialectRegistry registry;
-  mlir::func::registerInlinerExtension(registry);
-  mlir::MLIRContext ctx(registry);
+  mlir::MLIRContext ctx;
+  ctx.getOrLoadDialect<mlir::func::FuncDialect>();
+  ctx.getOrLoadDialect<graphalg::GraphAlgDialect>();
 
-  auto inputBuffer =
-      llvm::MemoryBuffer::getFileOrSTDIN(cmd::input, /*IsText=*/true);
-  if (auto ec = inputBuffer.getError()) {
-    llvm::WithColor::error() << "could not open source file '" << cmd::input
-                             << "': " << ec.message();
-    return 1;
-  }
-
-  // Parse source file.
-  auto loc = mlir::FileLineColLoc::get(&ctx, cmd::input,
-                                       /*line=*/1, /*column=*/1);
-  mlir::OwningOpRef<mlir::ModuleOp> moduleOp(
-      mlir::ModuleOp::create(loc, cmd::input));
-  if (mlir::failed(
-          graphalg::parse(inputBuffer->get()->getBuffer(), *moduleOp))) {
-    return 1;
-  }
-
-  // Convert source file to Core.
-  mlir::PassManager pm(moduleOp.get()->getName());
-  pm.addPass(graphalg::createGraphAlgPrepareInline());
-  pm.addPass(mlir::createInlinerPass());
-  pm.addNestedPass<mlir::func::FuncOp>(
-      graphalg::createGraphAlgScalarizeApply());
-  pm.addNestedPass<mlir::func::FuncOp>(graphalg::createGraphAlgToCore());
-  pm.addPass(mlir::createCanonicalizerPass());
-  if (mlir::failed(pm.run(*moduleOp))) {
-    llvm::errs() << "failed to convert to Core\n";
+  mlir::ParserConfig parserConfig(&ctx);
+  auto moduleOp =
+      mlir::parseSourceFile<mlir::ModuleOp>(cmd::input, parserConfig);
+  if (!moduleOp) {
     return 1;
   }
 

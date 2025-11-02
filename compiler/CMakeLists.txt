@@ -58,6 +58,7 @@ add_library(graphalg_lib STATIC
     src/graphalg/GraphAlgSetDimensions.cpp
     src/graphalg/GraphAlgSplitAggregate.cpp
     src/graphalg/GraphAlgToCore.cpp
+    src/graphalg/GraphAlgToCorePipeline.cpp
     src/graphalg/GraphAlgTypes.cpp
     src/graphalg/GraphAlgVerifyDimensions.cpp
     src/graphalg/SemiringTypes.cpp
@@ -118,7 +119,7 @@ add_executable(graphalg-exec src/graphalg-exec.cpp)
 target_link_libraries(graphalg-exec PRIVATE
     ${llvm_libs}
     graphalg_lib
-    graphalg_parse
+    MLIRParser
 )
 
 set(ENABLE_WASM OFF CACHE BOOL "Enable wasm-only targets" FORCE)
