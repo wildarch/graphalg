@@ -25,6 +25,7 @@ private:
   mlir::LogicalResult evaluate(DiagOp op);
   mlir::LogicalResult evaluate(MatMulOp op);
   mlir::LogicalResult evaluate(ReduceOp op);
+  mlir::LogicalResult evaluate(BroadcastOp op);
   mlir::LogicalResult evaluate(mlir::Operation *op);
 
   MatrixAttr value(mlir::Value v) { return _values.at(v); }
@@ -127,14 +128,31 @@ mlir::LogicalResult Evaluator::evaluate(ReduceOp op) {
   return mlir::success();
 }
 
+mlir::LogicalResult Evaluator::evaluate(BroadcastOp op) {
+  MatrixAttrReader input(_values[op.getInput()]);
+  MatrixAttrBuilder result(op.getType());
+
+  for (std::size_t row = 0; row < result.nRows(); row++) {
+    for (std::size_t col = 0; col < result.nCols(); col++) {
+      auto inRow = input.nRows() == 1 ? 0 : row;
+      auto inCol = input.nCols() == 1 ? 0 : col;
+      result.set(row, col, input.at(inRow, inCol));
+    }
+  }
+
+  _values[op.getResult()] = result.build();
+  return mlir::success();
+}
+
 mlir::LogicalResult Evaluator::evaluate(mlir::Operation *op) {
   return llvm::TypeSwitch<mlir::Operation *, mlir::LogicalResult>(op)
 #define GA_CASE(Op) .Case<Op>([&](Op op) { return evaluate(op); })
       GA_CASE(TransposeOp) GA_CASE(DiagOp) GA_CASE(MatMulOp) GA_CASE(ReduceOp)
+          GA_CASE(BroadcastOp)
 #undef GA_CASE
-          .Default([](mlir::Operation *op) {
-            return op->emitOpError("unsupported op");
-          });
+              .Default([](mlir::Operation *op) {
+                return op->emitOpError("unsupported op");
+              });
 }
 
 MatrixAttr Evaluator::evaluate(mlir::func::FuncOp funcOp,

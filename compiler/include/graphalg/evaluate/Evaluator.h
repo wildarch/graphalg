@@ -51,6 +51,9 @@ public:
         _ring(llvm::cast<SemiringTypeInterface>(type.getSemiring())),
         _elems(_rows * _cols, _ring.addIdentity()) {}
 
+  std::size_t nRows() const { return _rows; }
+  std::size_t nCols() const { return _cols; }
+
   SemiringTypeInterface ring() const { return _ring; }
 
   void set(std::size_t row, std::size_t col, mlir::TypedAttr attr) {
