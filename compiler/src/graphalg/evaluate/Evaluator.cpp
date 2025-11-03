@@ -14,6 +14,7 @@
 
 #include "graphalg/GraphAlgAttr.h"
 #include "graphalg/GraphAlgCast.h"
+#include "graphalg/GraphAlgDialect.h"
 #include "graphalg/GraphAlgOps.h"
 #include "graphalg/GraphAlgTypes.h"
 #include "graphalg/SemiringTypes.h"
@@ -50,6 +51,7 @@ private:
   mlir::LogicalResult evaluate(ConstantOp op);
   mlir::LogicalResult evaluate(AddOp op);
   mlir::LogicalResult evaluate(MulOp op);
+  mlir::LogicalResult evaluate(CastScalarOp op);
   mlir::LogicalResult evaluate(mlir::Operation *op);
 
 public:
@@ -341,10 +343,16 @@ mlir::LogicalResult ScalarEvaluator::evaluate(MulOp op) {
   return mlir::success();
 }
 
+mlir::LogicalResult ScalarEvaluator::evaluate(CastScalarOp op) {
+  auto *dialect = op->getContext()->getLoadedDialect<GraphAlgDialect>();
+  _values[op] = dialect->castAttribute(_values[op.getInput()], op.getType());
+  return mlir::success();
+}
+
 mlir::LogicalResult ScalarEvaluator::evaluate(mlir::Operation *op) {
   return llvm::TypeSwitch<mlir::Operation *, mlir::LogicalResult>(op)
 #define GA_CASE(Op) .Case<Op>([&](Op op) { return evaluate(op); })
-      GA_CASE(ConstantOp) GA_CASE(AddOp) GA_CASE(MulOp)
+      GA_CASE(ConstantOp) GA_CASE(AddOp) GA_CASE(MulOp) GA_CASE(CastScalarOp)
 #undef GA_CASE
           .Default([](mlir::Operation *op) {
             return op->emitOpError("unsupported op");
