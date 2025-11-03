@@ -1,3 +1,5 @@
+#include "graphalg/SemiringTypes.h"
+#include "mlir/IR/BuiltinAttributeInterfaces.h"
 #include <cstdint>
 #include <cstdlib>
 #include <string>
@@ -64,9 +66,9 @@ static graphalg::MatrixAttr parseMatrix(llvm::Twine filename,
 
     llvm::SmallVector<llvm::StringRef, 3> parts;
     llvm::SplitString(line, parts);
-    if (parts.size() != 3) {
+    if (parts.size() < 2) {
       llvm::WithColor::error()
-          << "Expected 3 parts, got " << parts.size() << "\n";
+          << "expected at least 2 parts, got " << parts.size() << "\n";
       llvm::errs() << "line: '" << line << "'\n";
       return nullptr;
     }
@@ -89,14 +91,38 @@ static graphalg::MatrixAttr parseMatrix(llvm::Twine filename,
       return nullptr;
     }
 
-    // TODO: Handle floats
-    std::int64_t value;
-    if (!llvm::to_integer(parts[2], value, /*Base=*/10)) {
-      llvm::WithColor::error() << "invalid value\n";
+    mlir::TypedAttr valueAttr;
+    if (type.getSemiring() == graphalg::SemiringTypes::forInt(ctx)) {
+      std::int64_t value;
+      if (parts.size() != 3) {
+        llvm::WithColor::error()
+            << "expected 3 parts, got " << parts.size() << "\n";
+        llvm::errs() << "line: '" << line << "'\n";
+        return nullptr;
+      }
+
+      if (!llvm::to_integer(parts[2], value, /*Base=*/10)) {
+        llvm::WithColor::error() << "invalid value\n";
+        return nullptr;
+      }
+
+      valueAttr = mlir::IntegerAttr::get(type.getSemiring(), value);
+    } else if (type.getSemiring() == graphalg::SemiringTypes::forBool(ctx)) {
+      if (parts.size() != 2) {
+        llvm::WithColor::error()
+            << "expected 2 parts, got " << parts.size() << "\n";
+        llvm::errs() << "line: '" << line << "'\n";
+        return nullptr;
+      }
+
+      valueAttr = mlir::BoolAttr::get(ctx, true);
+    } else {
+      llvm::WithColor::error()
+          << "unsupported semiring: " << type.getSemiring() << "\n";
       return nullptr;
     }
 
-    result.set(rowIdx, colIdx, mlir::IntegerAttr::get(result.ring(), value));
+    result.set(rowIdx, colIdx, valueAttr);
   }
 
   return result.build();
