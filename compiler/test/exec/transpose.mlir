@@ -8,11 +8,9 @@
 1 1 4
 
 //--- input.mlir
-module {
-  func.func @Transpose(%arg0: !graphalg.mat<2 x 2 x i64>) -> !graphalg.mat<2 x 2 x i64> {
-    %0 = graphalg.transpose %arg0 : <2 x 2 x i64>
-    return %0 : !graphalg.mat<2 x 2 x i64>
-  }
+func.func @Transpose(%arg0: !graphalg.mat<2 x 2 x i64>) -> !graphalg.mat<2 x 2 x i64> {
+  %0 = graphalg.transpose %arg0 : <2 x 2 x i64>
+  return %0 : !graphalg.mat<2 x 2 x i64>
 }
 
 //--- output.e

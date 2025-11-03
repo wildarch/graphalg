@@ -22,6 +22,7 @@ private:
   llvm::DenseMap<mlir::Value, MatrixAttr> _values;
 
   mlir::LogicalResult evaluate(TransposeOp op);
+  mlir::LogicalResult evaluate(DiagOp op);
   mlir::LogicalResult evaluate(mlir::Operation *op);
 
   MatrixAttr value(mlir::Value v) { return _values.at(v); }
@@ -46,10 +47,22 @@ mlir::LogicalResult Evaluator::evaluate(TransposeOp op) {
   return mlir::success();
 }
 
+mlir::LogicalResult Evaluator::evaluate(DiagOp op) {
+  MatrixAttrReader input(_values[op.getInput()]);
+  MatrixAttrBuilder result(op.getType());
+
+  for (std::size_t row = 0; row < input.nRows(); row++) {
+    result.set(row, row, input.at(row, 0));
+  }
+
+  _values[op.getResult()] = result.build();
+  return mlir::success();
+}
+
 mlir::LogicalResult Evaluator::evaluate(mlir::Operation *op) {
   return llvm::TypeSwitch<mlir::Operation *, mlir::LogicalResult>(op)
 #define GA_CASE(Op) .Case<Op>([&](Op op) { return evaluate(op); })
-      GA_CASE(TransposeOp)
+      GA_CASE(TransposeOp) GA_CASE(DiagOp)
 #undef GA_CASE
           .Default([](mlir::Operation *op) {
             return op->emitOpError("unsupported op");

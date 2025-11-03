@@ -75,11 +75,17 @@ static graphalg::MatrixAttr parseMatrix(llvm::Twine filename,
     if (!llvm::to_integer(parts[0], rowIdx, /*Base=*/10)) {
       llvm::WithColor::error() << "invalid row index\n";
       return nullptr;
+    } else if (rowIdx >= type.getRows().getConcreteDim()) {
+      llvm::WithColor::error() << "row index " << rowIdx << " out of bounds\n";
+      return nullptr;
     }
 
     std::size_t colIdx;
     if (!llvm::to_integer(parts[1], colIdx, /*Base=*/10)) {
       llvm::WithColor::error() << "invalid column index\n";
+      return nullptr;
+    } else if (colIdx >= type.getCols().getConcreteDim()) {
+      llvm::WithColor::error() << "col index " << colIdx << " out of bounds\n";
       return nullptr;
     }
 
