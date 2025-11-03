@@ -1,7 +1,7 @@
 // RUN: split-file %s %t
-// RUN: graphalg-exec %t/input.mlir Diag %t/v.e | diff - %t/output.e
+// RUN: graphalg-exec %t/input.mlir Diag %t/input.m | diff - %t/output.m
 
-//--- v.e
+//--- input.m
 0 0 42
 1 0 43
 
@@ -11,6 +11,6 @@ func.func @Diag(%arg0: !graphalg.mat<2 x 1 x i64>) -> !graphalg.mat<2 x 2 x i64>
   return %0 : !graphalg.mat<2 x 2 x i64>
 }
 
-//--- output.e
+//--- output.m
 0 0 42 : i64
 1 1 43 : i64

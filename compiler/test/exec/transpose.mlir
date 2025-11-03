@@ -1,7 +1,7 @@
 // RUN: split-file %s %t
-// RUN: graphalg-exec %t/input.mlir Transpose %t/graph.e | diff - %t/output.e
+// RUN: graphalg-exec %t/input.mlir Transpose %t/graph.m | diff - %t/output.m
 
-//--- graph.e
+//--- graph.m
 0 0 1
 0 1 2
 1 0 3
@@ -13,7 +13,7 @@ func.func @Transpose(%arg0: !graphalg.mat<2 x 2 x i64>) -> !graphalg.mat<2 x 2 x
   return %0 : !graphalg.mat<2 x 2 x i64>
 }
 
-//--- output.e
+//--- output.m
 0 0 1 : i64
 0 1 3 : i64
 1 0 2 : i64
