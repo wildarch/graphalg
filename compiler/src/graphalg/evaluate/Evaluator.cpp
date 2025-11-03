@@ -35,6 +35,7 @@ private:
   mlir::LogicalResult evaluate(ConstantMatrixOp op);
   mlir::LogicalResult evaluate(ForConstOp op);
   mlir::LogicalResult evaluate(ApplyOp op);
+  mlir::LogicalResult evaluate(PickAnyOp op);
   mlir::LogicalResult evaluate(mlir::Operation *op);
 
 public:
@@ -48,6 +49,7 @@ private:
 
   mlir::LogicalResult evaluate(ConstantOp op);
   mlir::LogicalResult evaluate(AddOp op);
+  mlir::LogicalResult evaluate(MulOp op);
   mlir::LogicalResult evaluate(mlir::Operation *op);
 
 public:
@@ -255,12 +257,30 @@ mlir::LogicalResult Evaluator::evaluate(ApplyOp op) {
   return mlir::success();
 }
 
+mlir::LogicalResult Evaluator::evaluate(PickAnyOp op) {
+  MatrixAttrReader input(_values[op.getInput()]);
+  MatrixAttrBuilder result(op.getType());
+
+  for (auto row : llvm::seq(input.nRows())) {
+    for (auto col : llvm::seq(input.nCols())) {
+      auto value = input.at(row, col);
+      if (value != result.ring().addIdentity()) {
+        result.set(row, col, value);
+        break;
+      }
+    }
+  }
+
+  _values[op.getResult()] = result.build();
+  return mlir::success();
+}
+
 mlir::LogicalResult Evaluator::evaluate(mlir::Operation *op) {
   return llvm::TypeSwitch<mlir::Operation *, mlir::LogicalResult>(op)
 #define GA_CASE(Op) .Case<Op>([&](Op op) { return evaluate(op); })
       GA_CASE(TransposeOp) GA_CASE(DiagOp) GA_CASE(MatMulOp) GA_CASE(ReduceOp)
           GA_CASE(BroadcastOp) GA_CASE(ConstantMatrixOp) GA_CASE(ForConstOp)
-              GA_CASE(ApplyOp)
+              GA_CASE(ApplyOp) GA_CASE(PickAnyOp)
 #undef GA_CASE
                   .Default([](mlir::Operation *op) {
                     return op->emitOpError("unsupported op");
@@ -315,10 +335,16 @@ mlir::LogicalResult ScalarEvaluator::evaluate(AddOp op) {
   return mlir::success();
 }
 
+mlir::LogicalResult ScalarEvaluator::evaluate(MulOp op) {
+  auto ring = llvm::cast<SemiringTypeInterface>(op.getType());
+  _values[op] = ring.mul(_values[op.getLhs()], _values[op.getRhs()]);
+  return mlir::success();
+}
+
 mlir::LogicalResult ScalarEvaluator::evaluate(mlir::Operation *op) {
   return llvm::TypeSwitch<mlir::Operation *, mlir::LogicalResult>(op)
 #define GA_CASE(Op) .Case<Op>([&](Op op) { return evaluate(op); })
-      GA_CASE(ConstantOp) GA_CASE(AddOp)
+      GA_CASE(ConstantOp) GA_CASE(AddOp) GA_CASE(MulOp)
 #undef GA_CASE
           .Default([](mlir::Operation *op) {
             return op->emitOpError("unsupported op");
