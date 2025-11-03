@@ -25,6 +25,10 @@ public:
   std::size_t nRows() const { return _rows; }
   std::size_t nCols() const { return _cols; }
 
+  SemiringTypeInterface ring() const {
+    return llvm::cast<SemiringTypeInterface>(_type.getSemiring());
+  }
+
   mlir::TypedAttr at(std::size_t row, std::size_t col) const {
     assert(row < _rows);
     assert(col < _cols);

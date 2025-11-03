@@ -157,7 +157,15 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  result.printStripped(llvm::outs());
+  graphalg::MatrixAttrReader resultReader(result);
+  for (std::size_t row = 0; row < resultReader.nRows(); row++) {
+    for (std::size_t col = 0; col < resultReader.nCols(); col++) {
+      auto val = resultReader.at(row, col);
+      if (val != resultReader.ring().addIdentity()) {
+        llvm::outs() << row << " " << col << " " << val << "\n";
+      }
+    }
+  }
 
   return 0;
 }
