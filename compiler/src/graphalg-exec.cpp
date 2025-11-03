@@ -1,26 +1,32 @@
-#include "graphalg/GraphAlgTypes.h"
-#include "mlir/IR/Attributes.h"
-#include "mlir/IR/BuiltinAttributes.h"
-#include "llvm/ADT/StringExtras.h"
-#include "llvm/ADT/StringRef.h"
+#include <cstdint>
 #include <cstdlib>
 #include <string>
 
 #include <llvm/ADT/SmallVector.h>
+#include <llvm/ADT/StringExtras.h>
+#include <llvm/ADT/StringRef.h>
 #include <llvm/ADT/Twine.h>
 #include <llvm/Support/Casting.h>
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Support/Error.h>
 #include <llvm/Support/MemoryBuffer.h>
+#include <llvm/Support/SMLoc.h>
+#include <llvm/Support/SourceMgr.h>
 #include <llvm/Support/WithColor.h>
 #include <llvm/Support/raw_ostream.h>
 #include <mlir/Dialect/Func/IR/FuncOps.h>
+#include <mlir/IR/Attributes.h>
+#include <mlir/IR/BuiltinAttributes.h>
 #include <mlir/IR/BuiltinOps.h>
+#include <mlir/IR/Diagnostics.h>
 #include <mlir/IR/MLIRContext.h>
 #include <mlir/Parser/Parser.h>
 
 #include <graphalg/GraphAlgAttr.h>
+#include <graphalg/GraphAlgCast.h>
 #include <graphalg/GraphAlgDialect.h>
+#include <graphalg/GraphAlgTypes.h>
+#include <graphalg/evaluate/Evaluator.h>
 
 namespace cmd {
 
@@ -46,24 +52,48 @@ static graphalg::MatrixAttr parseMatrix(llvm::Twine filename,
     return nullptr;
   }
 
-  assert(type.getRows().isConcrete() && type.getCols().isConcrete());
-  auto rows = type.getRows().getConcreteDim();
-  auto cols = type.getCols().getConcreteDim();
-  llvm::SmallVector<mlir::Attribute> elems(rows * cols);
+  auto *ctx = type.getContext();
+  graphalg::MatrixAttrBuilder result(type);
 
+  assert(type.getRows().isConcrete() && type.getCols().isConcrete());
   auto data = buffer->get()->getBuffer();
-  for (std::size_t i = 0; i < data.size();) {
-    auto lineEnd = data.find_first_of('\n', i);
-    if (lineEnd == std::string::npos) {
-      lineEnd = data.size();
+  for (auto line : llvm::split(data, '\n')) {
+    if (line.empty()) {
+      continue;
     }
 
-    auto line = data.substr(i, lineEnd);
     llvm::SmallVector<llvm::StringRef, 3> parts;
     llvm::SplitString(line, parts);
-    // TODO: use parts.
-    i = lineEnd + 1;
+    if (parts.size() != 3) {
+      llvm::WithColor::error()
+          << "Expected 3 parts, got " << parts.size() << "\n";
+      llvm::errs() << "line: '" << line << "'\n";
+      return nullptr;
+    }
+
+    std::size_t rowIdx;
+    if (!llvm::to_integer(parts[0], rowIdx, /*Base=*/10)) {
+      llvm::WithColor::error() << "invalid row index\n";
+      return nullptr;
+    }
+
+    std::size_t colIdx;
+    if (!llvm::to_integer(parts[1], colIdx, /*Base=*/10)) {
+      llvm::WithColor::error() << "invalid column index\n";
+      return nullptr;
+    }
+
+    // TODO: Handle floats
+    std::int64_t value;
+    if (!llvm::to_integer(parts[2], value, /*Base=*/10)) {
+      llvm::WithColor::error() << "invalid value\n";
+      return nullptr;
+    }
+
+    result.set(rowIdx, colIdx, mlir::IntegerAttr::get(result.ring(), value));
   }
+
+  return result.build();
 }
 
 int main(int argc, char **argv) {
@@ -72,9 +102,18 @@ int main(int argc, char **argv) {
   ctx.getOrLoadDialect<mlir::func::FuncDialect>();
   ctx.getOrLoadDialect<graphalg::GraphAlgDialect>();
 
+  llvm::SourceMgr sourceMgr;
+  mlir::SourceMgrDiagnosticHandler diagHandler(sourceMgr, &ctx);
+  std::string inputIncluded;
+  auto inputId =
+      sourceMgr.AddIncludeFile(cmd::input, llvm::SMLoc(), inputIncluded);
+  if (!inputId) {
+    return 1;
+  }
+
   mlir::ParserConfig parserConfig(&ctx);
   auto moduleOp =
-      mlir::parseSourceFile<mlir::ModuleOp>(cmd::input, parserConfig);
+      mlir::parseSourceFile<mlir::ModuleOp>(sourceMgr, parserConfig);
   if (!moduleOp) {
     return 1;
   }
@@ -88,19 +127,15 @@ int main(int argc, char **argv) {
     moduleOp->print(llvm::errs());
   }
 
-  // TODO: Load arguments
+  // Number of arguments must match function parameters.
+  if (cmd::args.size() != funcOp.getFunctionType().getNumInputs()) {
+    funcOp->emitOpError("expected ") << funcOp.getFunctionType().getNumInputs()
+                                     << "arguments, got " << cmd::args.size();
+  }
+
   llvm::SmallVector<graphalg::MatrixAttr> args;
-  // TODO: Different number of arguments.
   for (const auto &[i, filename] : llvm::enumerate(cmd::args)) {
     auto type = funcOp.getFunctionType().getInput(i);
-    /*
-    auto buffer = llvm::MemoryBuffer::getFileOrSTDIN(filename, true);
-    if (auto ec = buffer.getError()) {
-      llvm::WithColor::error() << "could not open argument file '" << arg
-                               << "': " << ec.message() << "\n";
-      return 1;
-    }
-    */
 
     auto matType = llvm::dyn_cast<graphalg::MatrixType>(type);
     if (!matType) {
@@ -117,9 +152,12 @@ int main(int argc, char **argv) {
     args.push_back(parsed);
   }
 
-  // TODO: Execute
+  auto result = graphalg::evaluate(funcOp, args);
+  if (!result) {
+    return 1;
+  }
 
-  // TODO: Write out the result
+  result.printStripped(llvm::outs());
 
   return 0;
 }

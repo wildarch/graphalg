@@ -62,6 +62,7 @@ add_library(graphalg_lib STATIC
     src/graphalg/GraphAlgTypes.cpp
     src/graphalg/GraphAlgVerifyDimensions.cpp
     src/graphalg/SemiringTypes.cpp
+    src/graphalg/evaluate/Evaluator.cpp
 )
 target_include_directories(graphalg_lib PUBLIC include)
 target_include_directories(graphalg_lib SYSTEM PUBLIC ${PROJECT_BINARY_DIR}/include)
