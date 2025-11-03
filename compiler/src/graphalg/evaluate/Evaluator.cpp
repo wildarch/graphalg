@@ -3,13 +3,17 @@
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/TypeSwitch.h>
+#include <llvm/Support/Casting.h>
 #include <mlir/Dialect/Func/IR/FuncOps.h>
+#include <mlir/IR/Block.h>
+#include <mlir/IR/BuiltinAttributeInterfaces.h>
 #include <mlir/IR/BuiltinAttributes.h>
 #include <mlir/IR/Diagnostics.h>
 #include <mlir/IR/Value.h>
 #include <mlir/Support/LLVM.h>
 
 #include "graphalg/GraphAlgAttr.h"
+#include "graphalg/GraphAlgCast.h"
 #include "graphalg/GraphAlgOps.h"
 #include "graphalg/GraphAlgTypes.h"
 #include "graphalg/SemiringTypes.h"
@@ -30,13 +34,24 @@ private:
   mlir::LogicalResult evaluate(BroadcastOp op);
   mlir::LogicalResult evaluate(ConstantMatrixOp op);
   mlir::LogicalResult evaluate(ForConstOp op);
+  mlir::LogicalResult evaluate(ApplyOp op);
   mlir::LogicalResult evaluate(mlir::Operation *op);
-
-  MatrixAttr value(mlir::Value v) { return _values.at(v); }
 
 public:
   MatrixAttr evaluate(mlir::func::FuncOp funcOp,
                       llvm::ArrayRef<MatrixAttr> args);
+};
+
+class ScalarEvaluator {
+private:
+  llvm::SmallDenseMap<mlir::Value, mlir::TypedAttr> _values;
+
+  mlir::LogicalResult evaluate(ConstantOp op);
+  mlir::LogicalResult evaluate(AddOp op);
+  mlir::LogicalResult evaluate(mlir::Operation *op);
+
+public:
+  mlir::TypedAttr evaluate(ApplyOp op, llvm::ArrayRef<mlir::TypedAttr> args);
 };
 
 } // namespace
@@ -212,15 +227,44 @@ mlir::LogicalResult Evaluator::evaluate(ForConstOp op) {
   return mlir::success();
 }
 
+mlir::LogicalResult Evaluator::evaluate(ApplyOp op) {
+  llvm::SmallVector<MatrixAttrReader> inputs;
+  for (auto input : op.getInputs()) {
+    inputs.emplace_back(_values[input]);
+  }
+
+  MatrixAttrBuilder result(op.getType());
+  for (auto row : llvm::seq(result.nRows())) {
+    for (auto col : llvm::seq(result.nCols())) {
+      llvm::SmallVector<mlir::TypedAttr> args;
+      for (const auto &input : inputs) {
+        args.push_back(input.at(row, col));
+      }
+
+      ScalarEvaluator scalarEvaluator;
+      auto value = scalarEvaluator.evaluate(op, args);
+      if (!value) {
+        return mlir::failure();
+      }
+
+      result.set(row, col, value);
+    }
+  }
+
+  _values[op] = result.build();
+  return mlir::success();
+}
+
 mlir::LogicalResult Evaluator::evaluate(mlir::Operation *op) {
   return llvm::TypeSwitch<mlir::Operation *, mlir::LogicalResult>(op)
 #define GA_CASE(Op) .Case<Op>([&](Op op) { return evaluate(op); })
       GA_CASE(TransposeOp) GA_CASE(DiagOp) GA_CASE(MatMulOp) GA_CASE(ReduceOp)
           GA_CASE(BroadcastOp) GA_CASE(ConstantMatrixOp) GA_CASE(ForConstOp)
+              GA_CASE(ApplyOp)
 #undef GA_CASE
-              .Default([](mlir::Operation *op) {
-                return op->emitOpError("unsupported op");
-              });
+                  .Default([](mlir::Operation *op) {
+                    return op->emitOpError("unsupported op");
+                  });
 }
 
 MatrixAttr Evaluator::evaluate(mlir::func::FuncOp funcOp,
@@ -248,7 +292,7 @@ MatrixAttr Evaluator::evaluate(mlir::func::FuncOp funcOp,
   for (auto &op : body) {
     if (auto retOp = llvm::dyn_cast<mlir::func::ReturnOp>(op)) {
       assert(retOp->getNumOperands() == 1);
-      return value(retOp->getOperand(0));
+      return _values[retOp->getOperand(0)];
     }
 
     if (mlir::failed(evaluate(&op))) {
@@ -257,6 +301,46 @@ MatrixAttr Evaluator::evaluate(mlir::func::FuncOp funcOp,
   }
 
   funcOp->emitOpError("missing return op");
+  return nullptr;
+}
+
+mlir::LogicalResult ScalarEvaluator::evaluate(ConstantOp op) {
+  _values[op] = op.getValue();
+  return mlir::success();
+}
+
+mlir::LogicalResult ScalarEvaluator::evaluate(AddOp op) {
+  auto ring = llvm::cast<SemiringTypeInterface>(op.getType());
+  _values[op] = ring.add(_values[op.getLhs()], _values[op.getRhs()]);
+  return mlir::success();
+}
+
+mlir::LogicalResult ScalarEvaluator::evaluate(mlir::Operation *op) {
+  return llvm::TypeSwitch<mlir::Operation *, mlir::LogicalResult>(op)
+#define GA_CASE(Op) .Case<Op>([&](Op op) { return evaluate(op); })
+      GA_CASE(ConstantOp) GA_CASE(AddOp)
+#undef GA_CASE
+          .Default([](mlir::Operation *op) {
+            return op->emitOpError("unsupported op");
+          });
+}
+
+mlir::TypedAttr
+ScalarEvaluator::evaluate(ApplyOp op, llvm::ArrayRef<mlir::TypedAttr> args) {
+  auto &block = op.getBody().front();
+  for (auto [blockArg, value] : llvm::zip_equal(block.getArguments(), args)) {
+    _values[blockArg] = value;
+  }
+
+  for (auto &op : block) {
+    if (auto retOp = llvm::dyn_cast<ApplyReturnOp>(op)) {
+      return _values[retOp.getValue()];
+    } else if (mlir::failed(evaluate(&op))) {
+      return nullptr;
+    }
+  }
+
+  op->emitOpError("missing return op");
   return nullptr;
 }
 

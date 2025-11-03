@@ -28,6 +28,6 @@ func.func @Reach(%arg0: !graphalg.mat<3 x 3 x i1>, %arg1: !graphalg.mat<3 x 1 x 
 }
 
 //--- output.m
-0 0
-1 0
-2 0
+0 0 true
+1 0 true
+2 0 true
