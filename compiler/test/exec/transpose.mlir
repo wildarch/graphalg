@@ -1,7 +1,7 @@
 // RUN: split-file %s %t
-// RUN: graphalg-exec %t/input.mlir Transpose %t/graph.m | diff - %t/output.m
+// RUN: graphalg-exec %t/input.mlir Transpose %t/input.m | diff - %t/output.m
 
-//--- graph.m
+//--- input.m
 0 0 1
 0 1 2
 1 0 3

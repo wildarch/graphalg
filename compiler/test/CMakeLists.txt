@@ -12,5 +12,8 @@ configure_lit_site_cfg(
 
 add_lit_testsuite(check "Run integration tests"
     ${CMAKE_CURRENT_BINARY_DIR}
-    DEPENDS graphalg-translate graphalg-opt
+    DEPENDS
+    graphalg-exec
+    graphalg-opt
+    graphalg-translate
 )

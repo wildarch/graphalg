@@ -24,6 +24,7 @@ private:
   mlir::LogicalResult evaluate(TransposeOp op);
   mlir::LogicalResult evaluate(DiagOp op);
   mlir::LogicalResult evaluate(MatMulOp op);
+  mlir::LogicalResult evaluate(ReduceOp op);
   mlir::LogicalResult evaluate(mlir::Operation *op);
 
   MatrixAttr value(mlir::Value v) { return _values.at(v); }
@@ -82,10 +83,54 @@ mlir::LogicalResult Evaluator::evaluate(MatMulOp op) {
   return mlir::success();
 }
 
+mlir::LogicalResult Evaluator::evaluate(ReduceOp op) {
+  MatrixAttrReader input(_values[op.getInput()]);
+  MatrixAttrBuilder result(op.getType());
+
+  auto ring = result.ring();
+  if (op.getType().isScalar()) {
+    // Reduce all to a single value.
+    auto value = ring.addIdentity();
+    for (std::size_t row = 0; row < input.nRows(); row++) {
+      for (std::size_t col = 0; col < input.nCols(); col++) {
+        value = ring.add(value, input.at(row, col));
+      }
+    }
+
+    result.set(0, 0, value);
+  } else if (op.getType().isColumnVector()) {
+    // Per-row reduce.
+    for (std::size_t row = 0; row < input.nRows(); row++) {
+      auto value = ring.addIdentity();
+      for (std::size_t col = 0; col < input.nCols(); col++) {
+        value = ring.add(value, input.at(row, col));
+      }
+
+      result.set(row, 0, value);
+    }
+  } else if (op.getType().isRowVector()) {
+    // Per-column reduce.
+    for (std::size_t col = 0; col < input.nCols(); col++) {
+      auto value = ring.addIdentity();
+      for (std::size_t row = 0; row < input.nRows(); row++) {
+        value = ring.add(value, input.at(row, col));
+      }
+
+      result.set(0, col, value);
+    }
+  } else {
+    // Reduce nothing.
+    return op.emitOpError("Not reducing along any dimension");
+  }
+
+  _values[op.getResult()] = result.build();
+  return mlir::success();
+}
+
 mlir::LogicalResult Evaluator::evaluate(mlir::Operation *op) {
   return llvm::TypeSwitch<mlir::Operation *, mlir::LogicalResult>(op)
 #define GA_CASE(Op) .Case<Op>([&](Op op) { return evaluate(op); })
-      GA_CASE(TransposeOp) GA_CASE(DiagOp) GA_CASE(MatMulOp)
+      GA_CASE(TransposeOp) GA_CASE(DiagOp) GA_CASE(MatMulOp) GA_CASE(ReduceOp)
 #undef GA_CASE
           .Default([](mlir::Operation *op) {
             return op->emitOpError("unsupported op");
