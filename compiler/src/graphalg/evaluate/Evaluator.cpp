@@ -38,6 +38,7 @@ private:
   mlir::LogicalResult evaluate(ForConstOp op);
   mlir::LogicalResult evaluate(ApplyOp op);
   mlir::LogicalResult evaluate(PickAnyOp op);
+  mlir::LogicalResult evaluate(TrilOp op);
   mlir::LogicalResult evaluate(mlir::Operation *op);
 
 public:
@@ -282,12 +283,29 @@ mlir::LogicalResult Evaluator::evaluate(PickAnyOp op) {
   return mlir::success();
 }
 
+mlir::LogicalResult Evaluator::evaluate(TrilOp op) {
+  MatrixAttrReader input(_values[op.getInput()]);
+  MatrixAttrBuilder result(op.getType());
+
+  for (auto row : llvm::seq(input.nRows())) {
+    for (auto col : llvm::seq(input.nCols())) {
+      if (col < row) {
+        auto value = input.at(row, col);
+        result.set(row, col, value);
+      }
+    }
+  }
+
+  _values[op.getResult()] = result.build();
+  return mlir::success();
+}
+
 mlir::LogicalResult Evaluator::evaluate(mlir::Operation *op) {
   return llvm::TypeSwitch<mlir::Operation *, mlir::LogicalResult>(op)
 #define GA_CASE(Op) .Case<Op>([&](Op op) { return evaluate(op); })
       GA_CASE(TransposeOp) GA_CASE(DiagOp) GA_CASE(MatMulOp) GA_CASE(ReduceOp)
           GA_CASE(BroadcastOp) GA_CASE(ConstantMatrixOp) GA_CASE(ForConstOp)
-              GA_CASE(ApplyOp) GA_CASE(PickAnyOp)
+              GA_CASE(ApplyOp) GA_CASE(PickAnyOp) GA_CASE(TrilOp)
 #undef GA_CASE
                   .Default([](mlir::Operation *op) {
                     return op->emitOpError("unsupported op");
