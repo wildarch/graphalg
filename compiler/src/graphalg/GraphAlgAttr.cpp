@@ -1,19 +1,19 @@
 #include <llvm/ADT/TypeSwitch.h>
+#include <llvm/Support/Casting.h>
 #include <mlir/IR/Builders.h>
+#include <mlir/IR/BuiltinAttributeInterfaces.h>
 #include <mlir/IR/BuiltinAttributes.h>
 #include <mlir/IR/DialectImplementation.h>
 #include <mlir/IR/OpImplementation.h>
+#include <mlir/Support/LogicalResult.h>
 
 #include <graphalg/GraphAlgAttr.h>
 #include <graphalg/GraphAlgDialect.h>
 #include <graphalg/GraphAlgInterfaces.h>
 #include <graphalg/GraphAlgTypes.h>
 #include <graphalg/SemiringTypes.h>
-#include <mlir/Support/LogicalResult.h>
 
 #include "graphalg/GraphAlgEnumAttr.cpp.inc"
-#include "mlir/IR/BuiltinAttributeInterfaces.h"
-#include "llvm/Support/Casting.h"
 #define GET_ATTRDEF_CLASSES
 #include "graphalg/GraphAlgAttr.cpp.inc"
 
