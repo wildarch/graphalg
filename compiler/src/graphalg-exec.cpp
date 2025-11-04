@@ -1,3 +1,8 @@
+/**
+ * Executes GraphAlg Core IR.
+ *
+ * It is used in regression tests for \c graphalg::evaluate.
+ */
 #include <cstdint>
 #include <cstdlib>
 #include <string>
@@ -21,15 +26,16 @@
 #include <mlir/IR/BuiltinAttributes.h>
 #include <mlir/IR/BuiltinOps.h>
 #include <mlir/IR/Diagnostics.h>
+#include <mlir/IR/Location.h>
 #include <mlir/IR/MLIRContext.h>
 #include <mlir/Parser/Parser.h>
 
-#include <graphalg/GraphAlgAttr.h>
-#include <graphalg/GraphAlgCast.h>
-#include <graphalg/GraphAlgDialect.h>
-#include <graphalg/GraphAlgTypes.h>
-#include <graphalg/SemiringTypes.h>
-#include <graphalg/evaluate/Evaluator.h>
+#include "graphalg/GraphAlgAttr.h"
+#include "graphalg/GraphAlgCast.h"
+#include "graphalg/GraphAlgDialect.h"
+#include "graphalg/GraphAlgTypes.h"
+#include "graphalg/SemiringTypes.h"
+#include "graphalg/evaluate/Evaluator.h"
 
 namespace cmd {
 
@@ -46,21 +52,24 @@ cl::list<std::string> args(cl::Positional, cl::desc("<arguments...>"),
 
 } // namespace cmd
 
-static graphalg::MatrixAttr parseMatrix(llvm::Twine filename,
+static graphalg::MatrixAttr parseMatrix(llvm::StringRef filename,
+                                        const llvm::MemoryBuffer *buffer,
                                         graphalg::MatrixType type) {
-  auto buffer = llvm::MemoryBuffer::getFileOrSTDIN(filename, true);
-  if (auto ec = buffer.getError()) {
-    llvm::WithColor::error() << "could not open argument file '" << filename
-                             << "': " << ec.message() << "\n";
-    return nullptr;
-  }
-
   auto *ctx = type.getContext();
   graphalg::MatrixAttrBuilder result(type);
 
   assert(type.getRows().isConcrete() && type.getCols().isConcrete());
-  auto data = buffer->get()->getBuffer();
+
+  std::size_t lineIdx = 0;
+  auto emitError = [&]() {
+    return mlir::emitError(
+        mlir::FileLineColLoc::get(type.getContext(), filename, lineIdx, 0));
+  };
+
+  auto data = buffer->getBuffer();
   for (auto line : llvm::split(data, '\n')) {
+    lineIdx++;
+
     if (line.empty()) {
       continue;
     }
@@ -68,27 +77,25 @@ static graphalg::MatrixAttr parseMatrix(llvm::Twine filename,
     llvm::SmallVector<llvm::StringRef, 3> parts;
     llvm::SplitString(line, parts);
     if (parts.size() < 2) {
-      llvm::WithColor::error()
-          << "expected at least 2 parts, got " << parts.size() << "\n";
-      llvm::errs() << "line: '" << line << "'\n";
+      emitError() << "expected at least 2 parts, got " << parts.size();
       return nullptr;
     }
 
     std::size_t rowIdx;
     if (!llvm::to_integer(parts[0], rowIdx, /*Base=*/10)) {
-      llvm::WithColor::error() << "invalid row index\n";
+      emitError() << "invalid row index";
       return nullptr;
     } else if (rowIdx >= type.getRows().getConcreteDim()) {
-      llvm::WithColor::error() << "row index " << rowIdx << " out of bounds\n";
+      emitError() << "row index " << rowIdx << " out of bounds";
       return nullptr;
     }
 
     std::size_t colIdx;
     if (!llvm::to_integer(parts[1], colIdx, /*Base=*/10)) {
-      llvm::WithColor::error() << "invalid column index\n";
+      emitError() << "invalid column index";
       return nullptr;
     } else if (colIdx >= type.getCols().getConcreteDim()) {
-      llvm::WithColor::error() << "col index " << colIdx << " out of bounds\n";
+      emitError() << "col index " << colIdx << " out of bounds";
       return nullptr;
     }
 
@@ -96,23 +103,19 @@ static graphalg::MatrixAttr parseMatrix(llvm::Twine filename,
     if (type.getSemiring() == graphalg::SemiringTypes::forInt(ctx)) {
       std::int64_t value;
       if (parts.size() != 3) {
-        llvm::WithColor::error()
-            << "expected 3 parts, got " << parts.size() << "\n";
-        llvm::errs() << "line: '" << line << "'\n";
+        emitError() << "expected 3 parts, got " << parts.size();
         return nullptr;
       }
 
       if (!llvm::to_integer(parts[2], value, /*Base=*/10)) {
-        llvm::WithColor::error() << "invalid value\n";
+        emitError() << "invalid integer value";
         return nullptr;
       }
 
       valueAttr = mlir::IntegerAttr::get(type.getSemiring(), value);
     } else if (type.getSemiring() == graphalg::SemiringTypes::forBool(ctx)) {
       if (parts.size() != 2) {
-        llvm::WithColor::error()
-            << "expected 2 parts, got " << parts.size() << "\n";
-        llvm::errs() << "line: '" << line << "'\n";
+        emitError() << "expected 2 parts, got " << parts.size();
         return nullptr;
       }
 
@@ -120,21 +123,18 @@ static graphalg::MatrixAttr parseMatrix(llvm::Twine filename,
     } else if (type.getSemiring() == graphalg::SemiringTypes::forReal(ctx)) {
       double value;
       if (parts.size() != 3) {
-        llvm::WithColor::error()
-            << "expected 3 parts, got " << parts.size() << "\n";
-        llvm::errs() << "line: '" << line << "'\n";
+        emitError() << "expected 3 parts, got " << parts.size();
         return nullptr;
       }
 
       if (!llvm::to_float(parts[2], value)) {
-        llvm::WithColor::error() << "invalid value\n";
+        emitError() << "invalid float value";
         return nullptr;
       }
 
       valueAttr = mlir::FloatAttr::get(type.getSemiring(), value);
     } else {
-      llvm::WithColor::error()
-          << "unsupported semiring: " << type.getSemiring() << "\n";
+      emitError() << "unsupported semiring: " << type.getSemiring();
       return nullptr;
     }
 
@@ -157,6 +157,8 @@ int main(int argc, char **argv) {
   auto inputId =
       sourceMgr.AddIncludeFile(cmd::input, llvm::SMLoc(), inputIncluded);
   if (!inputId) {
+    llvm::WithColor::error()
+        << "could not find input file '" << cmd::input << "'\n";
     return 1;
   }
 
@@ -174,18 +176,19 @@ int main(int argc, char **argv) {
     llvm::WithColor::error()
         << "no such function '" << cmd::func << "' in Core IR\n";
     moduleOp->print(llvm::errs());
+    return 1;
   }
 
   // Number of arguments must match function parameters.
   if (cmd::args.size() != funcOp.getFunctionType().getNumInputs()) {
     funcOp->emitOpError("expected ") << funcOp.getFunctionType().getNumInputs()
                                      << "arguments, got " << cmd::args.size();
+    return 1;
   }
 
   llvm::SmallVector<graphalg::MatrixAttr> args;
   for (const auto &[i, filename] : llvm::enumerate(cmd::args)) {
     auto type = funcOp.getFunctionType().getInput(i);
-
     auto matType = llvm::dyn_cast<graphalg::MatrixType>(type);
     if (!matType) {
       funcOp->emitOpError("parameter ")
@@ -193,7 +196,15 @@ int main(int argc, char **argv) {
       return 1;
     }
 
-    auto parsed = parseMatrix(filename, matType);
+    std::string argIncluded;
+    auto id = sourceMgr.AddIncludeFile(filename, llvm::SMLoc(), argIncluded);
+    if (!id) {
+      llvm::WithColor::error()
+          << "could not find argument file '" << filename << "'\n";
+      return 1;
+    }
+
+    auto parsed = parseMatrix(filename, sourceMgr.getMemoryBuffer(id), matType);
     if (!parsed) {
       return 1;
     }
