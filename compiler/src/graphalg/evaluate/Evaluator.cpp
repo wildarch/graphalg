@@ -223,8 +223,32 @@ mlir::LogicalResult Evaluator::evaluate(ForConstOp op) {
       }
     }
 
+    bool breakFromUntil = false;
     if (!op.getUntil().empty()) {
-      return op->emitOpError("'until' is not yet supported");
+      // Have an until clause to evaluate.
+      auto &until = op.getUntil().front();
+
+      // Use current state of loop variables as input to until block.
+      for (auto [bodyArg, untilArg] :
+           llvm::zip_equal(body.getArguments(), until.getArguments())) {
+        _values[untilArg] = _values[bodyArg];
+      }
+
+      for (auto &op : until) {
+        if (auto yieldOp = llvm::dyn_cast<YieldOp>(op)) {
+          // Check break condition
+          assert(yieldOp->getNumOperands() == 1);
+          MatrixAttrReader condMat(_values[yieldOp.getInputs().front()]);
+          breakFromUntil =
+              llvm::cast<mlir::BoolAttr>(condMat.at(0, 0)).getValue();
+        } else if (mlir::failed(evaluate(&op))) {
+          return mlir::failure();
+        }
+      }
+    }
+
+    if (breakFromUntil) {
+      break;
     }
   }
 
