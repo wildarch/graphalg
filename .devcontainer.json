@@ -1,6 +1,8 @@
 {
     "name": "GraphAlg",
-    "image": "ghcr.io/wildarch/mono:devcontainer",
+    "build": {
+        "dockerfile": "docker/Dockerfile"
+    },
     "remoteUser": "ubuntu",
     "runArgs": [
         // Allow GDB to disable address space layout randomization.

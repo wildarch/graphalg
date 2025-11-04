@@ -30,8 +30,10 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
   ninja-build \
   pkg-config \
   python3-pip \
+  ruby-full \
   sudo \
   vim-nox \
+  zlib1g-dev \
   && rm -rf /var/lib/apt/lists/*
 
 RUN pip install --break-system-packages lit
@@ -45,3 +47,9 @@ RUN update-alternatives --install /usr/bin/cc cc /usr/bin/clang-20 100 \
 
 USER ubuntu
 WORKDIR /home/ubuntu
+
+ENV GEM_HOME=/home/ubuntu/gems
+RUN echo '# Install Ruby Gems to ~/gems' >> /home/ubuntu/.bashrc && \
+    echo 'export GEM_HOME="$HOME/gems"' >> /home/ubuntu/.bashrc && \
+    echo 'export PATH="$HOME/gems/bin:$PATH"' >> /home/ubuntu/.bashrc && \
+    gem install jekyll bundler

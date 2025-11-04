@@ -1,13 +1,13 @@
-import {parser} from "./syntax.grammar"
-import {LRLanguage, LanguageSupport, indentNodeProp, foldNodeProp, foldInside, delimitedIndent} from "@codemirror/language"
-import {styleTags, tags as t} from "@lezer/highlight"
+import { parser } from "./syntax.grammar"
+import { LRLanguage, LanguageSupport, indentNodeProp, foldNodeProp, foldInside, delimitedIndent } from "@codemirror/language"
+import { styleTags, tags as t } from "@lezer/highlight"
 
 export const GraphAlgLanguage = LRLanguage.define({
   name: "graphalg",
   parser: parser.configure({
     props: [
       indentNodeProp.add({
-        Block: delimitedIndent({closing: "}"}),
+        Block: delimitedIndent({ closing: "}" }),
       }),
       foldNodeProp.add({
         Block: foldInside,
@@ -50,7 +50,7 @@ export const GraphAlgLanguage = LRLanguage.define({
     ]
   }),
   languageData: {
-    commentTokens: {line: "//"}
+    commentTokens: { line: "//" }
   }
 })
 
