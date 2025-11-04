@@ -4,6 +4,7 @@
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/TypeSwitch.h>
 #include <llvm/Support/Casting.h>
+#include <mlir/Dialect/Arith/IR/Arith.h>
 #include <mlir/Dialect/Func/IR/FuncOps.h>
 #include <mlir/IR/Block.h>
 #include <mlir/IR/BuiltinAttributeInterfaces.h>
@@ -52,6 +53,10 @@ private:
   mlir::LogicalResult evaluate(AddOp op);
   mlir::LogicalResult evaluate(MulOp op);
   mlir::LogicalResult evaluate(CastScalarOp op);
+  mlir::LogicalResult evaluate(EqOp op);
+  mlir::LogicalResult evaluate(mlir::arith::DivFOp op);
+  mlir::LogicalResult evaluate(mlir::arith::SubIOp op);
+  mlir::LogicalResult evaluate(mlir::arith::SubFOp op);
   mlir::LogicalResult evaluate(mlir::Operation *op);
 
 public:
@@ -349,14 +354,51 @@ mlir::LogicalResult ScalarEvaluator::evaluate(CastScalarOp op) {
   return mlir::success();
 }
 
+mlir::LogicalResult ScalarEvaluator::evaluate(EqOp op) {
+  auto ring = llvm::cast<SemiringTypeInterface>(op.getType());
+  bool eq = _values[op.getLhs()] == _values[op.getRhs()];
+  _values[op] = mlir::BoolAttr::get(op.getContext(), eq);
+  return mlir::success();
+}
+
+mlir::LogicalResult ScalarEvaluator::evaluate(mlir::arith::DivFOp op) {
+  auto lhs =
+      llvm::cast<mlir::FloatAttr>(_values[op.getLhs()]).getValueAsDouble();
+  auto rhs =
+      llvm::cast<mlir::FloatAttr>(_values[op.getRhs()]).getValueAsDouble();
+  double result = rhs == 0 ? 0 : lhs / rhs;
+  _values[op] = mlir::FloatAttr::get(op.getType(), result);
+  return mlir::success();
+}
+
+mlir::LogicalResult ScalarEvaluator::evaluate(mlir::arith::SubIOp op) {
+  auto lhs = llvm::cast<mlir::IntegerAttr>(_values[op.getLhs()]).getInt();
+  auto rhs = llvm::cast<mlir::IntegerAttr>(_values[op.getRhs()]).getInt();
+  double result = lhs - rhs;
+  _values[op] = mlir::IntegerAttr::get(op.getType(), result);
+  return mlir::success();
+}
+
+mlir::LogicalResult ScalarEvaluator::evaluate(mlir::arith::SubFOp op) {
+  auto lhs =
+      llvm::cast<mlir::FloatAttr>(_values[op.getLhs()]).getValueAsDouble();
+  auto rhs =
+      llvm::cast<mlir::FloatAttr>(_values[op.getRhs()]).getValueAsDouble();
+  double result = lhs - rhs;
+  _values[op] = mlir::FloatAttr::get(op.getType(), result);
+  return mlir::success();
+}
+
 mlir::LogicalResult ScalarEvaluator::evaluate(mlir::Operation *op) {
   return llvm::TypeSwitch<mlir::Operation *, mlir::LogicalResult>(op)
 #define GA_CASE(Op) .Case<Op>([&](Op op) { return evaluate(op); })
       GA_CASE(ConstantOp) GA_CASE(AddOp) GA_CASE(MulOp) GA_CASE(CastScalarOp)
+          GA_CASE(EqOp) GA_CASE(mlir::arith::DivFOp)
+              GA_CASE(mlir::arith::SubIOp) GA_CASE(mlir::arith::SubFOp)
 #undef GA_CASE
-          .Default([](mlir::Operation *op) {
-            return op->emitOpError("unsupported op");
-          });
+                  .Default([](mlir::Operation *op) {
+                    return op->emitOpError("unsupported op");
+                  });
 }
 
 mlir::TypedAttr

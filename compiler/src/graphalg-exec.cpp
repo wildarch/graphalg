@@ -1,5 +1,3 @@
-#include "graphalg/SemiringTypes.h"
-#include "mlir/IR/BuiltinAttributeInterfaces.h"
 #include <cstdint>
 #include <cstdlib>
 #include <string>
@@ -16,8 +14,10 @@
 #include <llvm/Support/SourceMgr.h>
 #include <llvm/Support/WithColor.h>
 #include <llvm/Support/raw_ostream.h>
+#include <mlir/Dialect/Arith/IR/Arith.h>
 #include <mlir/Dialect/Func/IR/FuncOps.h>
 #include <mlir/IR/Attributes.h>
+#include <mlir/IR/BuiltinAttributeInterfaces.h>
 #include <mlir/IR/BuiltinAttributes.h>
 #include <mlir/IR/BuiltinOps.h>
 #include <mlir/IR/Diagnostics.h>
@@ -28,6 +28,7 @@
 #include <graphalg/GraphAlgCast.h>
 #include <graphalg/GraphAlgDialect.h>
 #include <graphalg/GraphAlgTypes.h>
+#include <graphalg/SemiringTypes.h>
 #include <graphalg/evaluate/Evaluator.h>
 
 namespace cmd {
@@ -116,6 +117,21 @@ static graphalg::MatrixAttr parseMatrix(llvm::Twine filename,
       }
 
       valueAttr = mlir::BoolAttr::get(ctx, true);
+    } else if (type.getSemiring() == graphalg::SemiringTypes::forReal(ctx)) {
+      double value;
+      if (parts.size() != 3) {
+        llvm::WithColor::error()
+            << "expected 3 parts, got " << parts.size() << "\n";
+        llvm::errs() << "line: '" << line << "'\n";
+        return nullptr;
+      }
+
+      if (!llvm::to_float(parts[2], value)) {
+        llvm::WithColor::error() << "invalid value\n";
+        return nullptr;
+      }
+
+      valueAttr = mlir::FloatAttr::get(type.getSemiring(), value);
     } else {
       llvm::WithColor::error()
           << "unsupported semiring: " << type.getSemiring() << "\n";
@@ -133,6 +149,7 @@ int main(int argc, char **argv) {
   mlir::MLIRContext ctx;
   ctx.getOrLoadDialect<mlir::func::FuncDialect>();
   ctx.getOrLoadDialect<graphalg::GraphAlgDialect>();
+  ctx.getOrLoadDialect<mlir::arith::ArithDialect>();
 
   llvm::SourceMgr sourceMgr;
   mlir::SourceMgrDiagnosticHandler diagHandler(sourceMgr, &ctx);
