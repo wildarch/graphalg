@@ -58,9 +58,11 @@ add_library(graphalg_lib STATIC
     src/graphalg/GraphAlgSetDimensions.cpp
     src/graphalg/GraphAlgSplitAggregate.cpp
     src/graphalg/GraphAlgToCore.cpp
+    src/graphalg/GraphAlgToCorePipeline.cpp
     src/graphalg/GraphAlgTypes.cpp
     src/graphalg/GraphAlgVerifyDimensions.cpp
     src/graphalg/SemiringTypes.cpp
+    src/graphalg/evaluate/Evaluator.cpp
 )
 target_include_directories(graphalg_lib PUBLIC include)
 target_include_directories(graphalg_lib SYSTEM PUBLIC ${PROJECT_BINARY_DIR}/include)
@@ -90,15 +92,13 @@ add_library(graphalg_parse STATIC
     src/graphalg/parse/Lexer.cpp
     src/graphalg/parse/Parser.cpp
 )
-target_include_directories(graphalg_parse PUBLIC include)
-# TODO: Nasty, should be provided by graphalg_lib dep
-target_include_directories(graphalg_parse SYSTEM PRIVATE ${PROJECT_BINARY_DIR}/include)
+target_link_libraries(graphalg_parse PRIVATE graphalg_lib)
 
 add_executable(graphalg-translate src/graphalg-translate.cpp)
 target_link_libraries(graphalg-translate PRIVATE
-    graphalg_parse
     ${llvm_libs}
     graphalg_lib
+    graphalg_parse
     MLIRTranslateLib
 )
 
@@ -116,15 +116,21 @@ target_link_libraries(graphalg-lsp-server PRIVATE
     MLIRLspServerLib
 )
 
+add_executable(graphalg-exec src/graphalg-exec.cpp)
+target_link_libraries(graphalg-exec PRIVATE
+    ${llvm_libs}
+    graphalg_lib
+    MLIRParser
+)
 
 set(ENABLE_WASM OFF CACHE BOOL "Enable wasm-only targets" FORCE)
 
 if(ENABLE_WASM)
     add_executable(wasm_parse src/wasm_parse.cpp)
     target_link_libraries(wasm_parse PRIVATE
-        graphalg_parse
         ${llvm_libs}
         graphalg_lib
+        graphalg_parse
     )
     target_link_options(wasm_parse PRIVATE
         -sEXPORTED_FUNCTIONS=_ga_parse

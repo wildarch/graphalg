@@ -1,15 +1,17 @@
 #include <llvm/ADT/TypeSwitch.h>
+#include <llvm/Support/Casting.h>
 #include <mlir/IR/Builders.h>
+#include <mlir/IR/BuiltinAttributeInterfaces.h>
 #include <mlir/IR/BuiltinAttributes.h>
 #include <mlir/IR/DialectImplementation.h>
 #include <mlir/IR/OpImplementation.h>
+#include <mlir/Support/LogicalResult.h>
 
 #include <graphalg/GraphAlgAttr.h>
 #include <graphalg/GraphAlgDialect.h>
 #include <graphalg/GraphAlgInterfaces.h>
 #include <graphalg/GraphAlgTypes.h>
 #include <graphalg/SemiringTypes.h>
-#include <mlir/Support/LogicalResult.h>
 
 #include "graphalg/GraphAlgEnumAttr.cpp.inc"
 #define GET_ATTRDEF_CLASSES
@@ -145,6 +147,39 @@ void DimAttr::printBare(mlir::AsmPrinter &printer) const {
   } else {
     printer << getConcreteDim();
   }
+}
+
+mlir::LogicalResult
+MatrixAttr::verify(llvm::function_ref<mlir::InFlightDiagnostic()> emitError,
+                   mlir::Type type, mlir::ArrayAttr elems) {
+  auto matType = llvm::dyn_cast<MatrixType>(type);
+  if (!matType.getRows().isConcrete()) {
+    return emitError() << "row dimension is not concrete\n";
+  } else if (!matType.getCols().isConcrete()) {
+    return emitError() << "col dimension is not concrete\n";
+  }
+
+  auto nRows = matType.getRows().getConcreteDim();
+  auto nCols = matType.getCols().getConcreteDim();
+  auto nElems = nRows * nCols;
+  if (nElems != elems.size()) {
+    return emitError() << "expected " << nRows << " * " << nCols << " = "
+                       << nElems << " elements, got " << elems.size();
+  }
+
+  for (auto elem : elems) {
+    auto elemTyped = llvm::dyn_cast<mlir::TypedAttr>(elem);
+    if (!elemTyped) {
+      return emitError() << "untyped matrix element: " << elem;
+    }
+
+    if (elemTyped.getType() != matType.getSemiring()) {
+      return emitError() << "element " << elem << " does not match matrix type "
+                         << matType;
+    }
+  }
+
+  return mlir::success();
 }
 
 // Need to define this here to avoid depending on GraphAlgAttr in

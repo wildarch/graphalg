@@ -15,6 +15,7 @@ int main(int argc, char **argv) {
   registry.insert<mlir::func::FuncDialect>();
 
   graphalg::registerPasses();
+  graphalg::registerGraphAlgToCorePipeline();
   mlir::registerCanonicalizerPass();
   mlir::registerInlinerPass();
   mlir::registerCSEPass();

@@ -113,4 +113,18 @@ def DimAttr : GraphAlg_Attr<"Dim", "dim"> {
     }];
 }
 
+def MatrixAttr : GraphAlg_Attr<"Matrix", "mat"> {
+    let summary = "Constant value matrix";
+
+    let parameters = (ins
+        AttributeSelfTypeParameter<"">:$type,
+        "mlir::ArrayAttr":$elems);
+
+    let assemblyFormat = [{
+        `<` $elems `>`
+    }];
+
+    let genVerifyDecl = 1;
+}
+
 #endif // GRAPHALG_GRAPH_ALG_ATTR

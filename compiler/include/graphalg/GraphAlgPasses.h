@@ -4,6 +4,8 @@
 #include <llvm/Support/raw_ostream.h>
 #include <mlir/IR/Builders.h>
 #include <mlir/Pass/Pass.h>
+#include <mlir/Pass/PassManager.h>
+#include <mlir/Pass/PassOptions.h>
 
 #include <graphalg/GraphAlgDialect.h>
 #include <graphalg/GraphAlgOps.h>
@@ -52,6 +54,13 @@ mlir::FailureOr<mlir::Value> createScalarOpFor(mlir::Location loc, BinaryOp op,
 
 #define GEN_PASS_REGISTRATION
 #include "graphalg/GraphAlgPasses.h.inc"
+
+struct GraphAlgToCorePipelineOptions
+    : public mlir::PassPipelineOptions<GraphAlgToCorePipelineOptions> {};
+
+void buildGraphAlgToCorePipeline(mlir::OpPassManager &pm,
+                                 const GraphAlgToCorePipelineOptions &options);
+void registerGraphAlgToCorePipeline();
 
 // Testing only:
 void registerTestDensePass();
