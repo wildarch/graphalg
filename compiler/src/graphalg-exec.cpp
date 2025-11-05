@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <string>
 
+#include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/StringExtras.h>
 #include <llvm/ADT/StringRef.h>
@@ -218,8 +219,8 @@ int main(int argc, char **argv) {
   }
 
   graphalg::MatrixAttrReader resultReader(result);
-  for (std::size_t row = 0; row < resultReader.nRows(); row++) {
-    for (std::size_t col = 0; col < resultReader.nCols(); col++) {
+  for (auto row : llvm::seq(resultReader.nRows())) {
+    for (auto col : llvm::seq(resultReader.nCols())) {
       auto val = resultReader.at(row, col);
       if (val != resultReader.ring().addIdentity()) {
         llvm::outs() << row << " " << col << " " << val << "\n";

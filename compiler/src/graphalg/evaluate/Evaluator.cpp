@@ -69,8 +69,8 @@ public:
 mlir::LogicalResult Evaluator::evaluate(TransposeOp op) {
   MatrixAttrReader input(_values[op.getInput()]);
   MatrixAttrBuilder result(op.getType());
-  for (std::size_t row = 0; row < input.nRows(); row++) {
-    for (std::size_t col = 0; col < input.nCols(); col++) {
+  for (auto row : llvm::seq(input.nRows())) {
+    for (auto col : llvm::seq(input.nCols())) {
       result.set(col, row, input.at(row, col));
     }
   }
@@ -83,7 +83,7 @@ mlir::LogicalResult Evaluator::evaluate(DiagOp op) {
   MatrixAttrReader input(_values[op.getInput()]);
   MatrixAttrBuilder result(op.getType());
 
-  for (std::size_t row = 0; row < input.nRows(); row++) {
+  for (auto row : llvm::seq(input.nRows())) {
     result.set(row, row, input.at(row, 0));
   }
 
@@ -98,10 +98,10 @@ mlir::LogicalResult Evaluator::evaluate(MatMulOp op) {
 
   auto ring = result.ring();
   // result[row, col] = SUM{i}(lhs[row, i] * rhs[i, col])
-  for (std::size_t row = 0; row < lhs.nRows(); row++) {
-    for (std::size_t col = 0; col < rhs.nCols(); col++) {
+  for (auto row : llvm::seq(lhs.nRows())) {
+    for (auto col : llvm::seq(rhs.nCols())) {
       auto value = ring.addIdentity();
-      for (std::size_t i = 0; i < lhs.nCols(); i++) {
+      for (auto i : llvm::seq(lhs.nCols())) {
         value = ring.add(value, ring.mul(lhs.at(row, i), rhs.at(i, col)));
       }
 
@@ -121,8 +121,8 @@ mlir::LogicalResult Evaluator::evaluate(ReduceOp op) {
   if (op.getType().isScalar()) {
     // Reduce all to a single value.
     auto value = ring.addIdentity();
-    for (std::size_t row = 0; row < input.nRows(); row++) {
-      for (std::size_t col = 0; col < input.nCols(); col++) {
+    for (auto row : llvm::seq(input.nRows())) {
+      for (auto col : llvm::seq(input.nCols())) {
         value = ring.add(value, input.at(row, col));
       }
     }
@@ -130,9 +130,9 @@ mlir::LogicalResult Evaluator::evaluate(ReduceOp op) {
     result.set(0, 0, value);
   } else if (op.getType().isColumnVector()) {
     // Per-row reduce.
-    for (std::size_t row = 0; row < input.nRows(); row++) {
+    for (auto row : llvm::seq(input.nRows())) {
       auto value = ring.addIdentity();
-      for (std::size_t col = 0; col < input.nCols(); col++) {
+      for (auto col : llvm::seq(input.nCols())) {
         value = ring.add(value, input.at(row, col));
       }
 
@@ -140,9 +140,9 @@ mlir::LogicalResult Evaluator::evaluate(ReduceOp op) {
     }
   } else if (op.getType().isRowVector()) {
     // Per-column reduce.
-    for (std::size_t col = 0; col < input.nCols(); col++) {
+    for (auto col : llvm::seq(input.nCols())) {
       auto value = ring.addIdentity();
-      for (std::size_t row = 0; row < input.nRows(); row++) {
+      for (auto row : llvm::seq(input.nRows())) {
         value = ring.add(value, input.at(row, col));
       }
 
@@ -161,8 +161,8 @@ mlir::LogicalResult Evaluator::evaluate(BroadcastOp op) {
   MatrixAttrReader input(_values[op.getInput()]);
   MatrixAttrBuilder result(op.getType());
 
-  for (std::size_t row = 0; row < result.nRows(); row++) {
-    for (std::size_t col = 0; col < result.nCols(); col++) {
+  for (auto row : llvm::seq(result.nRows())) {
+    for (auto col : llvm::seq(result.nCols())) {
       auto inRow = input.nRows() == 1 ? 0 : row;
       auto inCol = input.nCols() == 1 ? 0 : col;
       result.set(row, col, input.at(inRow, inCol));
@@ -176,8 +176,8 @@ mlir::LogicalResult Evaluator::evaluate(BroadcastOp op) {
 mlir::LogicalResult Evaluator::evaluate(ConstantMatrixOp op) {
   MatrixAttrBuilder result(op.getType());
 
-  for (std::size_t row = 0; row < result.nRows(); row++) {
-    for (std::size_t col = 0; col < result.nCols(); col++) {
+  for (auto row : llvm::seq(result.nRows())) {
+    for (auto col : llvm::seq(result.nCols())) {
       result.set(row, col, op.getValue());
     }
   }
