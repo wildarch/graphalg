@@ -45,6 +45,16 @@ RUN update-alternatives --install /usr/bin/cc cc /usr/bin/clang-20 100 \
     && echo "ubuntu ALL=(root) NOPASSWD:ALL" > /etc/sudoers.d/ubuntu \
     && chmod a=r /etc/sudoers.d/ubuntu
 
+# Emscripten
+ADD https://github.com/emscripten-core/emsdk.git /opt/emsdk
+RUN /opt/emsdk/emsdk install latest && \
+    /opt/emsdk/emsdk activate latest && \
+    echo 'source /opt/emsdk/emsdk_env.sh' >> /home/ubuntu/.bashrc
+
+# Debug build of LLVM
+ADD build_llvm.sh /tmp/build_llvm.sh
+RUN /tmp/build_llvm.sh && rm /tmp/build_llvm.sh
+
 USER ubuntu
 WORKDIR /home/ubuntu
 
