@@ -55,11 +55,11 @@ RUN echo '# Install Ruby Gems to ~/gems' >> /home/ubuntu/.bashrc && \
     gem install jekyll bundler
 
 # Emscripten
-ADD https://github.com/emscripten-core/emsdk.git /home/ubuntu/emsdk
+ADD --chown=ubuntu:ubuntu https://github.com/emscripten-core/emsdk.git /home/ubuntu/emsdk
 RUN /home/ubuntu/emsdk/emsdk install latest && \
     /home/ubuntu/emsdk/emsdk activate latest && \
     echo 'source /home/ubuntu/emsdk/emsdk_env.sh' >> /home/ubuntu/.bashrc
 
 # Debug build of LLVM
-ADD build_llvm.sh /tmp/build_llvm.sh
+ADD --chown=ubuntu:ubuntu build_llvm.sh /tmp/build_llvm.sh
 RUN /tmp/build_llvm.sh && rm /tmp/build_llvm.sh

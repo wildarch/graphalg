@@ -46,7 +46,7 @@ cmake -G Ninja -S /tmp/llvm-src/llvm -B /tmp/build \
 
 cmake --build /tmp/build
 sudo cmake --install /tmp/build
-rm -r /tmp/build/
+sudo rm -r /tmp/build/
 
 # MLIR WASM build
 source /home/ubuntu/emsdk/emsdk_env.sh
@@ -75,7 +75,7 @@ emcmake cmake -G Ninja -S /tmp/llvm-src/llvm -B /tmp/build \
     -DCMAKE_CXX_FLAGS="-DLLVM_ABI=\"\" -DLLVM_TEMPLATE_ABI=\"\" -DLLVM_EXPORT_TEMPLATE=\"\""
 cmake --build /tmp/build
 sudo cmake --install /tmp/build
-rm -r /tmp/build/
+sudo rm -r /tmp/build/
 
 # Cleanup source so it is not included in the docker image (saves ~2GiB)
 rm -r /tmp/llvm-src/
