@@ -7,11 +7,16 @@ project(
     DESCRIPTION "Compiler for the GraphAlg language"
     LANGUAGES CXX)
 
+# =============================== BEGIN OPTIONS ================================
 # NOTE: If LLVM is built with RTTI disabled (the default), we must also disable
 # it. If the LLVM build enables RTTI, we are free to choose.
 option(GRAPHALG_ENABLE_RTTI "Enable run time type information" OFF)
 
-# LLVM
+option(ENABLE_WASM "Enable wasm-only targets" OFF)
+# ================================ END OPTIONS =================================
+
+# ================================= BEGIN LLVM =================================
+
 find_package(LLVM REQUIRED CONFIG)
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
@@ -24,7 +29,9 @@ include(AddLLVM)
 
 llvm_map_components_to_libnames(llvm_libs support)
 
-# MLIR
+# ================================== END LLVM ==================================
+
+# ================================= BEGIN MLIR =================================
 find_package(MLIR ${LLVM_PACKAGE_VERSION} REQUIRED CONFIG
     HINTS "${LLVM_INSTALL_PREFIX}/lib/cmake"
 )
@@ -39,6 +46,7 @@ if(DEFINED SET_MLIR_TABLEGEN_PATH)
 endif()
 
 include(AddMLIR)
+# ================================== END MLIR ==================================
 
 # Directories with MLIR dialects
 add_subdirectory(include/graphalg)
@@ -130,17 +138,16 @@ target_link_libraries(graphalg-exec PRIVATE
     MLIRParser
 )
 
-set(ENABLE_WASM OFF CACHE BOOL "Enable wasm-only targets" FORCE)
+add_executable(wasm_parse src/wasm_parse.cpp)
+target_link_libraries(wasm_parse PRIVATE
+    ${llvm_libs}
+    graphalg_lib
+    graphalg_parse
+)
 
 if(ENABLE_WASM)
-    add_executable(wasm_parse src/wasm_parse.cpp)
-    target_link_libraries(wasm_parse PRIVATE
-        ${llvm_libs}
-        graphalg_lib
-        graphalg_parse
-    )
     target_link_options(wasm_parse PRIVATE
-        -sEXPORTED_FUNCTIONS=_ga_parse
-        -sEXPORTED_RUNTIME_METHODS=cwrap
+        -sEXPORTED_FUNCTIONS=_ga_new,_ga_try_parse,_ga_get_printed,_ga_free
+        -sEXPORTED_RUNTIME_METHODS=cwrap,UTF8ToString
         -sMODULARIZE)
 endif()
