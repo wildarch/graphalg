@@ -45,16 +45,6 @@ RUN update-alternatives --install /usr/bin/cc cc /usr/bin/clang-20 100 \
     && echo "ubuntu ALL=(root) NOPASSWD:ALL" > /etc/sudoers.d/ubuntu \
     && chmod a=r /etc/sudoers.d/ubuntu
 
-# Emscripten
-ADD https://github.com/emscripten-core/emsdk.git /opt/emsdk
-RUN /opt/emsdk/emsdk install latest && \
-    /opt/emsdk/emsdk activate latest && \
-    echo 'source /opt/emsdk/emsdk_env.sh' >> /home/ubuntu/.bashrc
-
-# Debug build of LLVM
-ADD build_llvm.sh /tmp/build_llvm.sh
-RUN /tmp/build_llvm.sh && rm /tmp/build_llvm.sh
-
 USER ubuntu
 WORKDIR /home/ubuntu
 
@@ -63,3 +53,13 @@ RUN echo '# Install Ruby Gems to ~/gems' >> /home/ubuntu/.bashrc && \
     echo 'export GEM_HOME="$HOME/gems"' >> /home/ubuntu/.bashrc && \
     echo 'export PATH="$HOME/gems/bin:$PATH"' >> /home/ubuntu/.bashrc && \
     gem install jekyll bundler
+
+# Emscripten
+ADD https://github.com/emscripten-core/emsdk.git /home/ubuntu/emsdk
+RUN /home/ubuntu/emsdk/emsdk install latest && \
+    /home/ubuntu/emsdk/emsdk activate latest && \
+    echo 'source /home/ubuntu/emsdk/emsdk_env.sh' >> /home/ubuntu/.bashrc
+
+# Debug build of LLVM
+ADD build_llvm.sh /tmp/build_llvm.sh
+RUN /tmp/build_llvm.sh && rm /tmp/build_llvm.sh

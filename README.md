@@ -16,6 +16,9 @@ npm --workspace=codemirror-lang-graphalg run prepare
 cmake --build ./compiler/build
 cmake --build ./compiler/build --target check
 
+./compiler/configure-wasm.sh
+cmake --build ./compiler/build-wasm
+
 npm --workspace=website install
 npm --workspace=website run prepare
 # To start a simple server to test the website:

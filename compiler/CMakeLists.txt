@@ -7,6 +7,10 @@ project(
     DESCRIPTION "Compiler for the GraphAlg language"
     LANGUAGES CXX)
 
+# NOTE: If LLVM is built with RTTI disabled (the default), we must also disable
+# it. If the LLVM build enables RTTI, we are free to choose.
+option(GRAPHALG_ENABLE_RTTI "Enable run time type information" OFF)
+
 # LLVM
 find_package(LLVM REQUIRED CONFIG)
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
@@ -87,6 +91,9 @@ target_link_libraries(
 # Suppress -Wdangling-assignment-gsl for generated code from MLIR tablegen
 # The warning is triggered by template instantiations in GraphAlgOps.cpp.inc
 target_compile_options(graphalg_lib PRIVATE -Wno-dangling-assignment-gsl)
+if(NOT GRAPHALG_ENABLE_RTTI)
+  target_compile_options(graphalg_lib PUBLIC -fno-rtti)
+endif()
 
 add_library(graphalg_parse STATIC
     src/graphalg/parse/Lexer.cpp
