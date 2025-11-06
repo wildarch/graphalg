@@ -1,4 +1,4 @@
-var factory = require('/workspaces/graphalg/compiler/build-wasm/wasm_parse.js');
+var factory = require('/workspaces/graphalg/compiler/build-wasm/graphalg-playground.js');
 
 factory().then((instance) => {
     ga_new = instance.cwrap('ga_new', 'number', []);

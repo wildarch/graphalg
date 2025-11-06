@@ -32,7 +32,11 @@ cmake -G Ninja -S /tmp/llvm-src/llvm -B /tmp/build \
    -DLLVM_TABLEGEN=/usr/bin/llvm-tblgen-20 \
    -DMLIR_LINALG_ODS_YAML_GEN=/usr/bin/mlir-linalg-ods-yaml-gen-20 \
    -DLLVM_BUILD_EXAMPLES=OFF \
-   -DLLVM_INSTALL_UTILS=ON \
+   -DLLVM_BUILD_TOOLS=OFF \
+   -DLLVM_INCLUDE_BENCHMARKS=OFF \
+   -DLLVM_INCLUDE_DOCS=OFF \
+   -DLLVM_INCLUDE_TESTS=OFF \
+   -DLLVM_INCLUDE_UTILS=OFF \
    -DLLVM_USE_LINKER=mold \
    -DLLVM_USE_SPLIT_DWARF=ON \
 

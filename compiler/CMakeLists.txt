@@ -138,15 +138,15 @@ target_link_libraries(graphalg-exec PRIVATE
     MLIRParser
 )
 
-add_executable(wasm_parse src/wasm_parse.cpp)
-target_link_libraries(wasm_parse PRIVATE
+add_executable(graphalg-playground src/graphalg-playground.cpp)
+target_link_libraries(graphalg-playground PRIVATE
     ${llvm_libs}
     graphalg_lib
     graphalg_parse
 )
 
 if(ENABLE_WASM)
-    target_link_options(wasm_parse PRIVATE
+    target_link_options(graphalg-playground PRIVATE
         -sEXPORTED_FUNCTIONS=_ga_new,_ga_try_parse,_ga_get_printed,_ga_free
         -sEXPORTED_RUNTIME_METHODS=cwrap,UTF8ToString
         -sMODULARIZE)
