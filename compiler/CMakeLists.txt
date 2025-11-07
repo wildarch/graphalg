@@ -146,8 +146,26 @@ target_link_libraries(graphalg-playground PRIVATE
 )
 
 if(ENABLE_WASM)
+    set(PLAYGROUND_EXPORTED_FUNCTIONS
+        _ga_new
+        _ga_free
+        _ga_parse
+        _ga_desugar
+        _ga_add_arg
+        _ga_set_dims
+        _ga_set_arg_bool
+        _ga_set_arg_int
+        _ga_set_arg_real
+        _ga_evaluate
+        _ga_get_res_inf
+        _ga_get_res_int
+        _ga_get_res_real
+    )
+    string (REPLACE ";" "," PLAYGROUND_EXPORTED_FUNCTIONS_STR "${PLAYGROUND_EXPORTED_FUNCTIONS}")
+
+
     target_link_options(graphalg-playground PRIVATE
-        -sEXPORTED_FUNCTIONS=_ga_new,_ga_try_parse,_ga_get_printed,_ga_free
+        -sEXPORTED_FUNCTIONS=${PLAYGROUND_EXPORTED_FUNCTIONS_STR}
         -sEXPORTED_RUNTIME_METHODS=cwrap,UTF8ToString
         -sMODULARIZE)
 endif()
