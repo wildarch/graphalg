@@ -167,5 +167,6 @@ if(ENABLE_WASM)
     target_link_options(graphalg-playground PRIVATE
         -sEXPORTED_FUNCTIONS=${PLAYGROUND_EXPORTED_FUNCTIONS_STR}
         -sEXPORTED_RUNTIME_METHODS=cwrap,UTF8ToString
-        -sMODULARIZE)
+        -sMODULARIZE
+        -sEXPORT_ES6)
 endif()

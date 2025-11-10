@@ -1,5 +1,5 @@
-import {nodeResolve} from "@rollup/plugin-node-resolve"
-import {lezer} from "@lezer/generator/rollup"
+import { nodeResolve } from "@rollup/plugin-node-resolve"
+import { lezer } from "@lezer/generator/rollup"
 
 export default {
   input: "./editor.mjs",
