@@ -3,7 +3,8 @@ import { vim } from "@replit/codemirror-vim"
 import { keymap } from "@codemirror/view"
 import { indentWithTab } from "@codemirror/commands"
 import { GraphAlg } from "codemirror-lang-graphalg"
-import factory from "/workspaces/graphalg/compiler/build-wasm/graphalg-playground.js"
+import playgroundWasm from "/workspaces/graphalg/compiler/build-wasm/graphalg-playground.wasm"
+import playgroundWasmFactory from "/workspaces/graphalg/compiler/build-wasm/graphalg-playground.js"
 
 let editor = new EditorView({
   extensions: [
@@ -15,12 +16,12 @@ let editor = new EditorView({
   parent: document.body
 })
 
-factory({
-  /*
+editor.state.doc.toString()
+
+playgroundWasmFactory({
   locateFile: function (path, prefix) {
-    return "http://localhost:8000/compiler/build-wasm/graphalg-playground.wasm";
+    return playgroundWasm;
   },
-  */
 }).then((instance) => {
   const ga_new = instance.cwrap('ga_new', 'number', []);
   const ga_free = instance.cwrap('ga_free', null, ['number']);
@@ -36,46 +37,53 @@ factory({
   const ga_get_res_int = instance.cwrap('ga_get_res_int', 'number', ['number', 'number', 'number']);
   const ga_get_res_real = instance.cwrap('ga_get_res_real', 'number', ['number', 'number', 'number']);
 
-  const pg = ga_new();
-  const program = `
+  window.run = function () {
+
+    const pg = ga_new();
+    const program = editor.state.doc.toString();
+    /*
+    const program = `
         func MatMul(lhs: Matrix<s, s, int>, rhs: Matrix<s, s, int>) -> Matrix<s, s, int> {
             return lhs * rhs;
         }
     `;
-  if (!ga_parse(pg, program)) {
-    console.error("Parse failed");
-    return;
-  }
+    */
 
-  if (!ga_desugar(pg)) {
-    console.error("Desugar failed");
-    return;
-  }
-
-  ga_add_arg(pg, 2, 2); // lhs
-  ga_add_arg(pg, 2, 2); // rhs
-  ga_set_dims(pg, "MatMul");
-
-  ga_set_arg_int(pg, 0, 0, 0, 3n);
-  ga_set_arg_int(pg, 0, 0, 1, 5n);
-  ga_set_arg_int(pg, 0, 1, 0, 7n);
-  ga_set_arg_int(pg, 0, 1, 1, 1n);
-
-  ga_set_arg_int(pg, 1, 0, 0, 13n);
-  ga_set_arg_int(pg, 1, 0, 1, 17n);
-  ga_set_arg_int(pg, 1, 1, 0, 19n);
-  ga_set_arg_int(pg, 1, 1, 1, 23n);
-
-  if (!ga_evaluate(pg)) {
-    console.error("Evaluate failed");
-  }
-
-  for (let r = 0; r < 2; r++) {
-    for (let c = 0; c < 2; c++) {
-      const v = ga_get_res_int(pg, r, c);
-      console.log(r, c, v);
+    if (!ga_parse(pg, program)) {
+      console.error("Parse failed");
+      return;
     }
-  }
 
-  ga_free(pg);
+    if (!ga_desugar(pg)) {
+      console.error("Desugar failed");
+      return;
+    }
+
+    ga_add_arg(pg, 2, 2); // lhs
+    ga_add_arg(pg, 2, 2); // rhs
+    ga_set_dims(pg, "MatMul");
+
+    ga_set_arg_int(pg, 0, 0, 0, 3n);
+    ga_set_arg_int(pg, 0, 0, 1, 5n);
+    ga_set_arg_int(pg, 0, 1, 0, 7n);
+    ga_set_arg_int(pg, 0, 1, 1, 1n);
+
+    ga_set_arg_int(pg, 1, 0, 0, 13n);
+    ga_set_arg_int(pg, 1, 0, 1, 17n);
+    ga_set_arg_int(pg, 1, 1, 0, 19n);
+    ga_set_arg_int(pg, 1, 1, 1, 23n);
+
+    if (!ga_evaluate(pg)) {
+      console.error("Evaluate failed");
+    }
+
+    for (let r = 0; r < 2; r++) {
+      for (let c = 0; c < 2; c++) {
+        const v = ga_get_res_int(pg, r, c);
+        console.log(r, c, v);
+      }
+    }
+
+    ga_free(pg);
+  }
 });

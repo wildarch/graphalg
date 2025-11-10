@@ -10,5 +10,8 @@
     "codemirror": "^6.0.2",
     "codemirror-lang-graphalg": "^0.1.0",
     "rollup": "^4.52.4"
+  },
+  "devDependencies": {
+    "@rollup/plugin-url": "^8.0.2"
   }
 }
