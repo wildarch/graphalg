@@ -12,6 +12,12 @@ TODO:
 - Definition of the assumed aggregation operation
 - Rewrite rules for the conversion
 
+## Data Model
+The target system/algebra is assumed to support the following data types:
+- Boolean, denoted `i1`
+- 64-bit signed integer, denoted `si64`
+- 64-bit floating-point (IEEE 754 is assumed not strictly required), denoted `f64`
+
 ## Functions
 The conversion applies to individual functions, i.e. we can convert a single function call (with relational algebra expressions for the parameters) into a relational algebra expression.
 This is sufficient because as opposed to the full GraphAlg language, in GraphAlg Core functions do not call other functions.
@@ -79,6 +85,11 @@ aggregate(
 
 TODO: for boolean matrices, `min` with a single input is sufficient, because `val` is always `true`.
 
+### `ApplyOp`
+- Join all inputs based on available columns (some inputs may not have all dimensions and need to be broadcast)
+- If none of the inputs provides a requested output column, add additional joins to constant tables to broadcast them
+- Create a projection with the body of the `ApplyOp`. Keep only one row/col slot (as necessary for the output).
+
 ### `TrilOp`
 Keep all tuples with `col < row`:
 
@@ -88,11 +99,6 @@ selection(
     { col < row }
 )
 ```
-
-### `ApplyOp`
-- Join all inputs based on available columns (some inputs may not have all dimensions and need to be broadcast)
-- If none of the inputs provides a requested output column, add additional joins to constant tables to broadcast them
-- Create a projection with the body of the `ApplyOp`. Keep only one row/col slot (as necessary for the output).
 
 ### `ConstantMatrixOp`
 Create a constant table.
@@ -114,28 +120,60 @@ Create a constant table.
 - Project out the multiplied values
 
 ### `DeferredReduceOp`
+Aggregate, grouping by row/col, merging values according to the semiring add operator (see `AddOp` conversion).
 
-
-TODO:
-- `TransposeOp`
-- `DiagOp`
-- `BroadcastOp`
-- `ForConstOp`
-- `PickAnyOp`
-- `TrilOp`
-- `ConstantMatrixOp`
-- `ApplyOp`
-- `MatMulJoinOp`
-- `DeferredReduceOp`
-- `UnionOp`
+### `UnionOp`
+Simple relational union.
 
 ## Scalar Expressions
-- `ApplyReturnOp`
-- `ConstantOp`
-- `CastScalarOp`
-- `AddOp`
-- `mlir::arith::SubIOp`
-- `mlir::arith::SubFOp`
-- `MulOp`
-- `mlir::arith::DivFOp`
-- `EqOp`
+### `ApplyReturnOp`
+Becomes return op inside projection.
+
+### `ConstantOp`
+Becomes a constant in a plain data type depending on the semiring:
+- `i1` and `f64` are kept as-is
+- `i64` becomes `si64`
+- `trop_int` becomes `si64`. If the constant value is infinity, we map this to the the maximum value of the `si64` type (i.e. the largest possible integer)
+- `trop_max_int` becomes `si64`. If the constant value is infinity, we map this to the the minimum value of the `si64` type.
+- `trop_real` becomes `f64`. In IEEE 754 `f64` has a proper infinity value, so we can map `trop_real` infinity to that.
+
+### `CastScalarOp`
+Cases:
+- `* -> i1`: rewrite to `input != zero(inRing)`
+- `i1 -> *`: rewrite to `input ? one(outRing) : zero(outRing)`
+- `int -> real`: integer promotion
+- `int -> trop_int`: map to infinity (max value) if 0, otherwise leave unchanged.
+- `int -> trop_max_int`: map to infinity if 0, otherwise leave unchanged.
+- `int -> trop_real`: map to infinity if 0, otherwise promote
+- `real -> int`: truncate
+- `real -> trop_int`: map to infinity if 0, otherwise promote
+- `real -> trop_max_int`: map to infinity if 0, otherwise promote.
+- `real -> trop_real`: map to infinity if 0, otherwise leave unchanged.
+
+### `AddOp`
+Pick the operation based on the semiring:
+- `i1`: logical OR
+- `i64`: signed integer add
+- `f64`: floating point add
+- `trop_i64`/`trop_real`: `min`
+- `trop_max_i64`: `max`
+
+### `mlir::arith::SubIOp`
+Keep as-is.
+
+### `mlir::arith::SubFOp`
+Keep as-is.
+
+### `MulOp`
+Pick the operation based on the semiring:
+- `i1`: logical AND
+- `i64`: signed integer multiply
+- `f64`: floating point multiply
+- `trop_i64`/`trop_max_i64`: signed integer add
+- `trop_real`: floating point add
+
+### `mlir::arith::DivFOp`
+Keep as-is.
+
+### `EqOp`
+Keep as-is.
