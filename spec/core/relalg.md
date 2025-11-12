@@ -18,6 +18,23 @@ The target system/algebra is assumed to support the following data types:
 - 64-bit signed integer, denoted `si64`
 - 64-bit floating-point (IEEE 754 is assumed not strictly required), denoted `f64`
 
+It must support the following standard relational algebra operators:
+- projection
+- selection
+- join
+
+Additionally, an operator to perform aggregation is required, which is not strictly part of relational algebra, but is commonly available in relational database systems.
+The `aggregate` operator must support grouping tuples by key columns, and it must support the following aggregator functions to combine values:
+- `sum`, `min` and `max` over `si64` and `f64`
+- `or` over `i1` (representing logical OR)
+- `argmin(arg, val)`, which finds the tuple with minimal `val` and produces the `arg` for that tuple.
+
+A last requirement, and one unusual to relational database systems, is a loop operator.
+Its semantics are similar to `ForConstOp`.
+
+## Loop Operator
+
+
 ## Functions
 The conversion applies to individual functions, i.e. we can convert a single function call (with relational algebra expressions for the parameters) into a relational algebra expression.
 This is sufficient because as opposed to the full GraphAlg language, in GraphAlg Core functions do not call other functions.
