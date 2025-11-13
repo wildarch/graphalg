@@ -6,25 +6,46 @@ import { GraphAlg } from "codemirror-lang-graphalg"
 import playgroundWasm from "/workspaces/graphalg/compiler/build-wasm/graphalg-playground.wasm"
 import playgroundWasmFactory from "/workspaces/graphalg/compiler/build-wasm/graphalg-playground.js"
 
+// Set as class=.. on the container for the editor view
+const EDITOR_CONTAINER_CLASS = 'pt-1';
+
+class GraphAlgEditor {
+  constructor(rootElem) {
+    this.root = rootElem;
+  }
+
+  createEditorView() {
+    const container = document.createElement("div");
+    container.setAttribute('class', EDITOR_CONTAINER_CLASS);
+    this.root.appendChild(container);
+
+    // initialize the editor on it.
+    this.editorView = new EditorView({
+      extensions: [
+        //vim(),
+        keymap.of([indentWithTab]),
+        basicSetup,
+        GraphAlg()
+      ],
+      parent: container
+    });
+  }
+}
+
 // Find graphalg-editor elements
-// Create a graphalg-editor-container and initialize the editor on them.
+const editorElems = document.getElementsByClassName("graphalg-editor");
+const editors = []
+for (let elem of editorElems) {
+  editors.push(new GraphAlgEditor(elem));
+}
+
+// Initialize editor views
+for (let editor of editors) {
+  editor.createEditorView();
+}
 
 // Load the playground wasm
 // Create run/compile buttons
-
-const editorContainer = document.getElementsByClassName("graphalg-editor-container");
-
-let editor = new EditorView({
-  extensions: [
-    //vim(),
-    keymap.of([indentWithTab]),
-    basicSetup,
-    GraphAlg()
-  ],
-  parent: editorContainer[0]
-})
-
-editor.state.doc.toString()
 
 playgroundWasmFactory({
   locateFile: function (path, prefix) {
@@ -45,10 +66,9 @@ playgroundWasmFactory({
   const ga_get_res_int = instance.cwrap('ga_get_res_int', 'number', ['number', 'number', 'number']);
   const ga_get_res_real = instance.cwrap('ga_get_res_real', 'number', ['number', 'number', 'number']);
 
-  window.run = function () {
-
+  function run(editor) {
     const pg = ga_new();
-    const program = editor.state.doc.toString();
+    const program = editor.editorView.state.doc.toString();
 
     if (!ga_parse(pg, program)) {
       console.error("Parse failed");
@@ -78,13 +98,54 @@ playgroundWasmFactory({
       console.error("Evaluate failed");
     }
 
+    // Create an output table.
+    const table = document.createElement("table");
+
+    // Header
+    const thead = document.createElement("thead");
+    const tr = document.createElement("tr");
+    const thRow = document.createElement("th");
+    thRow.textContent = "Row";
+    const thCol = document.createElement("th");
+    thCol.textContent = "Column";
+    const thVal = document.createElement("th");
+    thVal.textContent = "Value";
+    tr.append(thRow, thCol, thVal);
+    thead.appendChild(tr);
+
+    // Body
+    const tbody = document.createElement("tbody");
     for (let r = 0; r < 2; r++) {
       for (let c = 0; c < 2; c++) {
+        const tr = document.createElement("tr");
+        const tdRow = document.createElement("td");
+        tdRow.textContent = r;
+        const tdCol = document.createElement("td");
+        tdCol.textContent = c;
+
+        const tdVal = document.createElement("td");
         const v = ga_get_res_int(pg, r, c);
-        console.log(r, c, v);
+        tdVal.textContent = v;
+        tr.append(tdRow, tdCol, tdVal);
+        tbody.appendChild(tr);
       }
     }
 
+    table.append(thead, tbody);
+    editor.root.appendChild(table);
+
     ga_free(pg);
+  }
+
+  for (let editor of editors) {
+    const runButton = document.createElement("button");
+    runButton.setAttribute('type', 'button');
+    runButton.setAttribute('name', 'run');
+    runButton.setAttribute('class', 'btn');
+    runButton.textContent = "Run";
+    runButton.addEventListener('click', () => {
+      run(editor);
+    });
+    editor.root.prepend(runButton);
   }
 });
