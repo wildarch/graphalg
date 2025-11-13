@@ -10,4 +10,4 @@ GraphAlg is a language for graph algorithms designed to be embedded into databas
 {: .warning-title }
 > This website is under construction
 >
-> We are working on an introduction to the language along with an interactive playground. In anticipation of that, you may be interested to read the [language specification](./docs/spec).
+> We are working on an introduction to the language along with an interactive playground. In anticipation of that, you may be interested to read the [language specification](./spec).
