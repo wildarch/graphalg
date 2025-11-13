@@ -30,3 +30,5 @@ tool_dirs = [
 llvm_config.add_tool_substitutions(tools, tool_dirs)
 
 config.environment["FILECHECK_OPTS"] = "--enable-var-scope --allow-unused-prefixes=false"
+
+config.environment['LLVM_PROFILE_FILE'] = os.getcwd() + '/coverage/%4m.profraw'
