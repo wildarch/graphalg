@@ -6,11 +6,7 @@ nav_order: 3
 ---
 
 # Conversion to Relational Algebra
-TODO:
-- Data model for the conversion
-- Definition of the assumed loop operator
-- Definition of the assumed aggregation operation
-- Rewrite rules for the conversion
+This page describes how GraphAlg Core operations can be converted into an extended relational algebra.
 
 ## Data Model
 The target system/algebra is assumed to support the following data types:
@@ -19,9 +15,9 @@ The target system/algebra is assumed to support the following data types:
 - 64-bit floating-point (IEEE 754 is assumed not strictly required), denoted `f64`
 
 It must support the following standard relational algebra operators:
-- projection
-- selection
-- join
+- projection: Drop or reorders input columns, or computes new columns based on existing ones using per-tuple operations.
+- selection: Keeps a subset of the input tuples based on a per-tuple predicate.
+- join: Combines two or more relations.
 
 Additionally, an operator to perform aggregation is required, which is not strictly part of relational algebra, but is commonly available in relational database systems.
 The `aggregate` operator must support grouping tuples by key columns, and it must support the following aggregator functions to combine values:
@@ -33,7 +29,21 @@ A last requirement, and one unusual to relational database systems, is a loop op
 Its semantics are similar to `ForConstOp`.
 
 ## Loop Operator
+The loop operator repeatedly evaluates a collection of relational algebra expressions based on *loop variables* whose state can change between iterations. The initial state of the loop variable is provided as inputs to the loop operator in the form of
 
+The loop operator has a number of inputs:
+- initial states for the loop variables, provided as relational algebra expressions
+- a maximum number of iterations, given as an integer constant
+- a result index, indicating which of the loop variables will become the final output of the loop
+
+The loop operator embeds *loop body expressions*, one relational algebra expression per loop variable, which together represent the loop body.
+Besides all the usual query operators, a loop body expression can reference loop variables to read the current state of a variable.
+
+Optionally included is a *break expression*, a relational algebra expression that indicates if the loop should terminate early, before completing the maximum number of iterations. This expression should produce tuples with a single boolean value, where `true` in one of the tuple indicates that the loop should terminate.
+
+To run one iteration of the loop, first the loop body expressions are evaluated based on the current state of the loop variables.
+Then, the values of the loop variables are replaced with the results of loop body expressions.
+This process continue until the maximum number of iterations has been reached, or until the *break expression* returns a tuple with value to `true`.
 
 ## Functions
 The conversion applies to individual functions, i.e. we can convert a single function call (with relational algebra expressions for the parameters) into a relational algebra expression.
@@ -84,8 +94,6 @@ For each dimension added, we join with a constant table of all possible indices 
 Translates directly to the relational algebra loop definition.
 For loops that produce multiple outputs, we duplicate the loop.
 
-TODO: Need to define the loop structure before we can give the translation.
-
 ### `PickAnyOp`
 Remove zero elements, then select zero (col,val) combinations per row:
 
@@ -96,7 +104,10 @@ aggregate(
         { val != <zero> }
     ),
     group by { row },
-    aggregate { min(col, val) }
+    aggregate {
+        min(col),
+        argmin(val, col)
+    }
 )
 ```
 
@@ -193,4 +204,4 @@ Pick the operation based on the semiring:
 Keep as-is.
 
 ### `EqOp`
-Keep as-is.
+Convert to the equivalent compare operation in the target representation.
