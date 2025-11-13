@@ -12,14 +12,21 @@ const EDITOR_CONTAINER_CLASS = 'pt-1';
 class GraphAlgEditor {
   constructor(rootElem) {
     this.root = rootElem;
+
+    // Container for toolbar buttons above the editor
+    this.toolbar = document.createElement("div");
+
+    // Container to host the editor view
+    this.editorContainer = document.createElement("div");
+    this.editorContainer.setAttribute('class', EDITOR_CONTAINER_CLASS);
+
+    // Container for output
+    this.outputContainer = document.createElement("div");
+
+    this.root.append(this.toolbar, this.editorContainer, this.outputContainer);
   }
 
-  createEditorView() {
-    const container = document.createElement("div");
-    container.setAttribute('class', EDITOR_CONTAINER_CLASS);
-    this.root.appendChild(container);
-
-    // initialize the editor on it.
+  initializeEditorView() {
     this.editorView = new EditorView({
       extensions: [
         //vim(),
@@ -27,7 +34,7 @@ class GraphAlgEditor {
         basicSetup,
         GraphAlg()
       ],
-      parent: container
+      parent: this.editorContainer
     });
   }
 }
@@ -41,7 +48,7 @@ for (let elem of editorElems) {
 
 // Initialize editor views
 for (let editor of editors) {
-  editor.createEditorView();
+  editor.initializeEditorView();
 }
 
 // Load the playground wasm
@@ -132,7 +139,8 @@ playgroundWasmFactory({
     }
 
     table.append(thead, tbody);
-    editor.root.appendChild(table);
+    editor.outputContainer.replaceChildren(table);
+    editor.outputContainer.append(table);
 
     ga_free(pg);
   }
@@ -146,6 +154,6 @@ playgroundWasmFactory({
     runButton.addEventListener('click', () => {
       run(editor);
     });
-    editor.root.prepend(runButton);
+    editor.toolbar.appendChild(runButton);
   }
 });
