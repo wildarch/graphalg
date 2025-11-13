@@ -150,6 +150,12 @@ if(ENABLE_WASM)
         _ga_new
         _ga_free
         _ga_parse
+        _ga_diag_count
+        _ga_diag_line_start
+        _ga_diag_line_end
+        _ga_diag_col_start
+        _ga_diag_col_end
+        _ga_diag_msg
         _ga_desugar
         _ga_add_arg
         _ga_set_dims

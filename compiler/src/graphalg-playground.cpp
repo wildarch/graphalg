@@ -58,6 +58,9 @@ public:
 
   bool parse(llvm::StringRef input);
 
+  std::size_t numDiagnostics() { return _diagnostics.size(); }
+  const Diagnostic &getDiagnostic(std::size_t i) { return _diagnostics[i]; }
+
   bool desugarToCore();
 
   void addArgument(std::size_t rows, std::size_t cols);
@@ -218,6 +221,28 @@ void ga_free(Playground *pg) { delete pg; }
 
 bool ga_parse(Playground *inst, const char *input) {
   return inst->parse(input);
+}
+
+std::size_t ga_diag_count(Playground *pg) { return pg->numDiagnostics(); }
+
+std::size_t ga_diag_line_start(Playground *pg, std::size_t i) {
+  return pg->getDiagnostic(i).startLine;
+}
+
+std::size_t ga_diag_line_end(Playground *pg, std::size_t i) {
+  return pg->getDiagnostic(i).endLine;
+}
+
+std::size_t ga_diag_col_start(Playground *pg, std::size_t i) {
+  return pg->getDiagnostic(i).startColumn;
+}
+
+std::size_t ga_diag_col_end(Playground *pg, std::size_t i) {
+  return pg->getDiagnostic(i).endColumn;
+}
+
+const char *ga_diag_msg(Playground *pg, std::size_t i) {
+  return pg->getDiagnostic(i).message.c_str();
 }
 
 bool ga_desugar(Playground *pg) { return pg->desugarToCore(); }

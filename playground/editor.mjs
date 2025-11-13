@@ -62,6 +62,12 @@ playgroundWasmFactory({
   const ga_new = instance.cwrap('ga_new', 'number', []);
   const ga_free = instance.cwrap('ga_free', null, ['number']);
   const ga_parse = instance.cwrap('ga_parse', 'number', ['number', 'string']);
+  const ga_diag_count = instance.cwrap('ga_diag_count', 'number', ['number']);
+  const ga_diag_line_start = instance.cwrap('ga_diag_line_start', 'number', ['number', 'number']);
+  const ga_diag_line_end = instance.cwrap('ga_diag_line_end', 'number', ['number', 'number']);
+  const ga_diag_col_start = instance.cwrap('ga_diag_col_start', 'number', ['number', 'number']);
+  const ga_diag_col_end = instance.cwrap('ga_diag_col_end', 'number', ['number', 'number']);
+  const ga_diag_msg = instance.cwrap('ga_diag_msg', 'number', ['number', 'number']);
   const ga_desugar = instance.cwrap('ga_desugar', 'number', ['number'])
   const ga_add_arg = instance.cwrap('ga_add_arg', null, ['number', 'number', 'number']);
   const ga_set_dims = instance.cwrap('ga_set_dims', 'number', ['number', 'string']);
@@ -79,6 +85,13 @@ playgroundWasmFactory({
 
     if (!ga_parse(pg, program)) {
       console.error("Parse failed");
+      const ndiag = ga_diag_count(pg);
+      for (let i = 0; i < ndiag; i++) {
+        const line = ga_diag_line_start(pg, i);
+        const col = ga_diag_col_start(pg, i);
+        const msg = instance.UTF8ToString(ga_diag_msg(pg, i));
+        console.error(line, col, msg);
+      }
       return;
     }
 
