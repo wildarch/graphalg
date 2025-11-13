@@ -41,13 +41,6 @@ playgroundWasmFactory({
 
     const pg = ga_new();
     const program = editor.state.doc.toString();
-    /*
-    const program = `
-        func MatMul(lhs: Matrix<s, s, int>, rhs: Matrix<s, s, int>) -> Matrix<s, s, int> {
-            return lhs * rhs;
-        }
-    `;
-    */
 
     if (!ga_parse(pg, program)) {
       console.error("Parse failed");

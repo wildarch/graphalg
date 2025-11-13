@@ -1,0 +1,17 @@
+{
+  "scripts": {
+    "prepare": "rollup -c",
+    "watch": "rollup -c --watch"
+  },
+  "dependencies": {
+    "@replit/codemirror-vim": "^6.3.0",
+    "codemirror": "^6.0.2",
+    "codemirror-lang-graphalg": "^0.1.0"
+  },
+  "devDependencies": {
+    "@lezer/generator": "^1.8.0",
+    "@rollup/plugin-node-resolve": "^16.0.2",
+    "@rollup/plugin-url": "^8.0.2",
+    "rollup": "^4.52.4"
+  }
+}
