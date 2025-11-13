@@ -6,14 +6,22 @@ import { GraphAlg } from "codemirror-lang-graphalg"
 import playgroundWasm from "/workspaces/graphalg/compiler/build-wasm/graphalg-playground.wasm"
 import playgroundWasmFactory from "/workspaces/graphalg/compiler/build-wasm/graphalg-playground.js"
 
+// Find graphalg-editor elements
+// Create a graphalg-editor-container and initialize the editor on them.
+
+// Load the playground wasm
+// Create run/compile buttons
+
+const editorContainer = document.getElementsByClassName("graphalg-editor-container");
+
 let editor = new EditorView({
   extensions: [
-    vim(),
+    //vim(),
     keymap.of([indentWithTab]),
     basicSetup,
     GraphAlg()
   ],
-  parent: document.body
+  parent: editorContainer[0]
 })
 
 editor.state.doc.toString()
