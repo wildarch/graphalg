@@ -178,7 +178,7 @@ Becomes a constant in a plain data type depending on the semiring:
 Cases:
 - `* -> i1`: rewrite to `input != zero(inRing)`
 - `i1 -> *`: rewrite to `input ? one(outRing) : zero(outRing)`
-- `i64 -> f64`: i64eger promotion
+- `i64 -> f64`: integer promotion
 - `i64 -> trop_i64`: map to infinity (max value) if 0, otherwise leave unchanged.
 - `i64 -> trop_max_i64`: map to infinity if 0, otherwise leave unchanged.
 - `i64 -> trop_f64`: map to infinity if 0, otherwise promote
