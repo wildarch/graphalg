@@ -13,7 +13,9 @@
 #include <mlir/IR/BuiltinAttributes.h>
 #include <mlir/IR/BuiltinDialect.h>
 #include <mlir/IR/BuiltinOps.h>
+#include <mlir/IR/Diagnostics.h>
 #include <mlir/IR/DialectRegistry.h>
+#include <mlir/IR/Location.h>
 #include <mlir/IR/MLIRContext.h>
 #include <mlir/IR/OwningOpRef.h>
 #include <mlir/Pass/PassManager.h>
@@ -30,8 +32,17 @@
 
 class Playground {
 private:
+  struct Diagnostic {
+    std::size_t startLine;
+    std::size_t endLine;
+    std::size_t startColumn;
+    std::size_t endColumn;
+    std::string message;
+  };
+
   mlir::DialectRegistry _registry;
   mlir::MLIRContext _ctx;
+  llvm::SmallVector<Diagnostic> _diagnostics;
   mlir::OwningOpRef<mlir::ModuleOp> _moduleOp;
   llvm::SmallVector<graphalg::CallArgumentDimensions> _argDims;
   mlir::func::FuncOp _funcOp;
@@ -106,8 +117,21 @@ static mlir::DialectRegistry createDialectRegistry() {
   return registry;
 }
 
-Playground::Playground()
-    : _registry(createDialectRegistry()), _ctx(_registry) {}
+Playground::Playground() : _registry(createDialectRegistry()), _ctx(_registry) {
+  auto &engine = _ctx.getDiagEngine();
+  engine.registerHandler([this](mlir::Diagnostic &diag) {
+    auto &res = _diagnostics.emplace_back();
+    auto loc = diag.getLocation();
+    if (auto lineColRange = llvm::dyn_cast<mlir::FileLineColRange>(loc)) {
+      res.startLine = lineColRange.getStartLine();
+      res.endLine = lineColRange.getEndLine();
+      res.startColumn = lineColRange.getStartColumn();
+      res.endColumn = lineColRange.getEndColumn();
+    }
+
+    res.message = diag.str();
+  });
+}
 
 bool Playground::parse(llvm::StringRef input) {
   llvm::StringRef filename = "<input>";
