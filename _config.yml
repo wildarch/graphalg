@@ -5,6 +5,10 @@ theme: just-the-docs
 url: https://wildarch.dev/graphalg
 
 callouts:
+  note:
+    title: Note
+    color: blue
+
   warning:
     title: Warning
     color: red

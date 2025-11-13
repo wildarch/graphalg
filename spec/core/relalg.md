@@ -8,20 +8,24 @@ nav_order: 3
 # Conversion to Relational Algebra
 This page describes how GraphAlg Core operations can be converted into an extended relational algebra.
 
+{: .note }
+Conversion to relational algebra requires that all matrices use concrete types rather than abstract dimension symbols.
+The `graphalg-set-dimensions` pass can be used to set concrete values for dimension symbols.
+
 ## Data Model
 The target system/algebra is assumed to support the following data types:
 - Boolean, denoted `i1`
-- 64-bit signed integer, denoted `si64`
+- 64-bit signed integer, denoted `i64`
 - 64-bit floating-point (IEEE 754 is assumed not strictly required), denoted `f64`
 
 It must support the following standard relational algebra operators:
-- projection: Drop or reorders input columns, or computes new columns based on existing ones using per-tuple operations.
+- projection: Drops or reorders input columns, or computes new columns based on existing ones using per-tuple operations.
 - selection: Keeps a subset of the input tuples based on a per-tuple predicate.
 - join: Combines two or more relations.
 
 Additionally, an operator to perform aggregation is required, which is not strictly part of relational algebra, but is commonly available in relational database systems.
 The `aggregate` operator must support grouping tuples by key columns, and it must support the following aggregator functions to combine values:
-- `sum`, `min` and `max` over `si64` and `f64`
+- `sum`, `min` and `max` over `i64` and `f64`
 - `or` over `i1` (representing logical OR)
 - `argmin(arg, val)`, which finds the tuple with minimal `val` and produces the `arg` for that tuple.
 
@@ -46,12 +50,14 @@ Then, the values of the loop variables are replaced with the results of loop bod
 This process continue until the maximum number of iterations has been reached, or until the *break expression* returns a tuple with value to `true`.
 
 ## Functions
-The conversion applies to individual functions, i.e. we can convert a single function call (with relational algebra expressions for the parameters) into a relational algebra expression.
+The conversion applies to individual functions, i.e. a single function call (with relational algebra expressions for the parameters) converts into a relational algebra expression.
 This is sufficient because as opposed to the full GraphAlg language, in GraphAlg Core functions do not call other functions.
 The `return` expression in the body becomes the root of the resulting expression.
 
-## Decomposing MatMul and ReduceOp
-TODO: Describe how these ops are broken up into `MatMulJoinOp`, `UnionOp` and `DeferredReduceOp`.
+## Decomposing `MatMulOp` and `ReduceOp`
+`MatMulOp` and `ReduceOp` are replaced with `MatMulJoinOp`, `UnionOp` and `DeferredReduceOp` in the `graphalg-split-aggregate` pass.
+`MatMulOp` is decomposed into `MatMulJoinOp + DeferredReduceOp`, whereas `ReduceOp` becomes `UnionOp + DeferredReduceOp`.
+For this reason, only the translation of `MatMulJoinOp`, `UnionOp` and `DeferredReduceOp` is considered.
 
 ## Matrix Expressions
 
@@ -69,7 +75,7 @@ projection(
 )
 ```
 
-TODO: Could be a vector
+For vector inputs that lack either `row` or `col` columns, transpose is a no-op.
 
 ### `DiagOp`
 Translates into a projection that adds a column index equal to the row index.
@@ -85,14 +91,15 @@ projection(
 )
 ```
 
-TODO: Could be a row vector too.
+If the input is a row vector rather than a column vector, a row index equal to the column index is added instead.
 
 ### `BroadcastOp`
-For each dimension added, we join with a constant table of all possible indices for that dimension.
+For each dimension added, join with a constant table of all possible indices for that dimension.
 
 ### `ForConstOp`
 Translates directly to the relational algebra loop definition.
-For loops that produce multiple outputs, we duplicate the loop.
+For loops that produce multiple outputs, the loop is duplicated.
+Because all operations are deterministic, this does not change the semantics of the program.
 
 ### `PickAnyOp`
 Remove zero elements, then select zero (col,val) combinations per row:
@@ -111,7 +118,8 @@ aggregate(
 )
 ```
 
-TODO: for boolean matrices, `min` with a single input is sufficient, because `val` is always `true`.
+{: .note }
+For boolean matrices, the value of `argmin(val, col)` is always `true`, so this aggregator can be omitted.
 
 ### `ApplyOp`
 - Join all inputs based on available columns (some inputs may not have all dimensions and need to be broadcast)
@@ -130,6 +138,7 @@ selection(
 
 ### `ConstantMatrixOp`
 Create a constant table.
+For a
 
 ```
 (row, col, val)
@@ -160,23 +169,23 @@ Becomes return op inside projection.
 ### `ConstantOp`
 Becomes a constant in a plain data type depending on the semiring:
 - `i1` and `f64` are kept as-is
-- `i64` becomes `si64`
-- `trop_int` becomes `si64`. If the constant value is infinity, we map this to the the maximum value of the `si64` type (i.e. the largest possible integer)
-- `trop_max_int` becomes `si64`. If the constant value is infinity, we map this to the the minimum value of the `si64` type.
-- `trop_real` becomes `f64`. In IEEE 754 `f64` has a proper infinity value, so we can map `trop_real` infinity to that.
+- `i64` becomes `i64`
+- `trop_int` becomes `i64`. If the constant value is infinity, we map this to the the maximum value of the `i64` type (i.e. the largest possible integer)
+- `trop_max_int` becomes `i64`. If the constant value is infinity, we map this to the the minimum value of the `i64` type.
+- `trop_real` becomes `f64`. In IEEE 754, `f64` has a proper infinity value, so we can map `trop_real` infinity to that.
 
 ### `CastScalarOp`
 Cases:
 - `* -> i1`: rewrite to `input != zero(inRing)`
 - `i1 -> *`: rewrite to `input ? one(outRing) : zero(outRing)`
-- `int -> real`: integer promotion
-- `int -> trop_int`: map to infinity (max value) if 0, otherwise leave unchanged.
-- `int -> trop_max_int`: map to infinity if 0, otherwise leave unchanged.
-- `int -> trop_real`: map to infinity if 0, otherwise promote
-- `real -> int`: truncate
-- `real -> trop_int`: map to infinity if 0, otherwise promote
-- `real -> trop_max_int`: map to infinity if 0, otherwise promote.
-- `real -> trop_real`: map to infinity if 0, otherwise leave unchanged.
+- `i64 -> f64`: i64eger promotion
+- `i64 -> trop_i64`: map to infinity (max value) if 0, otherwise leave unchanged.
+- `i64 -> trop_max_i64`: map to infinity if 0, otherwise leave unchanged.
+- `i64 -> trop_f64`: map to infinity if 0, otherwise promote
+- `f64 -> i64`: truncate
+- `f64 -> trop_i64`: map to infinity if 0, otherwise promote
+- `f64 -> trop_max_i64`: map to infinity if 0, otherwise promote.
+- `f64 -> trop_f64`: map to infinity if 0, otherwise leave unchanged.
 
 ### `AddOp`
 Pick the operation based on the semiring:
