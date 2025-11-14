@@ -7,6 +7,7 @@
 #include <mlir/IR/Attributes.h>
 #include <mlir/IR/BuiltinAttributes.h>
 #include <mlir/IR/Diagnostics.h>
+#include <mlir/IR/Location.h>
 #include <mlir/IR/MLIRContext.h>
 #include <mlir/Support/LLVM.h>
 
@@ -40,8 +41,20 @@ private:
     }
   }
 
-  mlir::Location currentLocation() {
-    return mlir::FileLineColLoc::get(_filename, _line, _col);
+  struct LineCol {
+    std::size_t line;
+    std::size_t column;
+  };
+  LineCol currentPos() { return {_line, _col}; }
+
+  mlir::FileLineColRange locFromTo(LineCol start, LineCol end) {
+    return mlir::FileLineColRange::get(_filename, start.line, start.column,
+                                       end.line, end.column);
+  }
+
+  mlir::FileLineColRange locFrom(LineCol from, std::size_t length) {
+    return mlir::FileLineColRange::get(_filename, from.line, from.column,
+                                       from.column + length);
   }
 
   void eat() {
@@ -131,12 +144,12 @@ void Lexer::eatWhitespace() {
 Token Lexer::nextToken() {
   eatWhitespace();
   if (!cur()) {
-    return Token{Token::END_OF_FILE, currentLocation()};
+    return Token{Token::END_OF_FILE, locFrom(currentPos(), 0)};
   }
 
   if (llvm::isAlpha(*cur())) {
     // Identifier [a-zA-Z][a-zA-Z0-9_']*
-    auto loc = currentLocation();
+    auto startPos = currentPos();
     auto start = _offset;
     eat();
     while (cur() && (llvm::isAlnum(*cur()) || cur() == '_' || cur() == '\'')) {
@@ -144,6 +157,7 @@ Token Lexer::nextToken() {
     }
 
     auto end = _offset;
+    auto loc = locFromTo(startPos, currentPos());
     auto body = _buffer.slice(start, end);
     if (auto keyword = tokenForKeyword(body)) {
       return Token{*keyword, loc, body};
@@ -154,7 +168,7 @@ Token Lexer::nextToken() {
 
   if (llvm::isDigit(*cur())) {
     // Number
-    auto loc = currentLocation();
+    auto startPos = currentPos();
     auto start = _offset;
     eat();
     while (cur() && llvm::isDigit(*cur())) {
@@ -171,17 +185,18 @@ Token Lexer::nextToken() {
     }
 
     auto end = _offset;
+    auto loc = locFromTo(startPos, currentPos());
     auto body = _buffer.slice(start, end);
     return Token{kind, loc, body};
   }
 
   auto two = peek(2);
-  auto loc = currentLocation();
+  auto locTwo = locFrom(currentPos(), 2);
 #define TWO(c, t)                                                              \
   if (two == c) {                                                              \
     eat();                                                                     \
     eat();                                                                     \
-    return Token{Token::t, loc, *two};                                         \
+    return Token{Token::t, locTwo, *two};                                      \
   }
 
   TWO("->", ARROW)
@@ -193,9 +208,10 @@ Token Lexer::nextToken() {
 #undef TWO
 
   auto one = _buffer.substr(_offset, 1);
+  auto locOne = locFrom(currentPos(), 1);
 #define ONE(c, t)                                                              \
   if (tryEat(c)) {                                                             \
-    return Token{Token::t, loc, one};                                          \
+    return Token{Token::t, locOne, one};                                       \
   }
 
   ONE('(', LPAREN)
@@ -218,9 +234,8 @@ Token Lexer::nextToken() {
   ONE('!', NOT)
 #undef ONE
 
-  mlir::emitError(currentLocation())
-      << "invalid input character '" << *cur() << "'";
-  return Token{Token::INVALID, currentLocation(), _buffer.substr(_offset, 1)};
+  mlir::emitError(locOne) << "invalid input character '" << *cur() << "'";
+  return Token{Token::INVALID, locOne, _buffer.substr(_offset, 1)};
 }
 
 mlir::LogicalResult Lexer::lex(std::vector<Token> &tokens) {
