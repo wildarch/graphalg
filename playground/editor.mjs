@@ -2,12 +2,127 @@ import { EditorView, basicSetup } from "codemirror"
 import { vim } from "@replit/codemirror-vim"
 import { keymap } from "@codemirror/view"
 import { indentWithTab } from "@codemirror/commands"
+import { linter, Diagnostic } from "@codemirror/lint"
 import { GraphAlg } from "codemirror-lang-graphalg"
 import playgroundWasm from "/workspaces/graphalg/compiler/build-wasm/graphalg-playground.wasm"
 import playgroundWasmFactory from "/workspaces/graphalg/compiler/build-wasm/graphalg-playground.js"
 
-// Set as class=.. on the container for the editor view
-const EDITOR_CONTAINER_CLASS = 'pt-1';
+// Load and register all webassembly bindings
+let playgroundWasmBindings = {
+  // Flipped to true once bindings have been registered
+  loaded: false,
+};
+playgroundWasmFactory({
+  locateFile: function (path, prefix) {
+    return playgroundWasm;
+  },
+}).then((instance) => {
+  playgroundWasmBindings.ga_new = instance.cwrap('ga_new', 'number', []);
+  playgroundWasmBindings.ga_free = instance.cwrap('ga_free', null, ['number']);
+  playgroundWasmBindings.ga_parse = instance.cwrap('ga_parse', 'number', ['number', 'string']);
+  playgroundWasmBindings.ga_diag_count = instance.cwrap('ga_diag_count', 'number', ['number']);
+  playgroundWasmBindings.ga_diag_line_start = instance.cwrap('ga_diag_line_start', 'number', ['number', 'number']);
+  playgroundWasmBindings.ga_diag_line_end = instance.cwrap('ga_diag_line_end', 'number', ['number', 'number']);
+  playgroundWasmBindings.ga_diag_col_start = instance.cwrap('ga_diag_col_start', 'number', ['number', 'number']);
+  playgroundWasmBindings.ga_diag_col_end = instance.cwrap('ga_diag_col_end', 'number', ['number', 'number']);
+  playgroundWasmBindings.ga_diag_msg = instance.cwrap('ga_diag_msg', 'number', ['number', 'number']);
+  playgroundWasmBindings.ga_desugar = instance.cwrap('ga_desugar', 'number', ['number'])
+  playgroundWasmBindings.ga_add_arg = instance.cwrap('ga_add_arg', null, ['number', 'number', 'number']);
+  playgroundWasmBindings.ga_set_dims = instance.cwrap('ga_set_dims', 'number', ['number', 'string']);
+  playgroundWasmBindings.ga_set_arg_bool = instance.cwrap('ga_set_arg_bool', 'number', ['number', 'number', 'number', 'number', 'number']);
+  playgroundWasmBindings.ga_set_arg_int = instance.cwrap('ga_set_arg_int', 'number', ['number', 'number', 'number', 'number', 'number']);
+  playgroundWasmBindings.ga_set_arg_real = instance.cwrap('ga_set_arg_real', 'number', ['number', 'number', 'number', 'number', 'number']);
+  playgroundWasmBindings.ga_evaluate = instance.cwrap('ga_evaluate', 'number', ['number']);
+  playgroundWasmBindings.ga_get_res_inf = instance.cwrap('ga_get_res_inf', 'number', ['number', 'number', 'number']);
+  playgroundWasmBindings.ga_get_res_int = instance.cwrap('ga_get_res_int', 'number', ['number', 'number', 'number']);
+  playgroundWasmBindings.ga_get_res_real = instance.cwrap('ga_get_res_real', 'number', ['number', 'number', 'number']);
+  playgroundWasmBindings.UTF8ToString = instance.UTF8ToString;
+  playgroundWasmBindings.loaded = true;
+});
+
+class GraphAlgDiagnostic {
+  constructor(startLine, endLine, startColumn, endColumn, message) {
+    this.startLine = startLine;
+    this.endLine = endLine;
+    this.startColumn = startColumn;
+    this.endColumn = endColumn;
+    this.message = message;
+  }
+}
+
+class PlaygroundInstance {
+  constructor(bindings) {
+    this.bindings = bindings;
+  }
+
+  init() {
+    this.handle = this.bindings.ga_new();
+  }
+
+  lint(program) {
+    const ga_new = this.bindings.ga_new;
+    const ga_free = this.bindings.ga_free;
+    const ga_parse = this.bindings.ga_parse;
+    const ga_desugar = this.bindings.ga_desugar;
+    const ga_diag_count = this.bindings.ga_diag_count;
+    const ga_diag_line_start = this.bindings.ga_diag_line_start;
+    const ga_diag_line_end = this.bindings.ga_diag_line_end;
+    const ga_diag_col_start = this.bindings.ga_diag_col_start;
+    const ga_diag_col_end = this.bindings.ga_diag_col_end;
+    const ga_diag_msg = this.bindings.ga_diag_msg;
+    const UTF8ToString = this.bindings.UTF8ToString;
+
+    const pg = ga_new();
+
+    let diagnostics = [];
+    if (ga_parse(pg, program)) {
+      // Also desugar
+      // TODO: Catch desugar error
+      ga_desugar(pg);
+    }
+
+    const ndiag = ga_diag_count(pg);
+    for (let i = 0; i < ndiag; i++) {
+      diagnostics.push(new GraphAlgDiagnostic(
+        ga_diag_line_start(pg, i),
+        ga_diag_line_end(pg, i),
+        ga_diag_col_start(pg, i),
+        ga_diag_col_end(pg, i),
+        UTF8ToString(ga_diag_msg(pg, i))));
+    }
+
+    ga_free(pg);
+    return diagnostics;
+  }
+}
+
+const GraphAlgLinter = linter(view => {
+  let diagnostics = [];
+  if (!playgroundWasmBindings.loaded) {
+    // Need to have wasm bindings loaded before we can lint.
+    return diagnostics;
+  }
+
+  const inst = new PlaygroundInstance(playgroundWasmBindings);
+  const program = view.state.doc.toString();
+  for (let diag of inst.lint(program)) {
+    const fromLine = view.state.doc.line(diag.startLine);
+    const toLine = view.state.doc.line(diag.endLine);
+    if (!fromLine || !toLine) {
+      console.error("Diagnostic at invalid line: ", diag);
+      continue;
+    }
+
+    diagnostics.push({
+      from: fromLine.from + diag.startColumn,
+      to: toLine.from + diag.endColumn,
+      severity: "error",
+      message: diag.message,
+    });
+  }
+
+  return diagnostics;
+});
 
 class GraphAlgEditor {
   constructor(rootElem) {
@@ -18,7 +133,9 @@ class GraphAlgEditor {
 
     // Container to host the editor view
     this.editorContainer = document.createElement("div");
-    this.editorContainer.setAttribute('class', EDITOR_CONTAINER_CLASS);
+    // NOTE: pt-1 is a just-the-docs class to add padding at the top.
+    // This helps separate it from the toolbar.
+    this.editorContainer.setAttribute('class', 'pt-1');
 
     // Container for output
     this.outputContainer = document.createElement("div");
@@ -32,7 +149,8 @@ class GraphAlgEditor {
         //vim(),
         keymap.of([indentWithTab]),
         basicSetup,
-        GraphAlg()
+        GraphAlg(),
+        GraphAlgLinter,
       ],
       parent: this.editorContainer
     });
@@ -50,9 +168,6 @@ for (let elem of editorElems) {
 for (let editor of editors) {
   editor.initializeEditorView();
 }
-
-// Load the playground wasm
-// Create run/compile buttons
 
 playgroundWasmFactory({
   locateFile: function (path, prefix) {

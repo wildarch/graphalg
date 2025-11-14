@@ -4,6 +4,7 @@
     "watch": "rollup -c --watch"
   },
   "dependencies": {
+    "@codemirror/lint": "^6.9.2",
     "@replit/codemirror-vim": "^6.3.0",
     "codemirror": "^6.0.2",
     "codemirror-lang-graphalg": "^0.1.0"
