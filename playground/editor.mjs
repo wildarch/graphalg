@@ -114,8 +114,8 @@ const GraphAlgLinter = linter(view => {
     }
 
     diagnostics.push({
-      from: fromLine.from + diag.startColumn,
-      to: toLine.from + diag.endColumn,
+      from: fromLine.from + diag.startColumn - 1,
+      to: toLine.from + diag.endColumn - 1,
       severity: "error",
       message: diag.message,
     });
