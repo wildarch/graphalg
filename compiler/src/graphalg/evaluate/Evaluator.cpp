@@ -272,12 +272,10 @@ mlir::LogicalResult Evaluator::evaluate(ApplyOp op) {
     for (auto col : llvm::seq(result.nCols())) {
       llvm::SmallVector<mlir::TypedAttr> args;
       for (const auto &input : inputs) {
-        if (input.nRows() == 1 && input.nCols() == 1) {
-          // Implicit broadcast
-          args.push_back(input.at(0, 0));
-        } else {
-          args.push_back(input.at(row, col));
-        }
+        // Implicit broadcast.
+        auto r = row < input.nRows() ? row : 0;
+        auto c = col < input.nCols() ? col : 0;
+        args.push_back(input.at(r, c));
       }
 
       ScalarEvaluator scalarEvaluator;

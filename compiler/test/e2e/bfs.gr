@@ -1,7 +1,7 @@
 // RUN: split-file %s %t
 // RUN: graphalg-translate --import-graphalg %t/input.gr > %t/parsed.mlir
 // RUN: graphalg-opt --graphalg-to-core-pipeline --graphalg-set-dimensions='func=BFS args=10x10,10x1' %t/parsed.mlir > %t/exec.mlir
-// RUN: graphalg-exec %t/exec.mlir BFS %t/graph.m %t/source.m
+// RUN: graphalg-exec %t/exec.mlir BFS %t/graph.m %t/source.m | diff - %t/output.m
 
 //--- graph.m
 0 1
