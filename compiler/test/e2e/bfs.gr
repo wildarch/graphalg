@@ -1,0 +1,61 @@
+// RUN: split-file %s %t
+// RUN: graphalg-translate --import-graphalg %t/input.gr > %t/parsed.mlir
+// RUN: graphalg-opt --graphalg-to-core-pipeline --graphalg-set-dimensions='func=BFS args=10x10,10x1' %t/parsed.mlir > %t/exec.mlir
+// RUN: graphalg-exec %t/exec.mlir BFS %t/graph.m %t/source.m
+
+//--- graph.m
+0 1
+0 2
+1 2
+1 3
+1 4
+2 0
+3 5
+3 6
+3 7
+4 0
+4 1
+5 3
+5 7
+7 0
+7 1
+7 2
+8 9
+
+//--- source.m
+0 0
+
+//--- input.gr
+func setDepth(b:bool, iter:int) -> int {
+  return cast<int>(b) * (iter + int(2));
+}
+
+func BFS(graph: Matrix<s, s, bool>, source: Vector<s, bool>) -> Vector<s, int> {
+  v = Vector<int>(graph.nrows);
+  v<source>[:] = int(1);
+
+  frontier = source;
+  reach = source;
+
+  for i in graph.nrows {
+    step = Vector<bool>(graph.nrows);
+    step<!reach> = frontier * graph;
+
+    v += apply(setDepth, step, i);
+
+    frontier = step;
+    reach += step;
+  } until frontier.nvals == int(0);
+
+  return v;
+}
+
+//--- output.m
+0 0 1 : i64
+1 0 2 : i64
+2 0 2 : i64
+3 0 3 : i64
+4 0 3 : i64
+5 0 4 : i64
+6 0 4 : i64
+7 0 4 : i64

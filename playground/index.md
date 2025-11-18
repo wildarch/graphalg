@@ -30,4 +30,59 @@ func MatMul(
 }
 ```
 
+## Breadth-First Search
+
+{:
+    data-ga-func="BFS"
+    data-ga-arg-0="
+        10, 10, i1;
+        0, 1;
+        0, 2;
+        1, 2;
+        1, 3;
+        1, 4;
+        2, 0;
+        3, 5;
+        3, 6;
+        3, 7;
+        4, 0;
+        4, 1;
+        5, 3;
+        5, 7;
+        7, 0;
+        7, 1;
+        7, 2;
+        8, 9;"
+    data-ga-arg-1="
+        10, 1, i1;
+        0, 0;"
+}
+```graphalg
+func setDepth(b:bool, iter:int) -> int {
+    return cast<int>(b) * (iter + int(2));
+}
+
+func BFS(
+        graph: Matrix<s, s, bool>,
+        source: Vector<s, bool>) -> Vector<s, int> {
+    v = Vector<int>(graph.nrows);
+    v<source>[:] = int(1);
+
+    frontier = source;
+    reach = source;
+
+    for i in graph.nrows {
+        step = Vector<bool>(graph.nrows);
+        step<!reach> = frontier * graph;
+
+        v += apply(setDepth, step, i);
+
+        frontier = step;
+        reach += step;
+    } until frontier.nvals == int(0);
+
+    return v;
+}
+```
+
 <script src="editor.bundle.js"></script>
