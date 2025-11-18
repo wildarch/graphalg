@@ -19,10 +19,10 @@ cmake --build ./compiler/build --target check
 ./compiler/configure-wasm.sh
 cmake --build ./compiler/build-wasm
 
-npm --workspace=website install
-npm --workspace=website run prepare
-# To start a simple server to test the website:
-# (cd website/ && python3 -m http.server)
+npm --workspace=playground install
+npm --workspace=playground run prepare
+# To start a simple server to test the playground:
+# (cd playground/ && python3 -m http.server)
 
 bundle install
 # Or bundle exec jekyll serve to start a server

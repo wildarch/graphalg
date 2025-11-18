@@ -23,9 +23,9 @@ interface GraphAlgMatrixEntry {
     val: boolean | bigint | number;
 }
 interface GraphAlgMatrix {
+    ring: string;
     rows: number;
     cols: number;
-    type: 'bool' | 'int' | 'real';
     values: GraphAlgMatrixEntry[],
 }
 
@@ -94,7 +94,14 @@ class PlaygroundInstance {
         const ga_set_arg_int = this.bindings.ga_set_arg_int;
         const ga_set_arg_real = this.bindings.ga_set_arg_real;
         const ga_evaluate = this.bindings.ga_evaluate;
+        const ga_get_res_ring = this.bindings.ga_get_res_ring;
+        const ga_get_res_rows = this.bindings.ga_get_res_rows;
+        const ga_get_res_cols = this.bindings.ga_get_res_cols;
+        const ga_get_res_bool = this.bindings.ga_get_res_bool;
         const ga_get_res_int = this.bindings.ga_get_res_int;
+        const ga_get_res_real = this.bindings.ga_get_res_real;
+        const ga_get_res_inf = this.bindings.ga_get_res_inf;
+        const UTF8ToString = this.bindings.UTF8ToString;
 
         const pg = ga_new();
 
@@ -122,14 +129,17 @@ class PlaygroundInstance {
 
         args.forEach((arg, idx) => {
             for (let val of arg.values) {
-                switch (arg.type) {
-                    case 'bool':
+                switch (arg.ring) {
+                    case 'i1':
                         ga_set_arg_bool(pg, idx, val.row, val.col, val.val);
                         break;
-                    case 'int':
+                    case 'i64':
+                    case '!graphalg.trop_i64':
+                    case '!graphalg.trop_max_i64':
                         ga_set_arg_int(pg, idx, val.row, val.col, val.val);
                         break;
-                    case 'real':
+                    case 'f64':
+                    case '!graphalg.trop_f64':
                         ga_set_arg_real(pg, idx, val.row, val.col, val.val);
                         break;
                 }
@@ -142,26 +152,58 @@ class PlaygroundInstance {
             };
         }
 
-        // TODO: Infer the result dimensions and type.
-        const resultRows = 2;
-        const resultCols = 2;
-        const resultType = 'int';
+        const resultRing = UTF8ToString(ga_get_res_ring(pg));
+        const resultRows = ga_get_res_rows(pg);
+        const resultCols = ga_get_res_cols(pg);
         let resultVals: GraphAlgMatrixEntry[] = [];
         for (let r = 0; r < resultRows; r++) {
             for (let c = 0; c < resultCols; c++) {
+                let val;
+                switch (resultRing) {
+                    case 'i1':
+                        val = ga_get_res_bool(pg, r, c);
+                        break;
+                    case '!graphalg.trop_i64':
+                    case '!graphalg.trop_max_i64':
+                        if (ga_get_res_inf(pg, r, c)) {
+                            // Skip infinity
+                            continue;
+                        }
+                    case 'i64':
+                        val = ga_get_res_int(pg, r, c);
+                        break;
+                    case '!graphalg.trop_f64':
+                        if (ga_get_res_inf(pg, r, c)) {
+                            // Skip infinity
+                            continue;
+                        }
+                    case 'f64':
+                        val = ga_get_res_int(pg, r, c);
+                        break;
+                }
+                if (resultRing == 'i1') {
+                    val = ga_get_res_bool(pg, r, c);
+                } else if (resultRing == 'i64') {
+                    val = ga_get_res_int(pg, r, c);
+                } else if (resultRing == 'f64') {
+                    val = ga_get_res_real(pg, r, c);
+                } else {
+                    throw Error(`Invalid result semiring '${resultRing}'`);
+                }
+
                 resultVals.push({
                     row: r,
                     col: c,
-                    val: ga_get_res_int(pg, r, c),
+                    val: val,
                 });
             }
         }
 
         return {
             result: {
+                ring: resultRing,
                 rows: resultRows,
                 cols: resultCols,
-                type: resultType,
                 values: resultVals,
             },
             diagnostics: this.getDiagnosticsAndFree(pg),
@@ -202,10 +244,7 @@ function parseMatrix(input: string): GraphAlgMatrix {
     const header = lines[0].split(',');
     const rows = parseInt(header[0]);
     const cols = parseInt(header[1]);
-    const type = header[2].trim();
-    if (type != 'bool' && type != 'int' && type != 'real') {
-        throw new Error(`invalid type ${type}`);
-    }
+    const ring = header[2].trim();
 
     let values: GraphAlgMatrixEntry[] = [];
     for (let line of lines.slice(1)) {
@@ -217,14 +256,21 @@ function parseMatrix(input: string): GraphAlgMatrix {
         const parts = line.split(',');
 
         let val: boolean | bigint | number;
-        if (type == 'bool') {
-            val = true;
-        } else if (type == 'int') {
-            val = BigInt(parts[2]);
-        } else if (type == 'real') {
-            val = parseFloat(parts[2]);
-        } else {
-            throw new Error(`invalid type ${type}`);
+        switch (ring) {
+            case 'i1':
+                val = true;
+                break;
+            case 'i64':
+            case '!graphalg.trop_i64':
+            case '!graphalg.trop_max_i64':
+                val = BigInt(parts[2]);
+                break;
+            case 'f64':
+            case '!graphalg.trop_f64':
+                val = parseFloat(parts[2]);
+                break;
+            default:
+                throw new Error(`invalid ring ${ring}`);
         }
 
         values.push({
@@ -235,97 +281,11 @@ function parseMatrix(input: string): GraphAlgMatrix {
     }
 
     return {
-        rows: rows,
-        cols: cols,
-        type: type,
-        values: values,
+        ring,
+        rows,
+        cols,
+        values,
     }
-}
-
-class GraphAlgEditor {
-    root: Element;
-    toolbar: Element;
-    editorContainer: Element;
-    outputContainer: Element;
-
-    initialProgram: string;
-    functionName?: string;
-    arguments: GraphAlgMatrix[] = [];
-
-    editorView?: EditorView;
-
-    constructor(rootElem: Element, program: string) {
-        this.root = rootElem;
-        this.initialProgram = program;
-
-        // Container for toolbar buttons above the editor
-        this.toolbar = document.createElement("div");
-
-        // Container to host the editor view
-        this.editorContainer = document.createElement("div");
-        // NOTE: pt-1 is a just-the-docs class to add padding at the top.
-        // This helps separate it from the toolbar.
-        this.editorContainer.setAttribute('class', 'pt-1');
-
-        // Container for output
-        this.outputContainer = document.createElement("div");
-
-        this.root.append(this.toolbar, this.editorContainer, this.outputContainer);
-    }
-
-    initializeEditorView() {
-        this.editorView = new EditorView({
-            extensions: [
-                //vim(),
-                keymap.of([indentWithTab]),
-                basicSetup,
-                GraphAlg(),
-                GraphAlgLinter,
-            ],
-            parent: this.editorContainer,
-            doc: this.initialProgram,
-        });
-    }
-}
-
-// Find code snippets to turn into editors.
-let editors: GraphAlgEditor[] = [];
-const codeElems = document.getElementsByClassName("language-graphalg");
-for (let elem of Array.from(codeElems)) {
-    // An empty div for the editor to own as its root.
-    const editorRoot = document.createElement("div");
-    const program = elem.textContent.trim();
-    const editor = new GraphAlgEditor(editorRoot, program);
-
-    if (elem.parentElement?.tagName == 'PRE') {
-        // Have additional annotations in a pre wrapper
-        elem = elem.parentElement;
-
-        const func = elem.getAttribute('data-ga-func');
-        if (func) {
-            editor.functionName = func;
-        }
-
-        for (let i = 0; ; i++) {
-            const arg = elem.getAttribute('data-ga-arg-' + i);
-            if (!arg) {
-                break;
-            }
-
-            const parsed = parseMatrix(arg);
-            editor.arguments.push(parsed);
-        }
-    }
-
-    // Replace the code snippet with the editor view.
-    elem.replaceWith(editorRoot);
-
-    editors.push(editor);
-}
-
-// Initialize editor views
-for (let editor of editors) {
-    editor.initializeEditorView();
 }
 
 function buildTable(m: GraphAlgMatrix): HTMLTableElement {
@@ -363,6 +323,111 @@ function buildTable(m: GraphAlgMatrix): HTMLTableElement {
     return table;
 }
 
+class GraphAlgEditor {
+    root: Element;
+    toolbar: Element;
+    editorContainer: Element;
+    argumentContainer: Element;
+    outputContainer: Element;
+
+    initialProgram: string;
+    functionName?: string;
+    arguments: GraphAlgMatrix[] = [];
+
+    editorView?: EditorView;
+
+    constructor(rootElem: Element, program: string) {
+        this.root = rootElem;
+        this.initialProgram = program;
+
+        // Container for toolbar buttons above the editor
+        this.toolbar = document.createElement("div");
+
+        // Container to host the editor view
+        this.editorContainer = document.createElement("div");
+        // NOTE: pt-1 is a just-the-docs class to add padding at the top.
+        // This helps separate it from the toolbar.
+        this.editorContainer.setAttribute('class', 'pt-1');
+
+        this.argumentContainer = document.createElement("div");
+
+        // Container for output
+        this.outputContainer = document.createElement("div");
+
+        this.root.append(
+            this.toolbar,
+            this.editorContainer,
+            this.argumentContainer,
+            this.outputContainer);
+    }
+
+    initializeEditorView() {
+        this.editorView = new EditorView({
+            extensions: [
+                //vim(),
+                keymap.of([indentWithTab]),
+                basicSetup,
+                GraphAlg(),
+                GraphAlgLinter,
+            ],
+            parent: this.editorContainer,
+            doc: this.initialProgram,
+        });
+    }
+
+    addArgument(arg: GraphAlgMatrix) {
+        this.arguments.push(arg);
+
+        // Display in accordion below the editor.
+        const argDetails = document.createElement("details");
+        const argSummary = document.createElement("summary");
+        argSummary.textContent = `Argument ${this.arguments.length} (${arg.ring} x ${arg.rows} x ${arg.cols})`;
+        const table = buildTable(arg);
+        argDetails.append(argSummary, table);
+        this.argumentContainer.appendChild(argDetails);
+    }
+}
+
+// Find code snippets to turn into editors.
+let editors: GraphAlgEditor[] = [];
+const codeElems = document.getElementsByClassName("language-graphalg");
+for (let elem of Array.from(codeElems)) {
+    // An empty div for the editor to own as its root.
+    const editorRoot = document.createElement("div");
+    const program = elem.textContent.trim();
+    const editor = new GraphAlgEditor(editorRoot, program);
+
+    if (elem.parentElement?.tagName == 'PRE') {
+        // Have additional annotations in a pre wrapper
+        elem = elem.parentElement;
+
+        const func = elem.getAttribute('data-ga-func');
+        if (func) {
+            editor.functionName = func;
+        }
+
+        for (let i = 0; ; i++) {
+            const arg = elem.getAttribute('data-ga-arg-' + i);
+            if (!arg) {
+                break;
+            }
+
+            const parsed = parseMatrix(arg);
+            editor.addArgument(parsed);
+        }
+    }
+
+    // Replace the code snippet with the editor view.
+    elem.replaceWith(editorRoot);
+
+    editors.push(editor);
+}
+
+// Initialize editor views
+for (let editor of editors) {
+    editor.initializeEditorView();
+}
+
 function buildErrorNote(diagnostics: GraphAlgDiagnostic[]): HTMLQuoteElement {
     const quote = document.createElement("blockquote");
     quote.setAttribute('class', 'error-title');
@@ -386,14 +451,20 @@ function run(editor: GraphAlgEditor, inst: PlaygroundInstance) {
     }
 
     const result = inst.run(program, editor.functionName!!, editor.arguments);
+    let resultElem;
     if (result.result) {
-        const table = buildTable(result.result);
-        editor.outputContainer.replaceChildren(table);
+        resultElem = buildTable(result.result);
     } else {
-        const note = buildErrorNote(result.diagnostics);
-        editor.outputContainer.replaceChildren(note);
+        resultElem = buildErrorNote(result.diagnostics);
     }
 
+    // Place output in a default-open accordion
+    const details = document.createElement("details");
+    details.setAttribute('open', 'true');
+    const summary = document.createElement("summary");
+    summary.textContent = "Output";
+    details.append(summary, resultElem);
+    editor.outputContainer.replaceChildren(details);
 }
 
 // Add run buttons

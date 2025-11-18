@@ -43,9 +43,13 @@ export function loadPlaygroundWasm() {
         bindings.ga_set_arg_int = instance.cwrap('ga_set_arg_int', 'number', ['number', 'number', 'number', 'number', 'number']);
         bindings.ga_set_arg_real = instance.cwrap('ga_set_arg_real', 'number', ['number', 'number', 'number', 'number', 'number']);
         bindings.ga_evaluate = instance.cwrap('ga_evaluate', 'number', ['number']);
-        bindings.ga_get_res_inf = instance.cwrap('ga_get_res_inf', 'number', ['number', 'number', 'number']);
+        bindings.ga_get_res_ring = instance.cwrap('ga_get_res_ring', 'number', ['number']);
+        bindings.ga_get_res_rows = instance.cwrap('ga_get_res_rows', 'number', ['number']);
+        bindings.ga_get_res_cols = instance.cwrap('ga_get_res_cols', 'number', ['number']);
+        bindings.ga_get_res_bool = instance.cwrap('ga_get_res_bool', 'boolean', ['number', 'number', 'number']);
         bindings.ga_get_res_int = instance.cwrap('ga_get_res_int', 'number', ['number', 'number', 'number']);
         bindings.ga_get_res_real = instance.cwrap('ga_get_res_real', 'number', ['number', 'number', 'number']);
+        bindings.ga_get_res_inf = instance.cwrap('ga_get_res_inf', 'boolean', ['number', 'number', 'number']);
         bindings.UTF8ToString = instance.UTF8ToString;
         bindings.loaded = true;
 

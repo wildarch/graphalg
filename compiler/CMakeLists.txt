@@ -163,9 +163,13 @@ if(ENABLE_WASM)
         _ga_set_arg_int
         _ga_set_arg_real
         _ga_evaluate
-        _ga_get_res_inf
+        _ga_get_res_ring
+        _ga_get_res_rows
+        _ga_get_res_cols
+        _ga_get_res_bool
         _ga_get_res_int
         _ga_get_res_real
+        _ga_get_res_inf
     )
     string (REPLACE ";" "," PLAYGROUND_EXPORTED_FUNCTIONS_STR "${PLAYGROUND_EXPORTED_FUNCTIONS}")
 

@@ -49,6 +49,7 @@ private:
   llvm::SmallVector<graphalg::MatrixAttrBuilder> _argBuilders;
   graphalg::MatrixAttr _result;
   std::optional<graphalg::MatrixAttrReader> _resultReader;
+  std::string _resultRingStr;
 
   void setArgumentValue(std::size_t argIdx, std::size_t row, std::size_t col,
                         mlir::TypedAttr value);
@@ -86,9 +87,13 @@ public:
 
   bool evaluate();
 
-  bool getResultInfinity(std::size_t row, std::size_t col);
+  const char *getResultRing();
+  std::size_t getResultRows();
+  std::size_t getResultCols();
+  bool getResultBool(std::size_t row, std::size_t col);
   std::int64_t getResultInt(std::size_t row, std::size_t col);
   double getResultReal(std::size_t row, std::size_t col);
+  bool getResultInfinity(std::size_t row, std::size_t col);
 };
 
 void Playground::setArgumentValue(std::size_t argIdx, std::size_t row,
@@ -199,9 +204,19 @@ bool Playground::evaluate() {
   return true;
 }
 
-bool Playground::getResultInfinity(std::size_t row, std::size_t col) {
+const char *Playground::getResultRing() {
+  _resultRingStr.clear();
+  llvm::raw_string_ostream ros(_resultRingStr);
+  _resultReader->ring().print(ros);
+  return _resultRingStr.c_str();
+}
+
+std::size_t Playground::getResultRows() { return _resultReader->nRows(); }
+std::size_t Playground::getResultCols() { return _resultReader->nCols(); }
+
+bool Playground::getResultBool(std::size_t row, std::size_t col) {
   auto value = _resultReader->at(row, col);
-  return llvm::isa<graphalg::TropInfAttr>(value);
+  return llvm::cast<mlir::BoolAttr>(value).getValue();
 }
 
 std::int64_t Playground::getResultInt(std::size_t row, std::size_t col) {
@@ -212,6 +227,11 @@ std::int64_t Playground::getResultInt(std::size_t row, std::size_t col) {
 double Playground::getResultReal(std::size_t row, std::size_t col) {
   auto value = _resultReader->at(row, col);
   return llvm::cast<mlir::FloatAttr>(value).getValueAsDouble();
+}
+
+bool Playground::getResultInfinity(std::size_t row, std::size_t col) {
+  auto value = _resultReader->at(row, col);
+  return llvm::isa<graphalg::TropInfAttr>(value);
 }
 
 extern "C" {
@@ -272,16 +292,24 @@ void ga_set_arg_real(Playground *pg, std::size_t argIdx, std::size_t row,
 
 bool ga_evaluate(Playground *pg) { return pg->evaluate(); }
 
-bool ga_get_res_inf(Playground *pg, std::size_t row, std::size_t col) {
-  return pg->getResultInfinity(row, col);
+const char *ga_get_res_ring(Playground *pg) { return pg->getResultRing(); }
+std::size_t ga_get_res_rows(Playground *pg) { return pg->getResultRows(); }
+std::size_t ga_get_res_cols(Playground *pg) { return pg->getResultCols(); }
+
+bool ga_get_res_bool(Playground *pg, std::size_t row, std::size_t col) {
+  return pg->getResultBool(row, col);
 }
 
 std::int64_t ga_get_res_int(Playground *pg, std::size_t row, std::size_t col) {
   return pg->getResultInt(row, col);
 }
 
-std::int64_t ga_get_res_real(Playground *pg, std::size_t row, std::size_t col) {
+double ga_get_res_real(Playground *pg, std::size_t row, std::size_t col) {
   return pg->getResultReal(row, col);
+}
+
+bool ga_get_res_inf(Playground *pg, std::size_t row, std::size_t col) {
+  return pg->getResultInfinity(row, col);
 }
 }
 

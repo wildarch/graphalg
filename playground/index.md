@@ -10,13 +10,13 @@ Compile and execute GraphAlg programs in your browser!
 {:
     data-ga-func="MatMul"
     data-ga-arg-0="
-        2, 2, int;
+        2, 2, i64;
         0, 0, 3;
         0, 1, 5;
         1, 0, 7;
         1, 1, 11;"
     data-ga-arg-1="
-        2, 2, int;
+        2, 2, i64;
         0, 0, 13;
         0, 1, 17;
         1, 0, 19;
