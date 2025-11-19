@@ -2,7 +2,7 @@
 This repository contains code related to the GraphAlg language:
 - `codemirror-lang-graphalg`: Language Support for Codemirror
 - `compiler/`: The GraphAlg compiler
-- `website/`: The GraphAlg online playground
+- `playground/`: The GraphAlg online playground
 - `spec/`: The GraphAlg Language Specification
 
 ## Building
@@ -20,9 +20,8 @@ cmake --build ./compiler/build --target check
 cmake --build ./compiler/build-wasm
 
 npm --workspace=playground install
+# Or npm --workspace=playground run watch to rebuild automatically upon edit.
 npm --workspace=playground run prepare
-# To start a simple server to test the playground:
-# (cd playground/ && python3 -m http.server)
 
 bundle install
 # Or bundle exec jekyll serve to start a server
