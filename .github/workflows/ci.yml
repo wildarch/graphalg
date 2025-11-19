@@ -5,18 +5,34 @@ on:
     branches: ["main"]
   pull_request:
 
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
 jobs:
   # Build job
   build:
-    runs-on: ubuntu-latest
+    runs-on: ghcr.io/wildarch/graphalg
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-      - name: Setup Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: '3.3' # Not needed with a .ruby-version file
-          bundler-cache: true # runs 'bundle install' and caches installed gems automatically
-          cache-version: 0 # Increment this number if you need to re-download cached gems
-      - name: Build with Jekyll
-        run: bundle exec jekyll build
+      - name: Build codemirror-lang-graphalg
+        run: |
+          npm --workspace=codemirror-lang-graphalg install
+          npm --workspace=codemirror-lang-graphalg run prepare
+      - name: Build compiler (native)
+        run: |
+          ./compiler/configure.sh
+          cmake --build ./compiler/build
+          cmake --build ./compiler/build --target check
+      - name: Build compiler (wasm)
+        run: |
+          ./compiler/configure-wasm.sh
+          cmake --build ./compiler/build-wasm
+      - name: Build playground
+        run: |
+          npm --workspace=playground install
+          npm --workspace=playground run prepare
+      - name: Build website
+        run: |
+          bundle install
+          bundle exec jekyll build
