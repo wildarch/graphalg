@@ -19,23 +19,19 @@ jobs:
           source /root/emsdk/emsdk_env.sh
           npm --workspace=codemirror-lang-graphalg install
           npm --workspace=codemirror-lang-graphalg run prepare
-      - name: Build compiler (native)
+      - name: Build compiler
         shell: bash
         run: |
           ./compiler/configure.sh
           cmake --build ./compiler/build
           cmake --build ./compiler/build --target check
-      - name: Build compiler (wasm)
-        shell: bash
-        run: |
-          source /root/emsdk/emsdk_env.sh
-          ./compiler/configure-wasm.sh
-          cmake --build ./compiler/build-wasm
       - name: Build playground
         shell: bash
         run: |
           source /root/emsdk/emsdk_env.sh
           npm --workspace=playground install
+          playground/cpp/configure-wasm.sh
+          cmake --build playground/cpp/build-wasm --target graphalg-playground
           npm --workspace=playground run prepare
       - name: Build website
         env:

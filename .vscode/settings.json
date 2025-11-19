@@ -2,5 +2,5 @@
     "mlir.tablegen_compilation_databases": [
         "compiler/build/tablegen_compile_commands.yml",
     ],
-    "mlir.server_path": "/workspaces/graphalg/compiler/build/graphalg-lsp-server",
+    "mlir.server_path": "/workspaces/graphalg/compiler/build/tools/graphalg-lsp-server",
 }

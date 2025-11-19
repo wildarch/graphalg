@@ -51,3 +51,4 @@ add_subdirectory(include/graphalg)
 
 add_subdirectory(src)
 add_subdirectory(test)
+add_subdirectory(tools)
