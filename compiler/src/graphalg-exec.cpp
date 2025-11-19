@@ -134,6 +134,22 @@ static graphalg::MatrixAttr parseMatrix(llvm::StringRef filename,
       }
 
       valueAttr = mlir::FloatAttr::get(type.getSemiring(), value);
+    } else if (type.getSemiring() ==
+               graphalg::SemiringTypes::forTropReal(ctx)) {
+      double value;
+      if (parts.size() != 3) {
+        emitError() << "expected 3 parts, got " << parts.size();
+        return nullptr;
+      }
+
+      if (!llvm::to_float(parts[2], value)) {
+        emitError() << "invalid float value";
+        return nullptr;
+      }
+
+      valueAttr = graphalg::TropFloatAttr::get(
+          ctx, type.getSemiring(),
+          mlir::FloatAttr::get(graphalg::SemiringTypes::forReal(ctx), value));
     } else {
       emitError() << "unsupported semiring: " << type.getSemiring();
       return nullptr;

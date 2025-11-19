@@ -1,0 +1,44 @@
+// RUN: split-file %s %t
+// RUN: graphalg-translate --import-graphalg %t/input.gr > %t/parsed.mlir
+// RUN: graphalg-opt --graphalg-to-core-pipeline --graphalg-set-dimensions='func=SSSP args=10x10,10x1' %t/parsed.mlir > %t/exec.mlir
+// RUN: graphalg-exec %t/exec.mlir SSSP %t/graph.m %t/source.m | diff - %t/output.m
+
+//--- graph.m
+0 1 0.5
+0 2 5.0
+0 3 5.0
+1 4 0.5
+2 3 2.0
+4 5 0.5
+5 2 0.5
+5 9 23.0
+6 0 1.0
+6 7 3.2
+7 9 0.2
+8 9 0.1
+9 6 8.0
+
+//--- source.m
+0 0
+
+//--- input.gr
+func SSSP(
+    graph: Matrix<s1, s1, trop_real>,
+    source: Vector<s1, bool>) -> Vector<s1, trop_real> {
+  v = cast<trop_real>(source);
+  for i in graph.nrows {
+    v += v * graph;
+  }
+  return v;
+}
+
+//--- output.m
+0 0 #graphalg.trop_float<0.000000e+00 : f64> : !graphalg.trop_f64
+1 0 #graphalg.trop_float<5.000000e-01 : f64> : !graphalg.trop_f64
+2 0 #graphalg.trop_float<2.000000e+00 : f64> : !graphalg.trop_f64
+3 0 #graphalg.trop_float<4.000000e+00 : f64> : !graphalg.trop_f64
+4 0 #graphalg.trop_float<1.000000e+00 : f64> : !graphalg.trop_f64
+5 0 #graphalg.trop_float<1.500000e+00 : f64> : !graphalg.trop_f64
+6 0 #graphalg.trop_float<3.250000e+01 : f64> : !graphalg.trop_f64
+7 0 #graphalg.trop_float<3.570000e+01 : f64> : !graphalg.trop_f64
+9 0 #graphalg.trop_float<2.450000e+01 : f64> : !graphalg.trop_f64
