@@ -29,9 +29,9 @@ jobs:
         shell: bash
         run: |
           source /root/emsdk/emsdk_env.sh
-          npm --workspace=playground install
           playground/cpp/configure-wasm.sh
           cmake --build playground/cpp/build-wasm --target graphalg-playground
+          npm --workspace=playground install
           npm --workspace=playground run prepare
       - name: Build website
         env:
