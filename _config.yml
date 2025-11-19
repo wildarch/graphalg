@@ -11,6 +11,13 @@ callouts:
 
   warning:
     title: Warning
+    color: yellow
+
+  error:
+    title: Error
+    color: red
+
+  error-titled:
     color: red
 
 exclude:

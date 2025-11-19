@@ -9,14 +9,37 @@ jobs:
   # Build job
   build:
     runs-on: ubuntu-latest
+    container: ghcr.io/wildarch/graphalg-ci
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-      - name: Setup Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: '3.3' # Not needed with a .ruby-version file
-          bundler-cache: true # runs 'bundle install' and caches installed gems automatically
-          cache-version: 0 # Increment this number if you need to re-download cached gems
-      - name: Build with Jekyll
-        run: bundle exec jekyll build
+      - name: Build codemirror-lang-graphalg
+        shell: bash
+        run: |
+          source /root/emsdk/emsdk_env.sh
+          npm --workspace=codemirror-lang-graphalg install
+          npm --workspace=codemirror-lang-graphalg run prepare
+      - name: Build compiler (native)
+        shell: bash
+        run: |
+          ./compiler/configure.sh
+          cmake --build ./compiler/build
+          cmake --build ./compiler/build --target check
+      - name: Build compiler (wasm)
+        shell: bash
+        run: |
+          source /root/emsdk/emsdk_env.sh
+          ./compiler/configure-wasm.sh
+          cmake --build ./compiler/build-wasm
+      - name: Build playground
+        shell: bash
+        run: |
+          source /root/emsdk/emsdk_env.sh
+          npm --workspace=playground install
+          npm --workspace=playground run prepare
+      - name: Build website
+        env:
+          GEM_HOME: /root/gems
+        run: |
+          /root/gems/bin/bundle install
+          /root/gems/bin/bundle exec jekyll build

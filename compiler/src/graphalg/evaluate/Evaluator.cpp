@@ -51,6 +51,7 @@ private:
   llvm::SmallDenseMap<mlir::Value, mlir::TypedAttr> _values;
 
   mlir::LogicalResult evaluate(ConstantOp op);
+  mlir::LogicalResult evaluate(mlir::arith::ConstantOp op);
   mlir::LogicalResult evaluate(AddOp op);
   mlir::LogicalResult evaluate(MulOp op);
   mlir::LogicalResult evaluate(CastScalarOp op);
@@ -272,7 +273,10 @@ mlir::LogicalResult Evaluator::evaluate(ApplyOp op) {
     for (auto col : llvm::seq(result.nCols())) {
       llvm::SmallVector<mlir::TypedAttr> args;
       for (const auto &input : inputs) {
-        args.push_back(input.at(row, col));
+        // Implicit broadcast.
+        auto r = row < input.nRows() ? row : 0;
+        auto c = col < input.nCols() ? col : 0;
+        args.push_back(input.at(r, c));
       }
 
       ScalarEvaluator scalarEvaluator;
@@ -378,6 +382,11 @@ mlir::LogicalResult ScalarEvaluator::evaluate(ConstantOp op) {
   return mlir::success();
 }
 
+mlir::LogicalResult ScalarEvaluator::evaluate(mlir::arith::ConstantOp op) {
+  _values[op] = op.getValue();
+  return mlir::success();
+}
+
 mlir::LogicalResult ScalarEvaluator::evaluate(AddOp op) {
   auto ring = llvm::cast<SemiringTypeInterface>(op.getType());
   _values[op] = ring.add(_values[op.getLhs()], _values[op.getRhs()]);
@@ -434,13 +443,14 @@ mlir::LogicalResult ScalarEvaluator::evaluate(mlir::arith::SubFOp op) {
 mlir::LogicalResult ScalarEvaluator::evaluate(mlir::Operation *op) {
   return llvm::TypeSwitch<mlir::Operation *, mlir::LogicalResult>(op)
 #define GA_CASE(Op) .Case<Op>([&](Op op) { return evaluate(op); })
-      GA_CASE(ConstantOp) GA_CASE(AddOp) GA_CASE(MulOp) GA_CASE(CastScalarOp)
-          GA_CASE(EqOp) GA_CASE(mlir::arith::DivFOp)
-              GA_CASE(mlir::arith::SubIOp) GA_CASE(mlir::arith::SubFOp)
+      GA_CASE(ConstantOp) GA_CASE(mlir::arith::ConstantOp) GA_CASE(AddOp)
+          GA_CASE(MulOp) GA_CASE(CastScalarOp) GA_CASE(EqOp)
+              GA_CASE(mlir::arith::DivFOp) GA_CASE(mlir::arith::SubIOp)
+                  GA_CASE(mlir::arith::SubFOp)
 #undef GA_CASE
-                  .Default([](mlir::Operation *op) {
-                    return op->emitOpError("unsupported op");
-                  });
+                      .Default([](mlir::Operation *op) {
+                        return op->emitOpError("unsupported op");
+                      });
 }
 
 mlir::TypedAttr

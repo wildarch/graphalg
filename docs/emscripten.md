@@ -1,4 +1,48 @@
 # WASM version of GraphAlg Compiler
+Fully automated install:
+
+```bash
+pushd third-party/
+
+# Alternative:
+# https://github.com/emscripten-core/emsdk/archive/refs/heads/main.zip
+git clone https://github.com/emscripten-core/emsdk.git
+pushd emsdk/
+./emsdk install latest
+./emsdk activate latest
+source ./emsdk_env.sh
+popd
+
+wget https://github.com/llvm/llvm-project/releases/download/llvmorg-20.1.0/llvm-project-20.1.0.src.tar.xz
+tar xf llvm-project-20.1.0.src.tar.xz
+popd
+
+emcmake cmake -G Ninja -S third-party/llvm-project-20.1.0.src/llvm -B third-party/llvm-wasm-build \
+    -DCMAKE_INSTALL_PREFIX="$(pwd)/third-party/llvm-wasm-install" \
+    -DLLVM_ENABLE_PROJECTS=mlir \
+    -DLLVM_BUILD_EXAMPLES=OFF \
+    -DLLVM_TARGETS_TO_BUILD="WebAssembly" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DLLVM_ENABLE_ASSERTIONS=ON \
+    -DMLIR_TABLEGEN=/usr/bin/mlir-tblgen-20 \
+    -DLLVM_TABLEGEN=/usr/bin/llvm-tblgen-20 \
+    -DMLIR_LINALG_ODS_YAML_GEN=/usr/bin/mlir-linalg-ods-yaml-gen-20 \
+    -DLLVM_ENABLE_BACKTRACES=OFF \
+    -DLLVM_ENABLE_THREADS=OFF \
+    -DLLVM_ENABLE_ZLIB=OFF \
+    -DLLVM_ENABLE_ZSTD=OFF \
+    -DLLVM_ENABLE_CURL=OFF \
+    -DLLVM_ENABLE_DUMP=OFF \
+    -DLLVM_BUILD_TOOLS=OFF \
+    -DLLVM_BUILD_LLVM_DYLIB=OFF \
+    -DLLVM_INCLUDE_TESTS=OFF \
+    -DLLVM_INCLUDE_UTILS=OFF \
+    -DCMAKE_CXX_FLAGS="-DLLVM_ABI=\"\" -DLLVM_TEMPLATE_ABI=\"\" -DLLVM_EXPORT_TEMPLATE=\"\""
+cmake --build third-party/llvm-wasm-build/
+cmake --install third-party/llvm-wasm-build/
+```
+
+## Details
 The goal: a GraphAlg compiler and reference runtime that can run inside a browser.
 
 First I install emsdk: https://emscripten.org/docs/getting_started/downloads.html#

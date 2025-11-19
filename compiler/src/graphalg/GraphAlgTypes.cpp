@@ -190,25 +190,49 @@ struct IntegerSemiringInterface
     : public SemiringTypeInterface::ExternalModel<IntegerSemiringInterface,
                                                   mlir::IntegerType> {
   static inline mlir::TypedAttr addIdentity(::mlir::Type type) {
-    return mlir::IntegerAttr::get(type, 0);
+    auto *ctx = type.getContext();
+    if (type == SemiringTypes::forBool(ctx)) {
+      return mlir::BoolAttr::get(ctx, false);
+    } else {
+      return mlir::IntegerAttr::get(type, 0);
+    }
   }
 
   static inline mlir::TypedAttr add(::mlir::Type type, mlir::TypedAttr lhs,
                                     mlir::TypedAttr rhs) {
-    auto v = llvm::cast<mlir::IntegerAttr>(lhs).getValue() +
-             llvm::cast<mlir::IntegerAttr>(rhs).getValue();
-    return mlir::IntegerAttr::get(type, v);
+    auto *ctx = type.getContext();
+    if (type == SemiringTypes::forBool(ctx)) {
+      auto lhsVal = llvm::cast<mlir::BoolAttr>(lhs).getValue();
+      auto rhsVal = llvm::cast<mlir::BoolAttr>(rhs).getValue();
+      return mlir::BoolAttr::get(ctx, lhsVal || rhsVal);
+    } else {
+      auto lhsVal = llvm::cast<mlir::IntegerAttr>(lhs).getValue();
+      auto rhsVal = llvm::cast<mlir::IntegerAttr>(rhs).getValue();
+      return mlir::IntegerAttr::get(type, lhsVal + rhsVal);
+    }
   }
 
   static inline mlir::TypedAttr mulIdentity(::mlir::Type type) {
-    return mlir::IntegerAttr::get(type, 1);
+    auto *ctx = type.getContext();
+    if (type == SemiringTypes::forBool(ctx)) {
+      return mlir::BoolAttr::get(ctx, true);
+    } else {
+      return mlir::IntegerAttr::get(type, 1);
+    }
   }
 
   static inline mlir::TypedAttr mul(::mlir::Type type, mlir::TypedAttr lhs,
                                     mlir::TypedAttr rhs) {
-    auto v = llvm::cast<mlir::IntegerAttr>(lhs).getValue() *
-             llvm::cast<mlir::IntegerAttr>(rhs).getValue();
-    return mlir::IntegerAttr::get(type, v);
+    auto *ctx = type.getContext();
+    if (type == SemiringTypes::forBool(ctx)) {
+      auto lhsVal = llvm::cast<mlir::BoolAttr>(lhs).getValue();
+      auto rhsVal = llvm::cast<mlir::BoolAttr>(rhs).getValue();
+      return mlir::BoolAttr::get(ctx, lhsVal && rhsVal);
+    } else {
+      auto lhsVal = llvm::cast<mlir::IntegerAttr>(lhs).getValue();
+      auto rhsVal = llvm::cast<mlir::IntegerAttr>(rhs).getValue();
+      return mlir::IntegerAttr::get(type, lhsVal * rhsVal);
+    }
   }
 };
 
