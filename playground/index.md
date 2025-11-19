@@ -7,6 +7,11 @@ nav_order: 3
 # GraphAlg Playground
 Compile and execute GraphAlg programs in your browser!
 
+{: .warning-title }
+> Early Preview
+>
+> The examples below are highly experimental and may malfunction.
+
 ## Breadth-First Search
 
 {:

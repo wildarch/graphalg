@@ -35,15 +35,21 @@ jobs:
 
       # The playground and its dependencies, because they are used in pages.
       - name: Build codemirror-lang-graphalg
+        shell: bash
         run: |
+          source /root/emsdk/emsdk_env.sh
           npm --workspace=codemirror-lang-graphalg install
           npm --workspace=codemirror-lang-graphalg run prepare
       - name: Build compiler (wasm)
+        shell: bash
         run: |
+          source /root/emsdk/emsdk_env.sh
           ./compiler/configure-wasm.sh
           cmake --build ./compiler/build-wasm
       - name: Build playground
+        shell: bash
         run: |
+          source /root/emsdk/emsdk_env.sh
           npm --workspace=playground install
           npm --workspace=playground run prepare
 
