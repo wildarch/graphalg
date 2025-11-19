@@ -14,28 +14,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
       - name: Build codemirror-lang-graphalg
-        shell: bash
+        shell: bash -l {0}
         run: |
           npm --workspace=codemirror-lang-graphalg install
           npm --workspace=codemirror-lang-graphalg run prepare
       - name: Build compiler (native)
-        shell: bash
+        shell: bash -l {0}
         run: |
           ./compiler/configure.sh
           cmake --build ./compiler/build
           cmake --build ./compiler/build --target check
       - name: Build compiler (wasm)
-        shell: bash
+        shell: bash -l {0}
         run: |
           ./compiler/configure-wasm.sh
           cmake --build ./compiler/build-wasm
       - name: Build playground
-        shell: bash
+        shell: bash -l {0}
         run: |
           npm --workspace=playground install
           npm --workspace=playground run prepare
       - name: Build website
-        shell: bash
+        shell: bash -l {0}
         run: |
           bundle install
           bundle exec jekyll build
