@@ -221,11 +221,19 @@ bool Playground::getResultBool(std::size_t row, std::size_t col) {
 
 std::int64_t Playground::getResultInt(std::size_t row, std::size_t col) {
   auto value = _resultReader->at(row, col);
+  if (auto trop = llvm::dyn_cast<graphalg::TropIntAttr>(value)) {
+    value = trop.getValue();
+  }
+
   return llvm::cast<mlir::IntegerAttr>(value).getInt();
 }
 
 double Playground::getResultReal(std::size_t row, std::size_t col) {
   auto value = _resultReader->at(row, col);
+  if (auto trop = llvm::dyn_cast<graphalg::TropFloatAttr>(value)) {
+    value = trop.getValue();
+  }
+
   return llvm::cast<mlir::FloatAttr>(value).getValueAsDouble();
 }
 

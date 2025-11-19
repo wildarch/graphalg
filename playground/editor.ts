@@ -178,17 +178,10 @@ class PlaygroundInstance {
                             continue;
                         }
                     case 'f64':
-                        val = ga_get_res_int(pg, r, c);
+                        val = ga_get_res_real(pg, r, c);
                         break;
-                }
-                if (resultRing == 'i1') {
-                    val = ga_get_res_bool(pg, r, c);
-                } else if (resultRing == 'i64') {
-                    val = ga_get_res_int(pg, r, c);
-                } else if (resultRing == 'f64') {
-                    val = ga_get_res_real(pg, r, c);
-                } else {
-                    throw Error(`Invalid result semiring '${resultRing}'`);
+                    default:
+                        throw Error(`Invalid result semiring '${resultRing}'`);
                 }
 
                 resultVals.push({
