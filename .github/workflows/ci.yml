@@ -14,12 +14,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
       - name: Build codemirror-lang-graphalg
-        run: codemirror-lang-graphalg/ci.sh
+        run: |
+          npm --workspace=codemirror-lang-graphalg install
+          npm --workspace=codemirror-lang-graphalg run prepare
       - name: Build compiler (native)
-        run: compiler/ci.sh
+        run: |
+          ./compiler/configure.sh
+          cmake --build ./compiler/build
+          cmake --build ./compiler/build --target check
       - name: Build compiler (wasm)
-        run: compiler/ci-wasm.sh
+        run: |
+          ./compiler/configure-wasm.sh
+          cmake --build ./compiler/build-wasm
       - name: Build playground
-        run: playground/ci.sh
+        run: |
+          npm --workspace=playground install
+          npm --workspace=playground run prepare
       - name: Build website
-        run: ci-website.sh
+        run: |
+          bundle install
+          bundle exec jekyll build
