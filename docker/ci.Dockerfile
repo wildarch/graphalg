@@ -11,8 +11,8 @@ RUN /root/emsdk/emsdk install latest && \
     echo 'source /root/emsdk/emsdk_env.sh' >> /root/.bashrc
 
 # Jekyll and bundler
-ENV GEM_HOME=/home/ubuntu/gems
-RUN echo '# Install Ruby Gems to ~/gems' >> /home/ubuntu/.bashrc && \
-    echo 'export GEM_HOME="$HOME/gems"' >> /home/ubuntu/.bashrc && \
-    echo 'export PATH="$HOME/gems/bin:$PATH"' >> /home/ubuntu/.bashrc && \
+ENV GEM_HOME=/root/gems
+RUN echo '# Install Ruby Gems to ~/gems' >> /root/.bashrc && \
+    echo 'export GEM_HOME="$HOME/gems"' >> /root/.bashrc && \
+    echo 'export PATH="$HOME/gems/bin:$PATH"' >> /root/.bashrc && \
     gem install jekyll bundler
