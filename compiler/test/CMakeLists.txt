@@ -6,8 +6,8 @@ endif ()
 # Allow overriding the directory for LLVM tools.
 # This lets us link to a minimal debug build of LLVM that does not include tool
 # binaries.
-if(DEFINED SET_LLVM_TOOLS_BINARY_DIR)
-    set(LLVM_TOOLS_BINARY_DIR "${SET_LLVM_TOOLS_BINARY_DIR}")
+if(DEFINED GRAPHALG_OVERRIDE_LLVM_TOOLS_BINARY_DIR)
+    set(LLVM_TOOLS_BINARY_DIR "${GRAPHALG_OVERRIDE_LLVM_TOOLS_BINARY_DIR}")
 endif()
 
 configure_lit_site_cfg(
