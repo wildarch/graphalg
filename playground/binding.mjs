@@ -1,5 +1,5 @@
-import playgroundWasm from "/workspaces/graphalg/compiler/build-wasm/graphalg-playground.wasm"
-import playgroundWasmFactory from "/workspaces/graphalg/compiler/build-wasm/graphalg-playground.js"
+import playgroundWasm from "../compiler/build-wasm/graphalg-playground.wasm"
+import playgroundWasmFactory from "../compiler/build-wasm/graphalg-playground.js"
 
 class PlaygroundWasmBindings {
     constructor() {

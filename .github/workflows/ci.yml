@@ -3,22 +3,18 @@ name: CI
 on:
   push:
     branches: ["main"]
-  pull_request:
+  #pull_request:
 
 jobs:
   # Build job
   build:
     runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/wildarch/graphalg
-      options: --user root
+    container: ghcr.io/wildarch/graphalg-ci
     steps:
       - name: Checkout
         uses: actions/checkout@v5
       - name: Build codemirror-lang-graphalg
         run: |
-          # Our npm is from here
-          . /home/ubuntu/emsdk/emsdk_env.sh
           npm --workspace=codemirror-lang-graphalg install
           npm --workspace=codemirror-lang-graphalg run prepare
       - name: Build compiler (native)
@@ -28,13 +24,10 @@ jobs:
           cmake --build ./compiler/build --target check
       - name: Build compiler (wasm)
         run: |
-          . /home/ubuntu/emsdk/emsdk_env.sh
           ./compiler/configure-wasm.sh
           cmake --build ./compiler/build-wasm
       - name: Build playground
         run: |
-          # Our npm is from here
-          . /home/ubuntu/emsdk/emsdk_env.sh
           npm --workspace=playground install
           npm --workspace=playground run prepare
       - name: Build website

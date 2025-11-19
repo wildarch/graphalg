@@ -8,4 +8,7 @@ You only need to do this after updating the `Dockerfile`.
 ```bash
 docker build -t ghcr.io/wildarch/graphalg docker/
 docker push ghcr.io/wildarch/graphalg
+
+docker build -t ghcr.io/wildarch/graphalg-ci docker/ -f docker/ci.Dockerfile
+docker push ghcr.io/wildarch/graphalg-ci
 ```
