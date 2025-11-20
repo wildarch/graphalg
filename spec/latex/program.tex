@@ -1,0 +1,11 @@
+\documentclass[preview]{standalone}
+\usepackage{semantic}
+\begin{document}
+\[
+  \inference[program]{
+    F \vdash f_1 : \tau_1 & F[f_1 := \tau_1] \vdash f_2 : \tau_2 \\
+  }{
+    F \vdash f_1 \ f_2
+  }
+\]
+\end{document}
