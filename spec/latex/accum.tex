@@ -1,0 +1,14 @@
+\documentclass[preview]{standalone}
+\usepackage{semantic}
+\begin{document}
+\[
+  \inference[accum]{
+    F, L \vdash M_b : \tau_b \\
+    F, L \vdash e : \tau_e \\
+    \tau_b = \tau_e \\
+  }{
+    % Note: does not change type of M_b
+    F, L \vdash M_b \texttt{ += } e \texttt{;} \vdash L
+  }
+\]
+\end{document}

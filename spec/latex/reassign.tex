@@ -1,0 +1,25 @@
+\documentclass[preview]{standalone}
+\usepackage{amsmath}
+\usepackage{semantic}
+\begin{document}
+\[
+  \inference[reassign]{
+    F, L \vdash M_b : \tau_b \\
+    F, L \vdash e : \tau_e \\
+    \text{if mask present: } F, L \vdash M_m : \tau_m & \dim(\tau_b) = \dim(\tau_m) \\
+    (r_b, c_b) := \dim(\tau_b) & (r_e, c_e) := \dim(\tau_e) \\
+    % base must be a full matrix, e a scalar
+    \text{if }\texttt{[:, :]}\text{ present: } r_b \neq 1 & c_b \neq 1 & r_e = 1 & c_e = 1 \\
+    % base must be a vector, e a scalar
+    \text{if }\texttt{[:]}\text{ present: } r_b \neq 1 & c_b = 1 & r_e = 1 & c_e = 1 \\
+    % dimensions must match
+    \text{else: } r_b = r_e & c_b = c_e \\
+  }{
+    % Note: does not change type of M_b
+    F, L \vdash M_b 
+      % Note: complement case omitted because it is irrelevant for typing
+      [\![ \texttt{<}M_m\texttt{>} ]\!]^?
+      [\![ \texttt{[:, :]} | \texttt{[:]} ]\!]^?
+      \texttt{ = }e\texttt{;} \vdash L}
+\]
+\end{document}

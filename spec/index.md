@@ -8,8 +8,6 @@ nav_order: 2
 
 A formal definition of the GraphAlg and GraphAlg Core languages.
 
-![](latex/program.svg)
-
 <!--
 Topics covered:
 - [Grammar/syntax of GraphAlg](.//syntax)

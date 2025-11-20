@@ -1,0 +1,20 @@
+\documentclass[preview]{standalone}
+\usepackage{amsmath}
+\usepackage{semantic}
+\begin{document}
+\[
+  \inference[for-const]{
+    F, L \vdash e_s : \langle 1, 1, \texttt{int}\rangle & F, L \vdash e_e : \langle 1, 1, \texttt{int}\rangle \\
+    L_0 := L[M_i := \langle 1, 1, \texttt{int}\rangle] \\
+    F, L_0 \vdash s_1 : L_{1} \\
+    \vdots \\
+    F, L_{n - 1} \vdash s_n : L_{n} \\
+    %\text{if until present: } F, L_n \vdash e_b : \langle 1, 1, \texttt{bool}\rangle \\
+    \text{if \texttt{until} present: } F, L_n \vdash e_b : \langle 1, 1, \texttt{bool}\rangle \\
+  }{
+    F, L \vdash \texttt{for } M_i \texttt{ in } e_s:e_e \texttt{\{ } s_1 \cdots s_n \texttt{ \} }
+    [\![ \texttt{until } e_b \texttt{;} ]\!]^?
+    \vdash L_n
+  }
+\]
+\end{document}
