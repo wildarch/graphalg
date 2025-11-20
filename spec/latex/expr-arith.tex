@@ -1,0 +1,40 @@
+\documentclass[preview]{standalone}
+\usepackage{semantic}
+\begin{document}
+\[
+  \inference[add]{
+    F, L \vdash e_1 : \langle 1, 1, R \rangle \\
+    F, L \vdash e_2 : \langle 1, 1, R \rangle \\
+  }{
+    F, L \vdash e_1 \texttt{ + } e_2 : \langle 1, 1, R \rangle
+  }
+\]
+
+\[
+  \inference[mul]{
+    F, L \vdash e_1 : \langle 1, 1, R \rangle \\
+    F, L \vdash e_2 : \langle 1, 1, R \rangle \\
+  }{
+    F, L \vdash e_1 \texttt{ * } e_2 : \langle 1, 1, R \rangle
+  }
+\]
+
+\[
+  \inference[sub]{
+    F, L \vdash e_1 : \langle 1, 1, R \rangle \\
+    F, L \vdash e_2 : \langle 1, 1, R \rangle \\
+    R \in \{ \texttt{int}, \texttt{real}\} \\
+  }{
+    F, L \vdash e_1 \texttt{ - } e_2 : \langle 1, 1, R \rangle
+  }
+\]
+
+\[
+  \inference[div]{
+    F, L \vdash e_1 : \langle 1, 1, \texttt{real} \rangle \\
+    F, L \vdash e_2 : \langle 1, 1, \texttt{real} \rangle \\
+  }{
+    F, L \vdash e_1 \texttt{ / } e_2 : \langle 1, 1, \texttt{real} \rangle
+  }
+\]
+\end{document}

@@ -8,7 +8,7 @@
     F, L \vdash e : \tau_e \\
     L_r := L[M_b := e] \\
   }{
-    F, L \vdash M_b \texttt{ = } e \texttt{;} \vdash L_r
+    F, L \vdash M_b \texttt{ = } e \texttt{;} : L_r
   }
 \]
 
@@ -30,6 +30,7 @@
       % Note: complement case omitted because it is irrelevant for typing
       [\![ \texttt{<}M_m\texttt{>} ]\!]^?
       [\![ \texttt{[:, :]} | \texttt{[:]} ]\!]^?
-      \texttt{ = }e\texttt{;} \vdash L}
+      \texttt{ = }e\texttt{;} : L
+  }
 \]
 \end{document}

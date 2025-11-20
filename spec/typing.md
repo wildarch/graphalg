@@ -81,3 +81,5 @@ For statement and expression typing rules we add two additional pieces of contex
 ### Reduce (rows/cols)
 
 ### pickAny
+
+### element-wise

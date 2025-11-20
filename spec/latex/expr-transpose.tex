@@ -1,0 +1,12 @@
+\documentclass[preview]{standalone}
+\usepackage{semantic}
+\begin{document}
+\[
+  \inference[transpose]{
+    F, L \vdash e : \langle d_1, d_2, R \rangle \\
+    \tau_t := \langle d_2, d_1, R \rangle \\ 
+  }{
+    F, L \vdash e\texttt{.T} : \tau_t
+  }
+\]
+\end{document}
