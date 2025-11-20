@@ -38,8 +38,6 @@ exclude:
   - docker/
   - docs/
   - grammars/
-  - third-party/
-  - website/
   - LICENSE
   - package-lock.json
   - package.json
