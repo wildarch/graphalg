@@ -22,4 +22,62 @@ For statement and expression typing rules we add two additional pieces of contex
 
 ## Statements
 
+### Assign
+- mask
+- fill
+
+### Accumulate
+
+### For
+- iter counter
+- range
+- until
+- body
+
+### Return
+
 ## Expressions
+
+### Variable
+
+### Transpose
+
+### nrows
+### ncols
+### nvals
+
+### Add
+
+### Sub
+
+### Mul
+
+### Div
+
+### Compare
+
+### Not
+
+### Neg
+
+### New Matrix/Vector
+
+### Cast
+
+### Literal
+
+### Zero/One
+
+### diag
+
+### apply
+- unary
+- binary
+
+### select
+- unary
+- binary
+
+### Reduce (rows/cols)
+
+### pickAny
