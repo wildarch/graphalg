@@ -3,6 +3,16 @@
 \usepackage{semantic}
 \begin{document}
 \[
+  \inference[assign]{
+    M_b \notin L \\
+    F, L \vdash e : \tau_e \\
+    L_r := L[M_b := e] \\
+  }{
+    F, L \vdash M_b \texttt{ = } e \texttt{;} \vdash L_r
+  }
+\]
+
+\[
   \inference[reassign]{
     F, L \vdash M_b : \tau_b \\
     F, L \vdash e : \tau_e \\
