@@ -5,16 +5,16 @@
 \[
   \inference[for-const]{
     F, D, L \vdash e_s : \langle 1, 1, \texttt{int}\rangle & F, D, L \vdash e_e : \langle 1, 1, \texttt{int}\rangle \\
-    L_0 := L[M_i := \langle 1, 1, \texttt{int}\rangle] \\
-    F, D, L_0 \vdash s_1 : L_{1} \\
+    D_0 := D & L_0 := L[M_i := \langle 1, 1, \texttt{int}\rangle] \\
+    F, D_0, L_0 \vdash s_1 : D_1, L_1 \\
     \vdots \\
-    F, D, L_{n - 1} \vdash s_n : L_{n} \\
+    F, D_{n - 1}, L_{n - 1} \vdash s_n : D_n, L_n \\
     %\text{if until present: } F, D, L_n \vdash e_b : \langle 1, 1, \texttt{bool}\rangle \\
-    \text{if \texttt{until} present: } F, D, L_n \vdash e_b : \langle 1, 1, \texttt{bool}\rangle \\
+    \text{if \texttt{until} present: } F, D_n, L_n \vdash e_b : \langle 1, 1, \texttt{bool}\rangle \\
   }{
     F, D, L \vdash \texttt{for } M_i \texttt{ in } e_s:e_e \texttt{\{ } s_1 \cdots s_n \texttt{ \} }
     [\![ \texttt{until } e_b \texttt{;} ]\!]^?
-    \vdash L_n
+    \vdash D_n, L_n
   }
 \]
 \end{document}
