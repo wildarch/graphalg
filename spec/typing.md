@@ -19,48 +19,46 @@ For statement and expression typing rules we add two additional pieces of contex
 - Return type `R`, the expected return type of the enclosing function.
 
 ## Functions
+<img src="latex/program.svg" width="1024"/>
+
+<img src="latex/function.svg" width="600"/>
 
 ## Statements
 
 ### Assign
-- mask
-- fill
+If there is no existing binding for the variable to be assigned, the first rule applies. Otherwise, the more involved reassignment rule applies.
+
+<img src="latex/stmt-assign.svg" width="600"/>
+
+The following additional typing rules deal with updating dimension symbol context $D$ if the expression to be assigned represents a dimension. It also defines the semantics of $\vdash_D$ to infer the dimension represented by an expression.
+
+<img src="latex/dim.svg" width="600"/>
 
 ### Accumulate
+<img src="latex/stmt-accum.svg" width="600"/>
 
 ### For
-- iter counter
-- range
-- until
-- body
-
-### Return
+<img src="latex/stmt-for.svg" width="600"/>
 
 ## Expressions
 
 ### Variable
+<img src="latex/expr-var.svg" width="600"/>
 
 ### Transpose
+<img src="latex/expr-transpose.svg" width="600"/>
 
-### nrows
-### ncols
-### nvals
+### Matrix Properties (`nrows`, `ncols`, `nvals`)
+<img src="latex/expr-prop.svg" width="600"/>
 
-### Add
-
-### Sub
-
-### Mul
-
-### Div
+### Scalar Arithmetic
+<img src="latex/expr-arith.svg" width="600"/>
 
 ### Compare
-
-### Not
-
-### Neg
+<img src="latex/expr-compare.svg" width="600"/>
 
 ### New Matrix/Vector
+<img src="latex/expr-new.svg" width="600"/>
 
 ### Cast
 
