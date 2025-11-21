@@ -1,0 +1,25 @@
+\documentclass[preview]{standalone}
+\usepackage{semantic}
+\begin{document}
+
+\[
+  \inference[literal]{
+    l \in R
+  }{
+    F, D, L \vdash R \texttt{(} l \texttt{)}: \langle 1, 1, R \rangle
+  }
+\]
+
+\[
+  \inference[zero]{}{
+    F, D, L \vdash \texttt{zero(} R \texttt{)}: \langle 1, 1, R \rangle
+  }
+\]
+
+\[
+  \inference[one]{}{
+    F, D, L \vdash \texttt{one(} R \texttt{)}: \langle 1, 1, R \rangle
+  }
+\]
+
+\end{document}

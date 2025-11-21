@@ -1,0 +1,75 @@
+\documentclass[preview]{standalone}
+\usepackage{semantic}
+\begin{document}
+\[
+  \inference[ewise-add]{
+    F, D, L \vdash e_1 : \tau \\
+    F, D, L \vdash e_2 : \tau \\
+  }{
+    F, D, L \vdash e_1 \texttt{ (.+) } e_2 : \tau
+  }
+\]
+
+\[
+  \inference[ewise-mul]{
+    F, D, L \vdash e_1 : \tau \\
+    F, D, L \vdash e_2 : \tau \\
+  }{
+    F, D, L \vdash e_1 \texttt{ (.*) } e_2 : \tau
+  }
+\]
+
+\[
+  \inference[ewise-sub]{
+    F, D, L \vdash e_1 : \langle d_1, d_2, R \rangle \\
+    F, D, L \vdash e_2 : \langle d_1, d_2, R \rangle \\
+    R \in \{ \texttt{int}, \texttt{real}\} \\
+  }{
+    F, D, L \vdash e_1 \texttt{ (.-) } e_2 : \langle d_1, d_2, R \rangle
+  }
+\]
+
+\[
+  \inference[ewise-div]{
+    F, D, L \vdash e_1 : \langle d_1, d_2, \texttt{real} \rangle \\
+    F, D, L \vdash e_2 : \langle d_1, d_2, \texttt{real} \rangle \\
+  }{
+    F, D, L \vdash e_1 \texttt{ (./) } e_2 : \langle d_1, d_2, \texttt{real} \rangle
+  }
+\]
+
+\[
+  \inference[ewise-eq]{
+    F, D, L \vdash e_1 : \langle d_1, d_2, R \rangle \\
+    F, D, L \vdash e_2 : \langle d_1, d_2, R \rangle \\
+    \diamond \in \{ \texttt{==}, \texttt{!=} \}
+  }{
+    F, D, L \vdash e_1 \texttt{ (.} \diamond \texttt{) } e_2 : \langle d_1, d_2, R \rangle
+  }
+\]
+
+\[
+  \inference[ewise-ord]{
+    F, D, L \vdash e_1 : \langle d_1, d_2, R \rangle \\
+    F, D, L \vdash e_2 : \langle d_1, d_2, R \rangle \\
+    R \in \{ \texttt{int}, \texttt{real} \} \\
+    \diamond \in \{ \texttt{<}, \texttt{>}, \texttt{<=}, \texttt{>=} \} \\
+  }{
+    F, D, L \vdash e_1 \texttt{ (.} \diamond \texttt{) } e_2 : \langle d_1, d_2, R \rangle
+  }
+\]
+
+\[
+  \inference[ewise-func]{
+    F, D, L \vdash e_1 : \langle d_1, d_2, R_1 \rangle \\
+    F, D, L \vdash e_2 : \langle d_1, d_2, R_2 \rangle \\
+    ((\tau_{p_1} \times \tau_{p_2}) \rightarrow \tau_r) := F[f] \\ 
+    \langle 1, 1, R_1 \rangle := \tau_{p_1} 
+      & \langle 1, 1, R_2 \rangle := \tau_{p_2} 
+      & \langle 1, 1, R_3 \rangle := \tau_r \\
+  }{
+    F, D, L \vdash e_1 \texttt{ (.} f \texttt{) } e_2 : \langle d_1, d_2, R_3 \rangle
+  }
+\]
+
+\end{document}

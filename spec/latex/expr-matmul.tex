@@ -1,0 +1,13 @@
+\documentclass[preview]{standalone}
+\usepackage{semantic}
+\begin{document}
+\[
+  \inference[matmul]{
+    F, D, L \vdash e_1 : \langle d_1, d_2, R \rangle \\
+    F, D, L \vdash e_2 : \langle d_2, d_3, R \rangle \\
+  }{
+    F, D, L \vdash e_1 \texttt{ * } e_2 : \langle d_1, d_3, R \rangle
+  }
+\]
+
+\end{document}

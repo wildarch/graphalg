@@ -1,0 +1,14 @@
+\documentclass[preview]{standalone}
+\usepackage{semantic}
+\begin{document}
+\[
+  \inference[program]{
+    F_0 := \emptyset \\
+    F_0 \vdash f_1 : \tau_1 & F_1 := F_0[f_1 : \tau_1] \\
+    \vdots \\
+    F_{n-1} \vdash f_n : \tau_n & F_n := F_{n-1}[f_n : \tau_n] \\
+  }{
+    F \vdash f_1 \cdots f_n
+  }
+\]
+\end{document}

@@ -1,0 +1,12 @@
+\documentclass[preview]{standalone}
+\usepackage{semantic}
+\begin{document}
+\[
+  \inference[pickAny]{
+    F, D, L \vdash e : \tau \\
+  }{
+    F, D, L \vdash \texttt{pickAny(} e \texttt{)} : \tau
+  }
+\]
+
+\end{document}

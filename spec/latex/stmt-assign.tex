@@ -1,0 +1,35 @@
+\documentclass[preview]{standalone}
+\usepackage{amsmath}
+\usepackage{semantic}
+\begin{document}
+\[
+  \inference[assign]{
+    M_b \notin L \\
+    F, D, L \vdash e : \tau_e \\
+    L_r := L[M_b := \tau_e] \\
+  }{
+    F, D, L \vdash M_b \texttt{ = } e \texttt{;} : D, L_r
+  }
+\]
+
+\[
+  \inference[reassign]{
+    \langle d_1, d_2, R \rangle := L[M_b] \\
+    \text{if mask present: } \langle d_1, d_2, R_m \rangle := L[M_m] \\
+    F, D, L \vdash e : \langle d_{e_1}, d_{e_2}, R \rangle \\
+    % e a scalar
+    \text{if }\texttt{[:, :]}\text{ present: } d_1 \neq 1 & d_2 \neq 1 & d_{e_1} = 1 & d_{e_2} = 1 \\
+    % base must be a vector, e a scalar
+    \text{if }\texttt{[:]}\text{ present: } d_1 \neq 1 & d_2 = 1 & d_{e_1} = 1 & d_{e_2} = 1 \\
+    % dimensions must match
+    \text{else: } d_1 = d_{e_1} & d_2 = d_{e_2} \\
+  }{
+    % Note: does not change type of M_b
+    F, D, L \vdash M_b 
+      % Note: complement case omitted because it is irrelevant for typing
+      [\![ \texttt{<}M_m\texttt{>} ]\!]^?
+      [\![ \texttt{[:, :]} | \texttt{[:]} ]\!]^?
+      \texttt{ = }e\texttt{;} : D, L
+  }
+\]
+\end{document}
