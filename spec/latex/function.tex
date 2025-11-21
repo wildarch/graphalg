@@ -9,13 +9,18 @@
     p_1 \notin P_0 & P_1 := P_0[p_1 := \tau_1] \\
     \vdots \\
     p_m \notin P_{m-1} & P_m := P_{m-1}[p_m := \tau_m] \\
-    % Statements (use parameter environment, and the changes of previous statements)
-    L_0 := P_m \\
-    F, L_0 \vdash s_1 : L_{1} \\
+    % Dimension symbols
+    D_0 := \{ 1 \} \\
+    (d_{1, r}, d_{1, c}) := \dim(\tau_1) & D_1 := D_0 \cup \{ d_{1,r}, d_{1,c} \} \\
     \vdots \\
-    F, L_{n - 1} \vdash s_n : L_{n} \\
+    (d_{n, r}, d_{n, c}) := \dim(\tau_n) & D_n := D_{n-1} \cup \{ d_{n,r}, d_{n,c} \} \\
+    % Statements (use parameter environment, and the changes of previous statements)
+    D := D_n & L_0 := P_m \\
+    F, D, L_0 \vdash s_1 : L_{1} \\
+    \vdots \\
+    F, D, L_{n - 1} \vdash s_n : L_{n} \\
     % Final expr
-    F, L_n \vdash e : \tau_r \\
+    F, D, L_n \vdash e : \tau_r \\
   }{
     F \vdash \texttt{func} \ f (p_1: \tau_1, \cdots, p_m: \tau_m) \texttt{ -> } \tau_r \ \{ s_1 \cdots s_n \texttt{ return } e \texttt{;} \} : \tau_f
   }

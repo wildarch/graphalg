@@ -3,22 +3,22 @@
 \begin{document}
 \[
   \inference[eq]{
-    F, L \vdash e_1 : \langle 1, 1, R \rangle \\
-    F, L \vdash e_2 : \langle 1, 1, R \rangle \\
+    F, D, L \vdash e_1 : \langle 1, 1, R \rangle \\
+    F, D, L \vdash e_2 : \langle 1, 1, R \rangle \\
     \diamond \in \{ \texttt{==}, \texttt{!=} \}
   }{
-    F, L \vdash e_1 \diamond e_2 : \langle 1, 1, R \rangle
+    F, D, L \vdash e_1 \diamond e_2 : \langle 1, 1, R \rangle
   }
 \]
 
 \[
   \inference[ord]{
-    F, L \vdash e_1 : \langle 1, 1, R \rangle \\
-    F, L \vdash e_2 : \langle 1, 1, R \rangle \\
+    F, D, L \vdash e_1 : \langle 1, 1, R \rangle \\
+    F, D, L \vdash e_2 : \langle 1, 1, R \rangle \\
     R \in \{ \texttt{int}, \texttt{real} \} \\
     \diamond \in \{ \texttt{<}, \texttt{>}, \texttt{<=}, \texttt{>=} \} \\
   }{
-    F, L \vdash e_1 \diamond e_2 : \langle 1, 1, R \rangle
+    F, D, L \vdash e_1 \diamond e_2 : \langle 1, 1, R \rangle
   }
 \]
 

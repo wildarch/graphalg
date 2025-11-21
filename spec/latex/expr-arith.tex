@@ -3,55 +3,55 @@
 \begin{document}
 \[
   \inference[add]{
-    F, L \vdash e_1 : \langle 1, 1, R \rangle \\
-    F, L \vdash e_2 : \langle 1, 1, R \rangle \\
+    F, D, L \vdash e_1 : \langle 1, 1, R \rangle \\
+    F, D, L \vdash e_2 : \langle 1, 1, R \rangle \\
   }{
-    F, L \vdash e_1 \texttt{ + } e_2 : \langle 1, 1, R \rangle
+    F, D, L \vdash e_1 \texttt{ + } e_2 : \langle 1, 1, R \rangle
   }
 \]
 
 \[
   \inference[mul]{
-    F, L \vdash e_1 : \langle 1, 1, R \rangle \\
-    F, L \vdash e_2 : \langle 1, 1, R \rangle \\
+    F, D, L \vdash e_1 : \langle 1, 1, R \rangle \\
+    F, D, L \vdash e_2 : \langle 1, 1, R \rangle \\
   }{
-    F, L \vdash e_1 \texttt{ * } e_2 : \langle 1, 1, R \rangle
+    F, D, L \vdash e_1 \texttt{ * } e_2 : \langle 1, 1, R \rangle
   }
 \]
 
 \[
   \inference[sub]{
-    F, L \vdash e_1 : \langle 1, 1, R \rangle \\
-    F, L \vdash e_2 : \langle 1, 1, R \rangle \\
+    F, D, L \vdash e_1 : \langle 1, 1, R \rangle \\
+    F, D, L \vdash e_2 : \langle 1, 1, R \rangle \\
     R \in \{ \texttt{int}, \texttt{real}\} \\
   }{
-    F, L \vdash e_1 \texttt{ - } e_2 : \langle 1, 1, R \rangle
+    F, D, L \vdash e_1 \texttt{ - } e_2 : \langle 1, 1, R \rangle
   }
 \]
 
 \[
   \inference[div]{
-    F, L \vdash e_1 : \langle 1, 1, \texttt{real} \rangle \\
-    F, L \vdash e_2 : \langle 1, 1, \texttt{real} \rangle \\
+    F, D, L \vdash e_1 : \langle 1, 1, \texttt{real} \rangle \\
+    F, D, L \vdash e_2 : \langle 1, 1, \texttt{real} \rangle \\
   }{
-    F, L \vdash e_1 \texttt{ / } e_2 : \langle 1, 1, \texttt{real} \rangle
+    F, D, L \vdash e_1 \texttt{ / } e_2 : \langle 1, 1, \texttt{real} \rangle
   }
 \]
 
 \[
   \inference[neg]{
-    F, L \vdash e : \langle 1, 1, R \rangle \\
+    F, D, L \vdash e : \langle 1, 1, R \rangle \\
     R \in \{ \texttt{int}, \texttt{real} \}
   }{
-    F, L \vdash \texttt{-}\ e : \langle 1, 1, R \rangle
+    F, D, L \vdash \texttt{-}\ e : \langle 1, 1, R \rangle
   }
 \]
 
 \[
   \inference[not]{
-    F, L \vdash e : \langle 1, 1, \texttt{bool} \rangle \\
+    F, D, L \vdash e : \langle 1, 1, \texttt{bool} \rangle \\
   }{
-    F, L \vdash \texttt{!}\ e : \langle 1, 1, \texttt{bool} \rangle
+    F, D, L \vdash \texttt{!}\ e : \langle 1, 1, \texttt{bool} \rangle
   }
 \]
 \end{document}

@@ -3,25 +3,25 @@
 \begin{document}
 \[
   \inference[nrows]{
-    F, L \vdash e : \tau
+    F, D, L \vdash e : \tau
   }{
-    F, L \vdash e\texttt{.nrows} : \langle 1, 1, \texttt{int} \rangle
+    F, D, L \vdash e\texttt{.nrows} : \langle 1, 1, \texttt{int} \rangle
   }
 \]
 
 \[
   \inference[ncols]{
-    F, L \vdash e : \tau
+    F, D, L \vdash e : \tau
   }{
-    F, L \vdash e\texttt{.ncols} : \langle 1, 1, \texttt{int} \rangle
+    F, D, L \vdash e\texttt{.ncols} : \langle 1, 1, \texttt{int} \rangle
   }
 \]
 
 \[
   \inference[nvals]{
-    F, L \vdash e : \tau
+    F, D, L \vdash e : \tau
   }{
-    F, L \vdash e\texttt{.nvals} : \langle 1, 1, \texttt{int} \rangle
+    F, D, L \vdash e\texttt{.nvals} : \langle 1, 1, \texttt{int} \rangle
   }
 \]
 \end{document}

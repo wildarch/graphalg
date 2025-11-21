@@ -5,18 +5,18 @@
 \[
   \inference[assign]{
     M_b \notin L \\
-    F, L \vdash e : \tau_e \\
+    F, D, L \vdash e : \tau_e \\
     L_r := L[M_b := e] \\
   }{
-    F, L \vdash M_b \texttt{ = } e \texttt{;} : L_r
+    F, D, L \vdash M_b \texttt{ = } e \texttt{;} : L_r
   }
 \]
 
 \[
   \inference[reassign]{
-    F, L \vdash M_b : \tau_b \\
-    F, L \vdash e : \tau_e \\
-    \text{if mask present: } F, L \vdash M_m : \tau_m & \dim(\tau_b) = \dim(\tau_m) \\
+    F, D, L \vdash M_b : \tau_b \\
+    F, D, L \vdash e : \tau_e \\
+    \text{if mask present: } F, D, L \vdash M_m : \tau_m & \dim(\tau_b) = \dim(\tau_m) \\
     (r_b, c_b) := \dim(\tau_b) & (r_e, c_e) := \dim(\tau_e) \\
     % base must be a full matrix, e a scalar
     \text{if }\texttt{[:, :]}\text{ present: } r_b \neq 1 & c_b \neq 1 & r_e = 1 & c_e = 1 \\
@@ -26,7 +26,7 @@
     \text{else: } r_b = r_e & c_b = c_e \\
   }{
     % Note: does not change type of M_b
-    F, L \vdash M_b 
+    F, D, L \vdash M_b 
       % Note: complement case omitted because it is irrelevant for typing
       [\![ \texttt{<}M_m\texttt{>} ]\!]^?
       [\![ \texttt{[:, :]} | \texttt{[:]} ]\!]^?
