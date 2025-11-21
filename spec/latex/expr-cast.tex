@@ -1,0 +1,13 @@
+\documentclass[preview]{standalone}
+\usepackage{semantic}
+\begin{document}
+
+\[
+  \inference[cast]{
+    F, D, L \vdash e : \langle d_1, d_2, R_2 \rangle \\
+  }{
+    F, D, L \vdash \texttt{cast<} R_1 \texttt{>(} e \texttt{)}: \langle d_1, d_2, R_1 \rangle
+  }
+\]
+
+\end{document}

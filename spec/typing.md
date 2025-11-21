@@ -19,7 +19,7 @@ For statement and expression typing rules we add two additional pieces of contex
 - Return type `R`, the expected return type of the enclosing function.
 
 ## Functions
-<img src="latex/program.svg" width="1024"/>
+<img src="latex/program.svg" width="600"/>
 
 <img src="latex/function.svg" width="600"/>
 
@@ -61,10 +61,10 @@ The following additional typing rules deal with updating dimension symbol contex
 <img src="latex/expr-new.svg" width="600"/>
 
 ### Cast
+<img src="latex/expr-cast.svg" width="600"/>
 
 ### Literal
-
-### Zero/One
+<img src="latex/expr-literal.svg" width="600"/>
 
 ### diag
 
