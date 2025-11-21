@@ -16,6 +16,7 @@
     F, D_{n - 1}, L_{n - 1} \vdash s_n : D_n, L_{n} \\
     % Final expr
     F, L_n \vdash e : \tau_r \\
+    \tau_f := (\tau_1 \times \cdots \times \tau_m) \rightarrow \tau_r
   }{
     F \vdash \texttt{func} \ f (p_1: \tau_1, \cdots, p_m: \tau_m) \texttt{ -> } \tau_r \ \{ s_1 \cdots s_n \texttt{ return } e \texttt{;} \} : \tau_f
   }

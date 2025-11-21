@@ -3,9 +3,8 @@
 \begin{document}
 \[
   \inference[accum]{
-    F, D, L \vdash M_b : \tau_b \\
-    F, D, L \vdash e : \tau_e \\
-    \tau_b = \tau_e \\
+    F, D, L \vdash M_b : \tau \\
+    F, D, L \vdash e : \tau \\
   }{
     % Note: does not change type of M_b
     F, D, L \vdash M_b \texttt{ += } e \texttt{;} : D, L

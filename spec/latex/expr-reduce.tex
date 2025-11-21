@@ -1,0 +1,28 @@
+\documentclass[preview]{standalone}
+\usepackage{semantic}
+\begin{document}
+\[
+  \inference[reduce]{
+    F, D, L \vdash e : \langle d_1, d_2, R \rangle \\
+  }{
+    F, D, L \vdash \texttt{reduce(} e \texttt{)} : \langle 1, 1, R \rangle
+  }
+\]
+
+\[
+  \inference[reduce-rows]{
+    F, D, L \vdash e : \langle d_1, d_2, R \rangle \\
+  }{
+    F, D, L \vdash \texttt{reduceRows(} e \texttt{)} : \langle d_1, 1, R \rangle
+  }
+\]
+
+\[
+  \inference[reduce-cols]{
+    F, D, L \vdash e : \langle d_1, d_2, R \rangle \\
+  }{
+    F, D, L \vdash \texttt{reduceCols(} e \texttt{)} : \langle 1, d_2, R \rangle
+  }
+\]
+
+\end{document}
