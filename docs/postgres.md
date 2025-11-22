@@ -18,6 +18,7 @@ Packages to install:
 - bison
 - flex
 - libreadline-dev
+- libicu-dev
 
 ```bash
 ./configure
@@ -49,4 +50,15 @@ Then connect to the server with `/usr/local/pgsql/bin/psql postgres` and run:
 CREATE FUNCTION add_one(integer) RETURNS integer
      AS '/workspaces/graphalg/pgext/funcs', 'add_one'
      LANGUAGE C STRICT;
+```
+
+## Foreign Data Wrapper
+Resources:
+- https://www.postgresql.org/docs/current/fdwhandler.html
+- https://www.dolthub.com/blog/2022-01-26-creating-a-postgres-foreign-data-wrapper/
+
+```bash
+export PATH="/usr/local/pgsql/bin:$PATH"
+cd pgext/tutorial_fdw
+./smoke_test.sh
 ```
