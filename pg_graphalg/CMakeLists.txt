@@ -5,7 +5,7 @@ project(
     pg_graphalg
     VERSION 0.1
     DESCRIPTION "GraphAlg extension for PostgreSQL"
-    LANGUAGES CXX)
+    LANGUAGES C CXX)
 
 find_package(PostgreSQL COMPONENTS Server)
 
