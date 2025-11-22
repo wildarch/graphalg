@@ -14,3 +14,5 @@ CREATE SERVER graphalg_server FOREIGN DATA WRAPPER graphalg_fdw;
 
 CREATE FOREIGN TABLE sequential_ints ( val int ) SERVER graphalg_server;
 SELECT * FROM sequential_ints;
+
+INSERT INTO sequential_ints VALUES (1), (2);

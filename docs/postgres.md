@@ -56,9 +56,4 @@ CREATE FUNCTION add_one(integer) RETURNS integer
 Resources:
 - https://www.postgresql.org/docs/current/fdwhandler.html
 - https://www.dolthub.com/blog/2022-01-26-creating-a-postgres-foreign-data-wrapper/
-
-```bash
-export PATH="/usr/local/pgsql/bin:$PATH"
-cd pgext/tutorial_fdw
-./smoke_test.sh
-```
+- https://github.com/Kentik-Archive/wdb_fdw

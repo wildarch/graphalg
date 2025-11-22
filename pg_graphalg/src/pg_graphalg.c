@@ -71,7 +71,7 @@ static TupleTableSlot *IterateForeignScan(ForeignScanState *node) {
   ExecClearTuple(slot);
 
   GaScanState *state = (GaScanState *)node->fdw_state;
-  if (state->current < 64) {
+  if (state->current < 10) {
     slot->tts_isnull[0] = false;
     slot->tts_values[0] = Int32GetDatum(state->current);
     ExecStoreVirtualTuple(slot);
@@ -90,6 +90,22 @@ static void EndForeignScan(ForeignScanState *node) {
   // No-Op
 }
 
+static TupleTableSlot *ExecForeignInsert(EState *estate, ResultRelInfo *rinfo,
+                                         TupleTableSlot *slot,
+                                         TupleTableSlot *planSlot) {
+  // TODO: Actually save it somewhere.
+  bool isnull;
+  Datum datum = slot_getattr(slot, 1, &isnull);
+  if (isnull) {
+    printf("NULL\n");
+  } else {
+    int x = DatumGetInt32(datum);
+    printf("value: %d\n", x);
+  }
+
+  return slot;
+}
+
 Datum graphalg_fdw_handler(PG_FUNCTION_ARGS) {
   FdwRoutine *fdwRoutine = makeNode(FdwRoutine);
 
@@ -100,6 +116,8 @@ Datum graphalg_fdw_handler(PG_FUNCTION_ARGS) {
   fdwRoutine->IterateForeignScan = IterateForeignScan;
   fdwRoutine->ReScanForeignScan = ReScanForeignScan;
   fdwRoutine->EndForeignScan = EndForeignScan;
+
+  fdwRoutine->ExecForeignInsert = ExecForeignInsert;
 
   PG_RETURN_POINTER(fdwRoutine);
 }
