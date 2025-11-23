@@ -57,3 +57,16 @@ Resources:
 - https://www.postgresql.org/docs/current/fdwhandler.html
 - https://www.dolthub.com/blog/2022-01-26-creating-a-postgres-foreign-data-wrapper/
 - https://github.com/Kentik-Archive/wdb_fdw
+
+## GraphBLAS
+We need to link to SuiteSparse:GraphBLAS.
+
+Install package `libgraphblas-dev`.
+
+Alternatively:
+Download https://github.com/DrTimothyAldenDavis/SuiteSparse/archive/refs/tags/v7.12.1.tar.gz to `thirdparty/`.
+
+```
+make
+sudo make install
+```

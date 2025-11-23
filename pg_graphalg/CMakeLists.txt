@@ -9,4 +9,6 @@ project(
 
 find_package(PostgreSQL COMPONENTS Server)
 
+find_library(NAMES GraphBLAS)
+
 add_subdirectory(src)
