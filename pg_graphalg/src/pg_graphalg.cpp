@@ -1,3 +1,7 @@
+#include "pg_graphalg/PgGraphAlg.h"
+
+extern "C" {
+
 #include <postgres.h>
 
 #include <executor/tuptable.h>
@@ -11,19 +15,20 @@
 
 PG_MODULE_MAGIC;
 
-PG_FUNCTION_INFO_V1(add_one);
+static pg_graphalg::PgGraphAlg *SINGLETON = nullptr;
+static pg_graphalg::PgGraphAlg &getInstance() {
+  if (!SINGLETON) {
+    SINGLETON = new pg_graphalg::PgGraphAlg();
+  }
+
+  return *SINGLETON;
+}
 
 PG_FUNCTION_INFO_V1(graphalg_fdw_handler);
 
-Datum add_one(PG_FUNCTION_ARGS) {
-  int32 arg = PG_GETARG_INT32(0);
-
-  PG_RETURN_INT32(arg + 1);
-}
-
 static void GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel,
                               Oid foreigntableid) {
-  baserel->rows = 42;
+  baserel->rows = getInstance().size();
 }
 
 static void GetForeignPaths(PlannerInfo *root, RelOptInfo *baserel,
@@ -58,32 +63,34 @@ static ForeignScan *GetForeignPlan(PlannerInfo *root, RelOptInfo *baserel,
       outer_plan);
 }
 
-typedef struct {
-  int current;
-} GaScanState;
-
 static void BeginForeignScan(ForeignScanState *node, int eflags) {
-  node->fdw_state = palloc0(sizeof(GaScanState));
+  auto *state = palloc(sizeof(pg_graphalg::ScanState));
+  new (state) pg_graphalg::ScanState();
+  node->fdw_state = state;
 }
 
 static TupleTableSlot *IterateForeignScan(ForeignScanState *node) {
   TupleTableSlot *slot = node->ss.ss_ScanTupleSlot;
   ExecClearTuple(slot);
 
-  GaScanState *state = (GaScanState *)node->fdw_state;
-  if (state->current < 10) {
+  auto *scanState = static_cast<pg_graphalg::ScanState *>(node->fdw_state);
+  if (auto res = getInstance().scan(*scanState)) {
     slot->tts_isnull[0] = false;
-    slot->tts_values[0] = Int32GetDatum(state->current);
+    slot->tts_isnull[1] = false;
+    slot->tts_isnull[2] = false;
+    auto [row, col, val] = *res;
+    slot->tts_values[0] = UInt64GetDatum(row);
+    slot->tts_values[1] = UInt64GetDatum(col);
+    slot->tts_values[2] = UInt64GetDatum(val);
     ExecStoreVirtualTuple(slot);
-    state->current++;
   }
 
   return slot;
 }
 
 static void ReScanForeignScan(ForeignScanState *node) {
-  GaScanState *state = (GaScanState *)node->fdw_state;
-  state->current = 0;
+  auto *scanState = static_cast<pg_graphalg::ScanState *>(node->fdw_state);
+  scanState->reset();
 }
 
 static void EndForeignScan(ForeignScanState *node) {
@@ -93,16 +100,16 @@ static void EndForeignScan(ForeignScanState *node) {
 static TupleTableSlot *ExecForeignInsert(EState *estate, ResultRelInfo *rinfo,
                                          TupleTableSlot *slot,
                                          TupleTableSlot *planSlot) {
-  // TODO: Actually save it somewhere.
-  bool isnull;
-  Datum datum = slot_getattr(slot, 1, &isnull);
-  if (isnull) {
-    printf("NULL\n");
-  } else {
-    int x = DatumGetInt32(datum);
-    printf("value: %d\n", x);
+  slot_getsomeattrs(slot, 3);
+  if (slot->tts_isnull[0] || slot->tts_isnull[1] || slot->tts_isnull[2]) {
+    // Ignore nulls
+    return nullptr;
   }
 
+  std::size_t row = DatumGetUInt64(slot->tts_values[0]);
+  std::size_t col = DatumGetUInt64(slot->tts_values[1]);
+  std::int64_t val = DatumGetInt64(slot->tts_values[2]);
+  getInstance().addTuple(row, col, val);
   return slot;
 }
 
@@ -120,4 +127,5 @@ Datum graphalg_fdw_handler(PG_FUNCTION_ARGS) {
   fdwRoutine->ExecForeignInsert = ExecForeignInsert;
 
   PG_RETURN_POINTER(fdwRoutine);
+}
 }

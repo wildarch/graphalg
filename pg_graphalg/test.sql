@@ -1,4 +1,4 @@
-DROP FOREIGN TABLE IF EXISTS sequential_ints;
+DROP FOREIGN TABLE IF EXISTS mat;
 DROP SERVER IF EXISTS graphalg_server;
 DROP FOREIGN DATA WRAPPER IF EXISTS graphalg_fdw;
 DROP FUNCTION IF EXISTS graphalg_fdw_handler;
@@ -12,7 +12,18 @@ CREATE FOREIGN DATA WRAPPER graphalg_fdw
   HANDLER graphalg_fdw_handler;
 CREATE SERVER graphalg_server FOREIGN DATA WRAPPER graphalg_fdw;
 
-CREATE FOREIGN TABLE sequential_ints ( val int ) SERVER graphalg_server;
-SELECT * FROM sequential_ints;
+CREATE FOREIGN TABLE mat ( row bigint, col bigint, val bigint ) SERVER graphalg_server;
+SELECT * FROM mat;
 
-INSERT INTO sequential_ints VALUES (1), (2);
+INSERT INTO mat VALUES
+  (0, 0, 42),
+  (0, 1, 43),
+  (1, 0, 44),
+  (1, 1, 45);
+
+SELECT * FROM mat;
+
+INSERT INTO mat VALUES
+  (0, 1, 4000);
+
+SELECT * FROM mat;

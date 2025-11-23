@@ -8,4 +8,4 @@ cmake -S $WORKSPACE_ROOT -B $BUILD_DIR -G Ninja \
     -DCMAKE_CXX_COMPILER=clang++-20  \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=1 \
     -DCMAKE_LINKER_TYPE=MOLD \
-    -DPostgreSQL_ROOT=/usr/local/pgsql
+    -DPostgreSQL_ROOT=/usr/local/pgsql \
