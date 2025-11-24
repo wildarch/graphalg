@@ -12,25 +12,25 @@ We define the GraphAlg type system formally using [typing rules](https://en.wiki
 
 ### Environments
 Typing rules use three distinct environments:
-- Function environment $F$: Associates function names with the parameter and results types of those functions.
+- Function environment $$F$$: Associates function names with the parameter and results types of those functions.
 - Dimension environment $D$: Associates variable names with dimension symbols.
 - Local environment $L$: Associates variable names with a matrix type.
 
 The environment objects have map semantics:
 - $M \in L$ asserts that $L$ contains a value for $M$.
-- $L[M]$ retrieves the value for key $M$ from environment $L$. 
+- $L[M]$ retrieves the value for key $M$ from environment $L$.
   Implies $M \in L$.
-- $L' := L[M := \tau]$ creates an updated environment $L'$ that contains all mappings from $L$ plus a mapping from $M$ to $\tau$. 
+- $L' := L[M := \tau]$ creates an updated environment $L'$ that contains all mappings from $L$ plus a mapping from $M$ to $\tau$.
   If $M \in L$, then the original value for $M$ is dropped ($L'[M] = \tau$).
 
 ### Type Instances
-Type instances are denoted $\langle d_1, d_2, R \rangle$, where 
-- $d_1$ is the dimension symbol for the number of rows 
+Type instances are denoted $\langle d_1, d_2, R \rangle$, where
+- $d_1$ is the dimension symbol for the number of rows
 - $d_2$ is the dimension symbol for the number of columns
 - $R$ is the semiring
 
 ### Bindings
-We use the syntax $A := B$ to bind the value of $B$ to a new variable $A$. 
+We use the syntax $A := B$ to bind the value of $B$ to a new variable $A$.
 This binding syntax is also used to destructure types, e.g. $\langle d_1, d_2, R \rangle := \tau$ allows referencing the dimension symbols and the semiring of $\tau$. Furthermore, the syntax can also be used for asserting (partial) matches. For example, the statement $\langle d, 1, R_1 \rangle = \tau_1$ following by $\langle 1, d, R_2 \rangle$ asserts that:
 - $\tau_1$ has one column
 - $\tau_2$ has one row
@@ -40,8 +40,8 @@ No requirement is placed on the relation of $R_1$ and $R_2$: they may refer to t
 
 ## Functions
 Functions have a function type of the form $(\tau_1 \times \tau_2) \rightarrow \tau_r$.
-A program is nothing more than a collection of functions. 
-Note that the order in which functions are defined is significant: 
+A program is nothing more than a collection of functions.
+Note that the order in which functions are defined is significant:
 A function cannot be referenced before they are defined.
 
 <img src="latex/program.svg" width="600"/>
@@ -53,7 +53,7 @@ Statements update the $D$ and $L$ environments.
 They do not have a type of their own.
 
 ### Assign
-If there is no existing binding for the variable to be assigned, the first rule applies. 
+If there is no existing binding for the variable to be assigned, the first rule applies.
 Otherwise, the more involved reassignment rule applies.
 
 <img src="latex/stmt-assign.svg" width="600"/>
@@ -107,7 +107,7 @@ Transpose is valid for any input matrix.
 <img src="latex/expr-diag.svg" width="600"/>
 
 ### `apply`
-Functions used in `apply` must be defined over scalar input and output types. 
+Functions used in `apply` must be defined over scalar input and output types.
 The parameter semirings must match those of the respective input arguments.
 
 <img src="latex/expr-apply.svg" width="600"/>
@@ -149,7 +149,7 @@ Operations such as subtraction or division are only allowed on specific semiring
 <img src="latex/expr-arith.svg" width="600"/>
 
 ### Scalar Compare
-Ordered comparison operations are only allowed on the `int` and `real` semirings. 
+Ordered comparison operations are only allowed on the `int` and `real` semirings.
 Equality comparison is allowed regardless of the semiring.
 
 <img src="latex/expr-compare.svg" width="600"/>
@@ -158,3 +158,15 @@ Equality comparison is allowed regardless of the semiring.
 Literals must be valid for the specified semiring.
 
 <img src="latex/expr-literal.svg" width="600"/>
+
+<script>
+MathJax = {
+  tex: {
+    inlineMath: {'[+]': [['$', '$']]}
+  },
+  svg: {
+    fontCache: 'global'
+  }
+};
+</script>
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
