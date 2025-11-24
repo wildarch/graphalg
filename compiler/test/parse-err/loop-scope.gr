@@ -1,0 +1,12 @@
+// RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
+
+func LoopScope() -> int {
+    a = int(0);
+    for i in int(1):int(10) {
+        b = int(42);
+        a = a + b;
+    }
+    // Variable b should not be accessible outside the loop
+    // expected-error@below{{unrecognized variable}}
+    return b;
+}

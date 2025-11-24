@@ -255,7 +255,9 @@ void TypeFormatter::formatColumnVector(MatrixType t) {
 }
 
 void TypeFormatter::formatMatrix(MatrixType t) {
-  if (t.isColumnVector()) {
+  if (t.isScalar()) {
+    return formatScalar(t.getSemiring());
+  } else if (t.isColumnVector()) {
     return formatColumnVector(t);
   }
 
@@ -968,7 +970,7 @@ mlir::ParseResult Parser::parseStmtAccum(mlir::Location baseLoc,
     return mlir::emitError(baseLoc)
            << "type of base does not match the expression to accumulate: ("
            << typeToString(baseValue.getType()) << " vs. "
-           << typeToString(expr.getType());
+           << typeToString(expr.getType()) << ")";
   }
 
   // Rewrite a += b; to a = a (.+) b;
