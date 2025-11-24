@@ -1,0 +1,8 @@
+// RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
+
+func MatrixFillColVector(v: Vector<s, int>, x: int) -> Vector<s, int> {
+    // expected-error@below{{matrix fill [:, :] used with column vector base}}
+    // expected-note@below{{base has type Vector<s, int>}}
+    v[:, :] = x;
+    return v;
+}

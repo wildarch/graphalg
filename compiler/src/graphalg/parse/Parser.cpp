@@ -5,6 +5,7 @@
 #include <llvm/ADT/APFloat.h>
 #include <llvm/ADT/APInt.h>
 #include <llvm/ADT/ArrayRef.h>
+#include <llvm/ADT/DenseMap.h>
 #include <llvm/ADT/DenseSet.h>
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/ScopedHashTable.h>
@@ -452,7 +453,12 @@ mlir::ParseResult Parser::parseFunction() {
     return mlir::failure();
   }
 
-  // TODO: Check duplicate definition
+  if (auto *previousDef = _module.lookupSymbol(name)) {
+    auto diag = mlir::emitError(loc)
+                << "duplicate definition of function '" << name << "'";
+    diag.attachNote(previousDef->getLoc()) << "original definition here";
+    return diag;
+  }
 
   // Create the new op.
   auto funcType = _builder.getFunctionType(paramTypes, {returnType});
@@ -496,10 +502,14 @@ Parser::parseParams(llvm::SmallVectorImpl<llvm::StringRef> &names,
   // First parameter
   auto &name = names.emplace_back();
   auto &type = types.emplace_back();
-  locs.emplace_back(cur().loc);
+  auto loc = cur().loc;
+  locs.emplace_back(loc);
   if (parseIdent(name) || eatOrError(Token::COLON) || parseType(type)) {
     return mlir::failure();
   }
+
+  llvm::SmallDenseMap<llvm::StringRef, mlir::Location> previousParams = {
+      {name, loc}};
 
   while (cur().type != Token::RPAREN) {
     // More parameters
@@ -509,10 +519,21 @@ Parser::parseParams(llvm::SmallVectorImpl<llvm::StringRef> &names,
 
     auto &name = names.emplace_back();
     auto &type = types.emplace_back();
-    locs.emplace_back(cur().loc);
+    auto loc = cur().loc;
+    locs.emplace_back(loc);
     if (parseIdent(name) || eatOrError(Token::COLON) || parseType(type)) {
       return mlir::failure();
     }
+
+    // Check for duplicate parameter names.
+    if (previousParams.contains(name)) {
+      auto diag = mlir::emitError(loc)
+                  << "duplicate parameter name '" << name << "'";
+      diag.attachNote(previousParams.at(name)) << "previous definition here";
+      return diag;
+    }
+
+    previousParams.insert({name, loc});
   }
 
   return eatOrError(Token::RPAREN);
@@ -921,6 +942,11 @@ mlir::Value Parser::applyFill(mlir::Location baseLoc, mlir::Value base,
   if (fill == ParsedFill::VECTOR && !baseType.isColumnVector()) {
     auto diag = mlir::emitError(fillLoc)
                 << "vector fill [:] used with non-vector base";
+    diag.attachNote(baseLoc) << "base has type " << typeToString(baseType);
+    return nullptr;
+  } else if (fill == ParsedFill::MATRIX && baseType.isColumnVector()) {
+    auto diag = mlir::emitError(fillLoc)
+                << "matrix fill [:, :] used with column vector base";
     diag.attachNote(baseLoc) << "base has type " << typeToString(baseType);
     return nullptr;
   }
