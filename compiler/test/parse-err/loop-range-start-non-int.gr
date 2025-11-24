@@ -1,0 +1,10 @@
+// RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
+
+func LoopRangeStartNonInt() -> int {
+    a = int(0);
+    // expected-error@below{{loop range start must be an integer, but got real}}
+    for i in real(1.0):int(10) {
+        a = a + int(1);
+    }
+    return a;
+}

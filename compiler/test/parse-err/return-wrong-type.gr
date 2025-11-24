@@ -1,0 +1,6 @@
+// RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
+
+func ReturnWrongType() -> int {
+    // expected-error@below{{return type mismatch: expected int, but got real}}
+    return real(3.14);
+}

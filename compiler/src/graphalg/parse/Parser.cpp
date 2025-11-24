@@ -89,6 +89,11 @@ private:
 
   DimMapper _dimMapper;
 
+  // Track parsing context
+  int _loopDepth = 0;
+  bool _hasReturn = false;
+  mlir::Type _expectedReturnType;
+
   Token cur() { return _tokens[_offset]; }
 
   void eat() {
@@ -479,11 +484,18 @@ mlir::ParseResult Parser::parseFunction() {
     }
   }
 
+  // Set expected return type for this function
+  _expectedReturnType = returnType;
+  _hasReturn = false;
+
   if (mlir::failed(parseBlock())) {
     return mlir::failure();
   }
 
-  // TODO: Check for return statement.
+  // Check for return statement
+  if (!_hasReturn) {
+    return mlir::emitError(loc) << "function must have a return statement";
+  }
 
   return mlir::success();
 }
@@ -549,6 +561,12 @@ mlir::ParseResult Parser::parseBlock() {
   while (cur().type != Token::RBRACE && cur().type != Token::END_OF_FILE) {
     if (parseStmt()) {
       return mlir::failure();
+    }
+
+    // Check if there are statements after a return
+    if (_hasReturn && cur().type != Token::RBRACE) {
+      return mlir::emitError(cur().loc)
+             << "statement after return is not allowed";
     }
   }
 
@@ -622,6 +640,9 @@ mlir::ParseResult Parser::parseStmtFor() {
       eatOrError(Token::IN) || parseRange(range)) {
     return mlir::failure();
   }
+
+  // Increment loop depth
+  _loopDepth++;
 
   // Find the variables modified inside the loop.
   llvm::SmallVector<llvm::StringRef> varNames;
@@ -751,17 +772,41 @@ mlir::ParseResult Parser::parseStmtFor() {
     }
   }
 
+  // Decrement loop depth
+  _loopDepth--;
+
   return mlir::success();
 }
 
 mlir::ParseResult Parser::parseStmtReturn() {
   auto loc = cur().loc;
+
+  // Check if return is inside a loop
+  if (_loopDepth > 0) {
+    return mlir::emitError(loc)
+           << "return statement inside a loop is not allowed";
+  }
+
+  // Check if we already have a return statement
+  if (_hasReturn) {
+    return mlir::emitError(loc) << "multiple return statements are not allowed";
+  }
+
   mlir::Value returnValue;
   if (eatOrError(Token::RETURN) || parseExpr(returnValue) ||
       eatOrError(Token::SEMI)) {
     return mlir::failure();
   }
 
+  // Check return type matches
+  if (returnValue.getType() != _expectedReturnType) {
+    return mlir::emitError(loc)
+           << "return type mismatch: expected "
+           << typeToString(_expectedReturnType) << ", but got "
+           << typeToString(returnValue.getType());
+  }
+
+  _hasReturn = true;
   _builder.create<mlir::func::ReturnOp>(loc, returnValue);
   return mlir::success();
 }
@@ -988,9 +1033,28 @@ mlir::ParseResult Parser::parseRange(ParsedRange &r) {
 
   if (cur().type == Token::COLON) {
     // Const range
+    auto beginLoc = exprLoc;
     r.begin = expr;
+
+    auto endLoc = cur().loc;
     if (eatOrError(Token::COLON) || parseExpr(r.end)) {
       return mlir::failure();
+    }
+
+    // Check that begin is an integer scalar
+    auto intScalarType =
+        MatrixType::scalarOf(SemiringTypes::forInt(_builder.getContext()));
+    if (r.begin.getType() != intScalarType) {
+      return mlir::emitError(beginLoc)
+             << "loop range start must be an integer, but got "
+             << typeToString(r.begin.getType());
+    }
+
+    // Check that end is an integer scalar
+    if (r.end.getType() != intScalarType) {
+      return mlir::emitError(endLoc)
+             << "loop range end must be an integer, but got "
+             << typeToString(r.end.getType());
     }
 
     return mlir::success();

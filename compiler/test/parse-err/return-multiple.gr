@@ -1,0 +1,8 @@
+// RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
+
+func ReturnMultiple() -> int {
+    a = int(42);
+    return a;
+    // expected-error@below{{statement after return is not allowed}}
+    return int(5);
+}

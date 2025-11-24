@@ -1,0 +1,12 @@
+// RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
+
+func LoopRangeNotDimension(m: Matrix<s, s, int>) -> int {
+    a = int(0);
+    // m.nvals is an integer, not a dimension
+    // expected-error@below{{not a dimension type}}
+    // expected-note@below{{defined here}}
+    for i in m.nvals {
+        a = a + int(1);
+    }
+    return a;
+}

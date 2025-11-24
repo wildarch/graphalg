@@ -1,0 +1,6 @@
+// RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
+
+// expected-error@below{{function must have a return statement}}
+func ReturnMissing() -> int {
+    a = int(42);
+}
