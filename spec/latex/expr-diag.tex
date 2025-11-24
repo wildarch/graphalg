@@ -1,0 +1,19 @@
+\documentclass[preview]{standalone}
+\usepackage{semantic}
+\begin{document}
+\[
+  \inference[diag-row]{
+    F, D, L \vdash e : \langle d, 1, R \rangle \\
+  }{
+    F, D, L \vdash \texttt{diag(} e \texttt{)} : \langle d, d, R \rangle
+  }
+\]
+
+\[
+  \inference[diag-col]{
+    F, D, L \vdash e : \langle 1, d, R \rangle \\
+  }{
+    F, D, L \vdash \texttt{diag(} e \texttt{)} : \langle d, d, R \rangle
+  }
+\]
+\end{document}

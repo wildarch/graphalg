@@ -1,0 +1,21 @@
+\documentclass[preview]{standalone}
+\usepackage{semantic}
+\begin{document}
+
+\[
+  \inference[new-matrix]{
+    F, D, L \vdash_D e_1 : d_1 \\
+    F, D, L \vdash_D e_2 : d_2 \\
+  }{
+    F, D, L \vdash \texttt{Matrix<} R \texttt{>(} e_1 \texttt{, } e_2 \texttt{)}: \langle d_1, d_2, R \rangle
+  }
+\]
+
+\[
+  \inference[new-vector]{
+    F, D, L \vdash_D e_1 : d_1 \\
+  }{
+    F, D, L \vdash \texttt{Vector<} R \texttt{>(} e_1 \texttt{)}: \langle d_1, 1, R \rangle
+  }
+\]
+\end{document}

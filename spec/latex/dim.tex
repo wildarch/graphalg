@@ -1,0 +1,62 @@
+\documentclass[preview]{standalone}
+\usepackage{amsmath}
+\usepackage{semantic}
+\begin{document}
+
+\[
+  \inference[dim-nrows]{
+    F, D, L \vdash e : \langle d_1, d_2, R \rangle \\
+  }{
+    F, D, L \vdash_D e \texttt{.nrows} : d_1
+  }
+\]
+
+\[
+  \inference[dim-ncols]{
+    F, D, L \vdash e : \langle d_1, d_2, R \rangle \\
+  }{
+    F, D, L \vdash_D e \texttt{.ncols} : d_2
+  }
+\]
+
+\[
+  \inference[dim-var]{
+    d := D[M] \\
+  }{
+    F, D, L \vdash_D M : d
+  }
+\]
+
+\[
+  \inference[assign-nrows]{
+    \text{if } M_b \in L \text{: } L[M_b] = \langle 1, 1, \texttt{int} \rangle \\
+    F, D, L \vdash e : \langle d_1, d_2, \texttt{int} \rangle \\
+    L_r := L[M_b := \langle 1, 1, \texttt{int} \rangle] \\
+    D_r := D[M_b := d_1] \\
+  }{
+    F, D, L \vdash M_b \texttt{ = } e \texttt{.nrows;} : L_r, D_r
+  }
+\]
+
+\[
+  \inference[assign-ncols]{
+    \text{if } M_b \in L \text{: } L[M_b] = \langle 1, 1, \texttt{int} \rangle \\
+    F, D, L \vdash e : \langle d_1, d_2, \texttt{int} \rangle \\
+    L_r := L[M_b := \langle 1, 1, \texttt{int} \rangle] \\
+    D_r := D[M_b := d_2] \\
+  }{
+    F, D, L \vdash M_b \texttt{ = } e \texttt{.ncols;} : L_r, D_r
+  }
+\]
+
+\[
+  \inference[assign-dim]{
+    \text{if } M_b \in L \text{: } L[M_b] = \langle 1, 1, \texttt{int} \rangle \\
+    L_r := L[M_b := \langle 1, 1, \texttt{int} \rangle] \\
+    D_r := D[M_b := M_e] \\
+  }{
+    F, D, L \vdash M_b \texttt{ = } M_e \texttt{;} : L_r, D_r
+  }
+\]
+
+\end{document}

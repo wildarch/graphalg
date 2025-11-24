@@ -1,0 +1,24 @@
+\documentclass[preview]{standalone}
+\usepackage{semantic}
+\begin{document}
+\[
+  \inference[function]{
+    f \notin F \\
+    % Parameters (must be unique)
+    P_0 := \emptyset \\
+    p_1 \notin P_0 & P_1 := P_0[p_1 := \tau_1] \\
+    \vdots \\
+    p_m \notin P_{m-1} & P_m := P_{m-1}[p_m := \tau_m] \\
+    % Statements (use parameter environment, and the changes of previous statements)
+    D_0 := \emptyset & L_0 := P_m \\
+    F, D_0, L_0 \vdash s_1 : L_1, D_1 \\
+    \vdots \\
+    F, D_{n - 1}, L_{n - 1} \vdash s_n : D_n, L_{n} \\
+    % Final expr
+    F, L_n \vdash e : \tau_r \\
+    \tau_f := (\tau_1 \times \cdots \times \tau_m) \rightarrow \tau_r
+  }{
+    F \vdash \texttt{func} \ f (p_1: \tau_1, \cdots, p_m: \tau_m) \texttt{ -> } \tau_r \ \{ s_1 \cdots s_n \texttt{ return } e \texttt{;} \} : \tau_f
+  }
+\]
+\end{document}

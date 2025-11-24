@@ -1,0 +1,27 @@
+\documentclass[preview]{standalone}
+\usepackage{semantic}
+\begin{document}
+\[
+  \inference[apply-unary]{
+    F, D, L \vdash e : \langle d_1, d_2, R_1 \rangle \\
+    ((\tau_p) \rightarrow \tau_r) := F[f] \\ 
+    \langle 1, 1, R_1 \rangle := \tau_p & \langle 1, 1, R_2 \rangle := \tau_r \\
+  }{
+    F, D, L \vdash \texttt{apply(} f \texttt{, } e \texttt{)} : \langle d_1, d_2, R_2 \rangle
+  }
+\]
+
+\[
+  \inference[apply-binary]{
+    F, D, L \vdash e_1 : \langle d_1, d_2, R_1 \rangle \\
+    F, D, L \vdash e_2 : \langle 1, 1, R_2 \rangle \\
+    ((\tau_{p_1} \times \tau_{p_2}) \rightarrow \tau_r) := F[f] \\ 
+    \langle 1, 1, R_1 \rangle := \tau_{p_1} 
+      & \langle 1, 1, R_2 \rangle := \tau_{p_2} 
+      & \langle 1, 1, R_3 \rangle := \tau_r \\
+  }{
+    F, D, L \vdash \texttt{apply(} f \texttt{, } e_1 \texttt{, } e_2 \texttt{)} : \langle d_1, d_2, R_3 \rangle
+  }
+\]
+
+\end{document}
