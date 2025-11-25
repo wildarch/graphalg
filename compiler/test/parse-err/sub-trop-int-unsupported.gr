@@ -1,0 +1,9 @@
+// RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
+
+func SubTropIntUnsupported(
+    // expected-note@below{{operands have semiring trop_int}}
+    a: trop_int, b: trop_int) -> trop_int {
+    // Subtraction is not supported for tropical semirings (only int and real)
+    // expected-error@below{{subtraction is only supported for int and real types}}
+    return a - b;
+}

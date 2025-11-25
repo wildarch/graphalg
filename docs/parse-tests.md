@@ -312,9 +312,135 @@ func Test() -> int {
 }
 ```
 
+### 8. Matrix Multiplication Errors
+
+**Dimension mismatch** (`matmul-dimension-mismatch.gr`):
+```graphalg
+func MatMulDimensionMismatch(
+    // expected-note@below{{left side has dimensions (r x s)}}
+    a: Matrix<r, s, int>,
+    // expected-note@below{{right side has dimensions (t x u)}}
+    b: Matrix<t, u, int>) -> Matrix<r, u, int> {
+    // expected-error@below{{incompatible dimensions for matrix multiply}}
+    return a * b;
+}
+```
+
+### 9. Built-in Function Errors
+
+**diag() with non-vector** (`diag-not-vector.gr`):
+```graphalg
+func DiagNotVector(
+    // expected-note@below{{argument has type Matrix<r, c, int>}}
+    m: Matrix<r, c, int>) -> Matrix<r, r, int> {
+    // expected-error@below{{diag() requires a row or column vector}}
+    return diag(m);
+}
+```
+
+**apply() with wrong function signature** (`apply-unary-func-wrong-arg-count.gr`):
+```graphalg
+// expected-note@below{{function defined here}}
+func twoArgs(a: int, b: int) -> int {
+    return a + b;
+}
+
+func ApplyUnaryFuncWrongArgCount(m: Matrix<s, s, int>) -> Matrix<s, s, int> {
+    // expected-error@below{{apply() with 1 matrix argument requires a function with 1 parameter, but got 2}}
+    return apply(twoArgs, m);
+}
+```
+
+**apply() with non-scalar function parameters** (`apply-func-non-scalar-args.gr`):
+```graphalg
+// expected-note@below{{parameter 0 has type '!graphalg.mat<distinct[0]<> x distinct[0]<> x i64>'}}
+func nonScalarFunc(m: Matrix<s, s, int>) -> int {
+    return int(0);
+}
+
+func ApplyFuncNonScalarArgs(m: Matrix<s, s, int>) -> Matrix<s, s, int> {
+    // expected-error@below{{apply() requires function parameters to be scalars}}
+    return apply(nonScalarFunc, m);
+}
+```
+
+**select() with non-bool return type** (`select-func-non-bool-return.gr`):
+```graphalg
+// expected-note@below{{function returns '!graphalg.mat<1 x 1 x i64>'}}
+func returnsInt(a: int) -> int {
+    return a;
+}
+
+func SelectFuncNonBoolReturn(m: Matrix<s, s, int>) -> Matrix<s, s, int> {
+    // expected-error@below{{select() requires function to return bool}}
+    return select(returnsInt, m);
+}
+```
+
+### 10. Element-wise Operation Errors
+
+**Different semirings** (`ewise-different-semirings.gr`):
+```graphalg
+func EwiseDifferentSemirings(
+    // expected-note@below{{left operand has semiring int}}
+    a: Matrix<s, s, int>,
+    // expected-note@below{{right operand has semiring real}}
+    b: Matrix<s, s, real>) -> Matrix<s, s, int> {
+    // expected-error@below{{element-wise operation requires operands to have the same semiring}}
+    return a (.+) b;
+}
+```
+
+**Different dimensions** (`ewise-different-dimensions.gr`):
+```graphalg
+func EwiseDifferentDimensions(
+    // expected-note@below{{left operand has dimensions (s x s)}}
+    a: Matrix<s, s, int>,
+    // expected-note@below{{right operand has dimensions (t x t)}}
+    b: Matrix<t, t, int>) -> Matrix<s, s, int> {
+    // expected-error@below{{element-wise operation requires operands to have the same dimensions}}
+    return a (.+) b;
+}
+```
+
+### 11. Subtraction and Negation Errors
+
+**Subtraction with unsupported semiring** (`sub-bool-unsupported.gr`, `sub-trop-int-unsupported.gr`):
+```graphalg
+func SubBoolUnsupported(
+    // expected-note@below{{operands have semiring bool}}
+    a: bool, b: bool) -> bool {
+    // expected-error@below{{subtraction is only supported for int and real types}}
+    return a - b;
+}
+```
+
+**Subtraction with non-scalars** (`sub-matrix-not-scalar.gr`):
+```graphalg
+func SubMatrixNotScalar(
+    // expected-note@below{{left operand has type Matrix<s, s, int>}}
+    a: Matrix<s, s, int>,
+    // expected-note@below{{right operand has type Matrix<s, s, int>}}
+    b: Matrix<s, s, int>) -> Matrix<s, s, int> {
+    // Note: Use element-wise subtraction (.-) for matrices
+    // expected-error@below{{subtraction only works on scalars; use element-wise subtraction (.-) for matrices}}
+    return a - b;
+}
+```
+
+**Negation with unsupported semiring** (`neg-bool-unsupported.gr`, `neg-trop-int-unsupported.gr`):
+```graphalg
+func NegBoolUnsupported(
+    // expected-note@below{{operand has semiring bool}}
+    a: bool) -> bool {
+    // expected-error@below{{negation is only supported for int and real types}}
+    return -a;
+}
+```
+
 ## Current Test Coverage
 
-As of now, we have 136 parser tests covering:
+As of now, we have 157 parser tests covering:
 - Duplicate definitions (functions and parameters)
 - Fill syntax errors (vector vs matrix, non-scalar expressions)
 - Masked assignment errors (dimension mismatches)
@@ -323,3 +449,15 @@ As of now, we have 136 parser tests covering:
 - Variable scoping (loop-local variables)
 - For loop errors (non-integer start/end, non-dimension range, non-boolean until condition)
 - Return statement errors (in loop, not last, wrong type, multiple returns, missing return)
+- Matrix multiplication dimension mismatches
+- Built-in function validation (diag, apply, select)
+- Element-wise operation type checking (semiring and dimension compatibility)
+- Subtraction and negation semiring restrictions (only int and real)
+
+## Additional Tests to Add
+- compare less than: fails on bool and trop_int semirings
+- div: fails on int and trop_real semirings
+- not: fails on int semiring
+- literal: `bool(42)`, `int(42.0)` and `trop_real(false)`
+- Use `TypeFormatter::format` when printing types in error messages in the parser.
+- element-wise function application: look at the tests with have for `apply(..)` and element-wise addition, and add similar tests for element-wise function application (nr. of parameters, type mismatch, does the function to call exist)

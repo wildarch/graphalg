@@ -1,0 +1,8 @@
+// RUN: graphalg-translate --import-graphalg < %s | FileCheck %s
+
+// Scalars (1x1 matrices) are both row and column vectors, so diag should accept them
+// CHECK-LABEL: @DiagScalar
+func DiagScalar(x: int) -> int {
+    // CHECK: graphalg.diag %arg0
+    return diag(x);
+}

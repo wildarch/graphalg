@@ -1,0 +1,12 @@
+// RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
+
+// expected-note@below{{parameter 0 has type '!graphalg.mat<distinct[0]<> x distinct[0]<> x i64>'}}
+func nonScalarFunc(m: Matrix<s, s, int>) -> int {
+    return int(0);
+}
+
+func ApplyFuncNonScalarArgs(m: Matrix<s, s, int>) -> Matrix<s, s, int> {
+    // apply() requires the function to have scalar arguments
+    // expected-error@below{{apply() requires function parameters to be scalars}}
+    return apply(nonScalarFunc, m);
+}

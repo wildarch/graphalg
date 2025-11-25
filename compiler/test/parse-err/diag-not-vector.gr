@@ -1,0 +1,9 @@
+// RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
+
+func DiagNotVector(
+    // expected-note@below{{argument has type Matrix<r, c, int>}}
+    m: Matrix<r, c, int>) -> Matrix<r, r, int> {
+    // diag() requires a row or column vector, but m is a general matrix
+    // expected-error@below{{diag() requires a row or column vector}}
+    return diag(m);
+}

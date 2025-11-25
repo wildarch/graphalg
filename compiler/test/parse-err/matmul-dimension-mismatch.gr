@@ -1,0 +1,12 @@
+// RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
+
+func MatMulDimensionMismatch(
+    // expected-note@below{{left side has dimensions (r x s)}}
+    a: Matrix<r, s, int>,
+    // expected-note@below{{right side has dimensions (t x u)}}
+    b: Matrix<t, u, int>) -> Matrix<r, u, int> {
+    // Left matrix has s columns, right matrix has t rows
+    // These dimensions must match for matrix multiplication
+    // expected-error@below{{incompatible dimensions for matrix multiply}}
+    return a * b;
+}

@@ -180,6 +180,9 @@ private:
 
   mlir::Value buildMatMul(mlir::Location loc, mlir::Value lhs, mlir::Value rhs);
 
+  mlir::Value buildElementWise(mlir::Location loc, mlir::Value lhs, BinaryOp op,
+                                mlir::Value rhs, bool isExplicitElementWise = false);
+
   mlir::ParseResult parseAtom(mlir::Value &v);
 
   mlir::ParseResult parseLiteral(mlir::Type ring, mlir::Value &v);
@@ -1155,7 +1158,10 @@ mlir::ParseResult Parser::parseExpr(mlir::Value &v, int minPrec) {
           return mlir::failure();
         }
 
-        atomLhs = _builder.create<ElementWiseOp>(loc, atomLhs, binop, atomRhs);
+        atomLhs = buildElementWise(loc, atomLhs, binop, atomRhs, true);
+        if (!atomLhs) {
+          return mlir::failure();
+        }
       }
     } else {
       // Binary operator
@@ -1169,9 +1175,14 @@ mlir::ParseResult Parser::parseExpr(mlir::Value &v, int minPrec) {
       if (binop == BinaryOp::MUL) {
         // Matmul special case
         atomLhs = buildMatMul(loc, atomLhs, atomRhs);
+        if (!atomLhs) {
+          return mlir::failure();
+        }
       } else {
-        // TODO: check scalar matrix types
-        atomLhs = _builder.create<ElementWiseOp>(loc, atomLhs, binop, atomRhs);
+        atomLhs = buildElementWise(loc, atomLhs, binop, atomRhs);
+        if (!atomLhs) {
+          return mlir::failure();
+        }
       }
     }
   }
@@ -1249,6 +1260,64 @@ mlir::Value Parser::buildMatMul(mlir::Location loc, mlir::Value lhs,
   diag.attachNote(rhs.getLoc())
       << "right side has dimensions " << dimsToString(rhsType.getDims());
   return nullptr;
+}
+
+mlir::Value Parser::buildElementWise(mlir::Location loc, mlir::Value lhs,
+                                      BinaryOp op, mlir::Value rhs,
+                                      bool isExplicitElementWise) {
+  auto lhsType = llvm::cast<MatrixType>(lhs.getType());
+  auto rhsType = llvm::cast<MatrixType>(rhs.getType());
+
+  // Check that semirings match
+  if (lhsType.getSemiring() != rhsType.getSemiring()) {
+    auto diag = mlir::emitError(loc)
+                << "element-wise operation requires operands to have the same semiring";
+    diag.attachNote(lhs.getLoc())
+        << "left operand has semiring " << typeToString(lhsType.getSemiring());
+    diag.attachNote(rhs.getLoc())
+        << "right operand has semiring " << typeToString(rhsType.getSemiring());
+    return nullptr;
+  }
+
+  // Check that dimensions match
+  if (lhsType.getDims() != rhsType.getDims()) {
+    auto diag = mlir::emitError(loc)
+                << "element-wise operation requires operands to have the same dimensions";
+    diag.attachNote(lhs.getLoc())
+        << "left operand has dimensions " << dimsToString(lhsType.getDims());
+    diag.attachNote(rhs.getLoc())
+        << "right operand has dimensions " << dimsToString(rhsType.getDims());
+    return nullptr;
+  }
+
+  // Special checks for subtraction
+  if (op == BinaryOp::SUB) {
+    // Regular subtraction (e1 - e2) only works on scalars
+    // Element-wise subtraction (e1 (.-) e2) works on any dimensions
+    if (!isExplicitElementWise && (!lhsType.isScalar() || !rhsType.isScalar())) {
+      auto diag = mlir::emitError(loc)
+                  << "subtraction only works on scalars; use element-wise subtraction (.-) for matrices";
+      diag.attachNote(lhs.getLoc())
+          << "left operand has type " << typeToString(lhsType);
+      diag.attachNote(rhs.getLoc())
+          << "right operand has type " << typeToString(rhsType);
+      return nullptr;
+    }
+
+    // Subtraction (both forms) only supports int and real semirings
+    auto *ctx = _builder.getContext();
+    auto semiring = lhsType.getSemiring();
+    if (semiring != SemiringTypes::forInt(ctx) &&
+        semiring != SemiringTypes::forReal(ctx)) {
+      auto diag = mlir::emitError(loc)
+                  << "subtraction is only supported for int and real types";
+      diag.attachNote(lhs.getLoc())
+          << "operands have semiring " << typeToString(semiring);
+      return nullptr;
+    }
+  }
+
+  return _builder.create<ElementWiseOp>(loc, lhs, op, rhs);
 }
 
 mlir::ParseResult Parser::parseAtom(mlir::Value &v) {
@@ -1396,6 +1465,52 @@ mlir::ParseResult Parser::parseAtom(mlir::Value &v) {
         return mlir::failure();
       }
 
+      // Validate function signature
+      auto funcType = func.getFunctionType();
+      size_t numFuncArgs = funcType.getNumInputs();
+
+      if (args.size() == 1) {
+        // Unary apply: function must have exactly 1 argument
+        if (numFuncArgs != 1) {
+          auto diag = mlir::emitError(loc)
+                      << "apply() with 1 matrix argument requires a function with 1 parameter, but got "
+                      << numFuncArgs;
+          diag.attachNote(func.getLoc()) << "function defined here";
+          return mlir::failure();
+        }
+      } else {
+        // Binary apply: function must have exactly 2 arguments
+        if (numFuncArgs != 2) {
+          auto diag = mlir::emitError(loc)
+                      << "apply() with 2 arguments requires a function with 2 parameters, but got "
+                      << numFuncArgs;
+          diag.attachNote(func.getLoc()) << "function defined here";
+          return mlir::failure();
+        }
+
+        // Second argument must be a scalar
+        auto arg1Type = llvm::cast<MatrixType>(args[1].getType());
+        if (!arg1Type.isScalar()) {
+          auto diag = mlir::emitError(loc)
+                      << "second argument to apply() must be a scalar";
+          diag.attachNote(args[1].getLoc())
+              << "argument has type " << typeToString(arg1Type);
+          return mlir::failure();
+        }
+      }
+
+      // Check that all function parameters are scalars
+      for (size_t i = 0; i < numFuncArgs; i++) {
+        auto paramType = llvm::dyn_cast<MatrixType>(funcType.getInput(i));
+        if (!paramType || !paramType.isScalar()) {
+          auto diag = mlir::emitError(loc)
+                      << "apply() requires function parameters to be scalars";
+          diag.attachNote(func.getLoc())
+              << "parameter " << i << " has type " << funcType.getInput(i);
+          return mlir::failure();
+        }
+      }
+
       if (args.size() == 1) {
         v = _builder.create<ApplyUnaryOp>(loc, func, args[0]);
       } else {
@@ -1423,6 +1538,71 @@ mlir::ParseResult Parser::parseAtom(mlir::Value &v) {
       }
 
       if (eatOrError(Token::RPAREN)) {
+        return mlir::failure();
+      }
+
+      // Validate function signature
+      auto funcType = func.getFunctionType();
+      size_t numFuncArgs = funcType.getNumInputs();
+
+      if (args.size() == 1) {
+        // Unary select: function must have exactly 1 argument
+        if (numFuncArgs != 1) {
+          auto diag = mlir::emitError(loc)
+                      << "select() with 1 matrix argument requires a function with 1 parameter, but got "
+                      << numFuncArgs;
+          diag.attachNote(func.getLoc()) << "function defined here";
+          return mlir::failure();
+        }
+      } else {
+        // Binary select: function must have exactly 2 arguments
+        if (numFuncArgs != 2) {
+          auto diag = mlir::emitError(loc)
+                      << "select() with 2 arguments requires a function with 2 parameters, but got "
+                      << numFuncArgs;
+          diag.attachNote(func.getLoc()) << "function defined here";
+          return mlir::failure();
+        }
+
+        // Second argument must be a scalar
+        auto arg1Type = llvm::cast<MatrixType>(args[1].getType());
+        if (!arg1Type.isScalar()) {
+          auto diag = mlir::emitError(loc)
+                      << "second argument to select() must be a scalar";
+          diag.attachNote(args[1].getLoc())
+              << "argument has type " << typeToString(arg1Type);
+          return mlir::failure();
+        }
+      }
+
+      // Check that all function parameters are scalars
+      for (size_t i = 0; i < numFuncArgs; i++) {
+        auto paramType = llvm::dyn_cast<MatrixType>(funcType.getInput(i));
+        if (!paramType || !paramType.isScalar()) {
+          auto diag = mlir::emitError(loc)
+                      << "select() requires function parameters to be scalars";
+          diag.attachNote(func.getLoc())
+              << "parameter " << i << " has type " << funcType.getInput(i);
+          return mlir::failure();
+        }
+      }
+
+      // Check that function returns a boolean scalar
+      if (funcType.getNumResults() != 1) {
+        auto diag = mlir::emitError(loc)
+                    << "select() requires function to return exactly one value";
+        diag.attachNote(func.getLoc()) << "function defined here";
+        return mlir::failure();
+      }
+
+      auto returnType = llvm::dyn_cast<MatrixType>(funcType.getResult(0));
+      auto *ctx = _builder.getContext();
+      auto expectedReturnType = MatrixType::scalarOf(SemiringTypes::forBool(ctx));
+      if (!returnType || returnType != expectedReturnType) {
+        auto diag = mlir::emitError(loc)
+                    << "select() requires function to return bool";
+        diag.attachNote(func.getLoc())
+            << "function returns " << funcType.getResult(0);
         return mlir::failure();
       }
 
@@ -1499,6 +1679,15 @@ mlir::ParseResult Parser::parseAtom(mlir::Value &v) {
         return mlir::failure();
       }
 
+      auto argType = llvm::cast<MatrixType>(arg.getType());
+      if (!argType.isColumnVector() && !argType.isRowVector()) {
+        auto diag = mlir::emitError(loc)
+                    << "diag() requires a row or column vector";
+        diag.attachNote(arg.getLoc())
+            << "argument has type " << typeToString(argType);
+        return mlir::failure();
+      }
+
       v = _builder.create<DiagOp>(loc, arg);
       return mlir::success();
     }
@@ -1545,6 +1734,19 @@ mlir::ParseResult Parser::parseAtom(mlir::Value &v) {
   }
   case Token::MINUS: {
     if (eatOrError(Token::MINUS) || parseAtom(v)) {
+      return mlir::failure();
+    }
+
+    // Check that negation is only used with int or real semirings
+    auto vType = llvm::cast<MatrixType>(v.getType());
+    auto semiring = vType.getSemiring();
+    auto *ctx = _builder.getContext();
+    if (semiring != SemiringTypes::forInt(ctx) &&
+        semiring != SemiringTypes::forReal(ctx)) {
+      auto diag = mlir::emitError(loc)
+                  << "negation is only supported for int and real types";
+      diag.attachNote(v.getLoc())
+          << "operand has semiring " << typeToString(semiring);
       return mlir::failure();
     }
 

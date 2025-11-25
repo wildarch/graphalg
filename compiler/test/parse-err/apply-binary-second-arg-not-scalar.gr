@@ -1,0 +1,14 @@
+// RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
+
+func binary(a: int, b: int) -> int {
+    return a + b;
+}
+
+func ApplyBinarySecondArgNotScalar(
+    a: Matrix<s, s, int>,
+    // expected-note@below{{argument has type Vector<s, int>}}
+    b: Vector<s, int>) -> Matrix<s, s, int> {
+    // Binary apply requires the second argument to be a scalar
+    // expected-error@below{{second argument to apply() must be a scalar}}
+    return apply(binary, a, b);
+}

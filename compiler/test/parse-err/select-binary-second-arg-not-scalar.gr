@@ -1,0 +1,14 @@
+// RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
+
+func binary(a: int, b: int) -> bool {
+    return a == b;
+}
+
+func SelectBinarySecondArgNotScalar(
+    a: Matrix<s, s, int>,
+    // expected-note@below{{argument has type Vector<s, int>}}
+    b: Vector<s, int>) -> Matrix<s, s, int> {
+    // Binary select requires the second argument to be a scalar
+    // expected-error@below{{second argument to select() must be a scalar}}
+    return select(binary, a, b);
+}

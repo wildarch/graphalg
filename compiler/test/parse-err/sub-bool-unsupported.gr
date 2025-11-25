@@ -1,0 +1,9 @@
+// RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
+
+func SubBoolUnsupported(
+    // expected-note@below{{operands have semiring bool}}
+    a: bool, b: bool) -> bool {
+    // Subtraction is not supported for bool semiring (only int and real)
+    // expected-error@below{{subtraction is only supported for int and real types}}
+    return a - b;
+}

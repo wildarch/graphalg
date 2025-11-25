@@ -1,0 +1,7 @@
+// RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
+
+func ApplyUndefinedFunc(m: Matrix<s, s, int>) -> Matrix<s, s, int> {
+    // The function 'undefinedFunc' does not exist
+    // expected-error@below{{unknown function 'undefinedFunc'}}
+    return apply(undefinedFunc, m);
+}

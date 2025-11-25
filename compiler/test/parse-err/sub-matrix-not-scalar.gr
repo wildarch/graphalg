@@ -1,0 +1,11 @@
+// RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
+
+func SubMatrixNotScalar(
+    // expected-note@below{{left operand has type Matrix<s, s, int>}}
+    a: Matrix<s, s, int>,
+    // expected-note@below{{right operand has type Matrix<s, s, int>}}
+    b: Matrix<s, s, int>) -> Matrix<s, s, int> {
+    // Subtraction only works on scalars, not matrices
+    // expected-error@below{{subtraction only works on scalars; use element-wise subtraction (.-) for matrices}}
+    return a - b;
+}
