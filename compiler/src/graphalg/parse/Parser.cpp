@@ -1146,6 +1146,59 @@ mlir::ParseResult Parser::parseExpr(mlir::Value &v, int minPrec) {
           return mlir::failure();
         }
 
+        // Validate element-wise function application
+        auto funcType = funcOp.getFunctionType();
+
+        // Check that function takes exactly 2 parameters
+        if (funcType.getNumInputs() != 2) {
+          auto diag = mlir::emitError(loc)
+                      << "element-wise function application requires a function "
+                         "with 2 parameters, but got "
+                      << funcType.getNumInputs();
+          diag.attachNote(funcOp.getLoc()) << "function defined here";
+          return mlir::failure();
+        }
+
+        // Check that all function parameters are scalars
+        for (size_t i = 0; i < 2; i++) {
+          auto paramType = llvm::dyn_cast<MatrixType>(funcType.getInput(i));
+          if (!paramType || !paramType.isScalar()) {
+            auto diag = mlir::emitError(loc)
+                        << "element-wise function application requires function "
+                           "parameters to be scalars";
+            diag.attachNote(funcOp.getLoc())
+                << "parameter " << i << " has type "
+                << typeToString(funcType.getInput(i));
+            return mlir::failure();
+          }
+        }
+
+        // Check that operand types match function parameter types
+        auto lhsType = llvm::cast<MatrixType>(atomLhs.getType());
+        auto rhsType = llvm::cast<MatrixType>(atomRhs.getType());
+        auto param0Type = llvm::cast<MatrixType>(funcType.getInput(0));
+        auto param1Type = llvm::cast<MatrixType>(funcType.getInput(1));
+
+        if (lhsType.getSemiring() != param0Type.getSemiring()) {
+          auto diag = mlir::emitError(loc)
+                      << "left operand type does not match first parameter type";
+          diag.attachNote(atomLhs.getLoc())
+              << "left operand has type " << typeToString(lhsType.getSemiring());
+          diag.attachNote(funcOp.getLoc())
+              << "first parameter has type " << typeToString(param0Type.getSemiring());
+          return mlir::failure();
+        }
+
+        if (rhsType.getSemiring() != param1Type.getSemiring()) {
+          auto diag = mlir::emitError(loc)
+                      << "right operand type does not match second parameter type";
+          diag.attachNote(atomRhs.getLoc())
+              << "right operand has type " << typeToString(rhsType.getSemiring());
+          diag.attachNote(funcOp.getLoc())
+              << "second parameter has type " << typeToString(param1Type.getSemiring());
+          return mlir::failure();
+        }
+
         atomLhs =
             _builder.create<ApplyElementWiseOp>(loc, funcOp, atomLhs, atomRhs);
       } else {
@@ -1311,6 +1364,37 @@ mlir::Value Parser::buildElementWise(mlir::Location loc, mlir::Value lhs,
         semiring != SemiringTypes::forReal(ctx)) {
       auto diag = mlir::emitError(loc)
                   << "subtraction is only supported for int and real types";
+      diag.attachNote(lhs.getLoc())
+          << "operands have semiring " << typeToString(semiring);
+      return nullptr;
+    }
+  }
+
+  // Special checks for division
+  if (op == BinaryOp::DIV) {
+    // Division only supports real and trop_int semirings
+    auto *ctx = _builder.getContext();
+    auto semiring = lhsType.getSemiring();
+    if (semiring != SemiringTypes::forReal(ctx) &&
+        semiring != SemiringTypes::forTropInt(ctx)) {
+      auto diag = mlir::emitError(loc)
+                  << "division is only supported for real and trop_int types";
+      diag.attachNote(lhs.getLoc())
+          << "operands have semiring " << typeToString(semiring);
+      return nullptr;
+    }
+  }
+
+  // Special checks for comparison operators
+  if (op == BinaryOp::LT || op == BinaryOp::GT || op == BinaryOp::LE || op == BinaryOp::GE) {
+    // Comparison only supports int, real, and trop_real semirings
+    auto *ctx = _builder.getContext();
+    auto semiring = lhsType.getSemiring();
+    if (semiring != SemiringTypes::forInt(ctx) &&
+        semiring != SemiringTypes::forReal(ctx) &&
+        semiring != SemiringTypes::forTropReal(ctx)) {
+      auto diag = mlir::emitError(loc)
+                  << "comparison is only supported for int, real, and trop_real types";
       diag.attachNote(lhs.getLoc())
           << "operands have semiring " << typeToString(semiring);
       return nullptr;
@@ -1506,7 +1590,7 @@ mlir::ParseResult Parser::parseAtom(mlir::Value &v) {
           auto diag = mlir::emitError(loc)
                       << "apply() requires function parameters to be scalars";
           diag.attachNote(func.getLoc())
-              << "parameter " << i << " has type " << funcType.getInput(i);
+              << "parameter " << i << " has type " << typeToString(funcType.getInput(i));
           return mlir::failure();
         }
       }
@@ -1582,7 +1666,7 @@ mlir::ParseResult Parser::parseAtom(mlir::Value &v) {
           auto diag = mlir::emitError(loc)
                       << "select() requires function parameters to be scalars";
           diag.attachNote(func.getLoc())
-              << "parameter " << i << " has type " << funcType.getInput(i);
+              << "parameter " << i << " has type " << typeToString(funcType.getInput(i));
           return mlir::failure();
         }
       }
@@ -1602,7 +1686,7 @@ mlir::ParseResult Parser::parseAtom(mlir::Value &v) {
         auto diag = mlir::emitError(loc)
                     << "select() requires function to return bool";
         diag.attachNote(func.getLoc())
-            << "function returns " << funcType.getResult(0);
+            << "function returns " << typeToString(funcType.getResult(0));
         return mlir::failure();
       }
 
@@ -1726,6 +1810,18 @@ mlir::ParseResult Parser::parseAtom(mlir::Value &v) {
   }
   case Token::NOT: {
     if (eatOrError(Token::NOT) || parseAtom(v)) {
+      return mlir::failure();
+    }
+
+    // Check that NOT is only used with bool semiring
+    auto vType = llvm::cast<MatrixType>(v.getType());
+    auto semiring = vType.getSemiring();
+    auto *ctx = _builder.getContext();
+    if (semiring != SemiringTypes::forBool(ctx)) {
+      auto diag = mlir::emitError(loc)
+                  << "not operator is only supported for bool type";
+      diag.attachNote(v.getLoc())
+          << "operand has semiring " << typeToString(semiring);
       return mlir::failure();
     }
 

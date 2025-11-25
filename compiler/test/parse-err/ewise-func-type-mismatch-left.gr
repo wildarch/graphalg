@@ -1,0 +1,13 @@
+// RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
+
+// expected-note@below{{first parameter has type real}}
+func addReals(a: real, b: real) -> real {
+    return a + b;
+}
+
+func EwiseFuncTypeMismatchLeft(
+    // expected-note@below{{left operand has type int}}
+    m: Matrix<s, s, int>, n: Matrix<s, s, int>) -> Matrix<s, s, int> {
+    // expected-error@below{{left operand type does not match first parameter type}}
+    return m (.addReals) n;
+}

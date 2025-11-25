@@ -1,0 +1,6 @@
+// RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
+
+func LiteralIntFromReal() -> int {
+    // expected-error@below{{expected an integer value}}
+    return int(42.0);
+}

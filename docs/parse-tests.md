@@ -353,7 +353,7 @@ func ApplyUnaryFuncWrongArgCount(m: Matrix<s, s, int>) -> Matrix<s, s, int> {
 
 **apply() with non-scalar function parameters** (`apply-func-non-scalar-args.gr`):
 ```graphalg
-// expected-note@below{{parameter 0 has type '!graphalg.mat<distinct[0]<> x distinct[0]<> x i64>'}}
+// expected-note@below{{parameter 0 has type Matrix<s, s, int>}}
 func nonScalarFunc(m: Matrix<s, s, int>) -> int {
     return int(0);
 }
@@ -366,7 +366,7 @@ func ApplyFuncNonScalarArgs(m: Matrix<s, s, int>) -> Matrix<s, s, int> {
 
 **select() with non-bool return type** (`select-func-non-bool-return.gr`):
 ```graphalg
-// expected-note@below{{function returns '!graphalg.mat<1 x 1 x i64>'}}
+// expected-note@below{{function returns int}}
 func returnsInt(a: int) -> int {
     return a;
 }
@@ -440,7 +440,7 @@ func NegBoolUnsupported(
 
 ## Current Test Coverage
 
-As of now, we have 157 parser tests covering:
+As of now, we have 173 parser tests covering:
 - Duplicate definitions (functions and parameters)
 - Fill syntax errors (vector vs matrix, non-scalar expressions)
 - Masked assignment errors (dimension mismatches)
@@ -453,11 +453,172 @@ As of now, we have 157 parser tests covering:
 - Built-in function validation (diag, apply, select)
 - Element-wise operation type checking (semiring and dimension compatibility)
 - Subtraction and negation semiring restrictions (only int and real)
+- **Comparison operator semiring restrictions (only int, real, and trop_real)**
+- **Division semiring restrictions (only real and trop_int)**
+- **NOT operator type restrictions (only bool)**
+- **Literal type conversion validation**
+- **Element-wise function application validation (parameter count, types, and existence)**
+### 12. Comparison Operator Errors
 
-## Additional Tests to Add
-- compare less than: fails on bool and trop_int semirings
-- div: fails on int and trop_real semirings
-- not: fails on int semiring
-- literal: `bool(42)`, `int(42.0)` and `trop_real(false)`
-- Use `TypeFormatter::format` when printing types in error messages in the parser.
-- element-wise function application: look at the tests with have for `apply(..)` and element-wise addition, and add similar tests for element-wise function application (nr. of parameters, type mismatch, does the function to call exist)
+**Comparison with unsupported semiring** (`cmp-bool-unsupported.gr`, `cmp-trop-int-unsupported.gr`):
+```graphalg
+func CmpBoolUnsupported(
+    // expected-note@below{{operands have semiring bool}}
+    a: bool, b: bool) -> bool {
+    // expected-error@below{{comparison is only supported for int, real, and trop_real types}}
+    return a < b;
+}
+```
+
+Comparison operators (`<`, `>`, `<=`, `>=`) only support int, real, and trop_real semirings. They are not supported for bool or trop_int.
+
+### 13. Division Errors
+
+**Division with unsupported semiring** (`div-int-unsupported.gr`, `div-trop-real-unsupported.gr`, `div-bool-unsupported.gr`):
+```graphalg
+func DivIntUnsupported(
+    // expected-note@below{{operands have semiring int}}
+    a: int, b: int) -> int {
+    // expected-error@below{{division is only supported for real and trop_int types}}
+    return a / b;
+}
+```
+
+Division only supports real and trop_int semirings. It is not supported for int, bool, or trop_real.
+
+### 14. NOT Operator Errors
+
+**NOT with non-bool semiring** (`not-int-unsupported.gr`, `not-real-unsupported.gr`, `not-trop-int-unsupported.gr`):
+```graphalg
+func NotIntUnsupported(
+    // expected-note@below{{operand has semiring int}}
+    a: int) -> int {
+    // expected-error@below{{not operator is only supported for bool type}}
+    return !a;
+}
+```
+
+The NOT operator (`!`) only works with bool type. It is not supported for any other semiring.
+
+### 15. Literal Type Conversion Errors
+
+**Invalid literal conversions** (`literal-bool-from-int.gr`, `literal-int-from-real.gr`, `literal-trop-real-from-bool.gr`):
+```graphalg
+func LiteralBoolFromInt() -> bool {
+    // expected-error@below{{expected 'true' or 'false'}}
+    return bool(42);
+}
+
+func LiteralIntFromReal() -> int {
+    // expected-error@below{{expected an integer value}}
+    return int(42.0);
+}
+
+func LiteralTropRealFromBool() -> trop_real {
+    // expected-error@below{{expected a floating-point value}}
+    return trop_real(false);
+}
+```
+
+Each semiring type requires a specific literal format:
+- `bool` requires `true` or `false`
+- `int` and `trop_int` require integer literals
+- `real` and `trop_real` require floating-point literals
+
+### 16. Element-wise Function Application Errors
+
+Element-wise function application uses the syntax `a (.func) b` to apply a binary function element-wise to two matrices.
+
+**Wrong parameter count** (`ewise-func-wrong-param-count.gr`):
+```graphalg
+// expected-note@below{{function defined here}}
+func oneParam(a: int) -> int {
+    return a;
+}
+
+func Test(m: Matrix<s, s, int>, n: Matrix<s, s, int>) -> Matrix<s, s, int> {
+    // expected-error@below{{element-wise function application requires a function with 2 parameters, but got 1}}
+    return m (.oneParam) n;
+}
+```
+
+**Non-scalar parameters** (`ewise-func-non-scalar-params.gr`):
+```graphalg
+// expected-note@below{{parameter 0 has type Matrix<s, s, int>}}
+func matrixParam(m: Matrix<s, s, int>, n: int) -> int {
+    return n;
+}
+
+func Test(m: Matrix<s, s, int>, n: Matrix<s, s, int>) -> Matrix<s, s, int> {
+    // expected-error@below{{element-wise function application requires function parameters to be scalars}}
+    return m (.matrixParam) n;
+}
+```
+
+**Type mismatch** (`ewise-func-type-mismatch-left.gr`, `ewise-func-type-mismatch-right.gr`):
+```graphalg
+// expected-note@below{{first parameter has type real}}
+func addReals(a: real, b: real) -> real {
+    return a + b;
+}
+
+func Test(
+    // expected-note@below{{left operand has type int}}
+    m: Matrix<s, s, int>, n: Matrix<s, s, int>) -> Matrix<s, s, int> {
+    // expected-error@below{{left operand type does not match first parameter type}}
+    return m (.addReals) n;
+}
+```
+
+**Undefined function** (`ewise-func-undefined.gr`):
+```graphalg
+func Test(m: Matrix<s, s, int>, n: Matrix<s, s, int>) -> Matrix<s, s, int> {
+    // expected-error@below{{unknown function 'doesNotExist'}}
+    return m (.doesNotExist) n;
+}
+```
+
+## Best Practices for Error Messages
+
+### Always Use TypeFormatter for Type Display
+
+When emitting error messages that include types, **always use `typeToString()`** instead of directly printing MLIR types. This ensures user-friendly error messages.
+
+**Correct:**
+```cpp
+auto diag = mlir::emitError(loc)
+            << "parameter has type " << typeToString(funcType.getInput(i));
+```
+
+**Incorrect:**
+```cpp
+auto diag = mlir::emitError(loc)
+            << "parameter has type " << funcType.getInput(i);  // Shows raw MLIR type
+```
+
+The `typeToString()` function uses `TypeFormatter` internally, which formats types in a user-friendly way:
+- Raw MLIR: `!graphalg.mat<distinct[0]<> x distinct[0]<> x i64>`
+- Formatted: `Matrix<s, s, int>`
+
+### Semiring Type Restrictions Summary
+
+| Operation | Supported Semirings | Notes |
+|-----------|-------------------|-------|
+| Addition (`+`) | All | No restrictions |
+| Subtraction (`-`) | int, real | Scalar only without `(.-)` |
+| Multiplication (`*`) | All | Matrix multiplication has dimension requirements |
+| Division (`/`) | real, trop_int | |
+| Comparison (`<`, `>`, `<=`, `>=`) | int, real, trop_real | |
+| Equality (`==`, `!=`) | All | No restrictions |
+| NOT (`!`) | bool | Only boolean values |
+| Negation (`-x`) | int, real | Unary operator |
+
+### Validation Checklist for Element-wise Function Application
+
+When implementing validation for element-wise function application `a (.func) b`:
+
+1. ✅ Function must exist (checked by `parseFuncRef`)
+2. ✅ Function must have exactly 2 parameters
+3. ✅ All function parameters must be scalars
+4. ✅ Left operand type must match first parameter type
+5. ✅ Right operand type must match second parameter type

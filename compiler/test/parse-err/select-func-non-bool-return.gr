@@ -1,6 +1,6 @@
 // RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
 
-// expected-note@below{{function returns '!graphalg.mat<1 x 1 x i64>'}}
+// expected-note@below{{function returns int}}
 func returnsInt(a: int) -> int {
     return a;
 }

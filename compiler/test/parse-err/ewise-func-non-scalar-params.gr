@@ -1,0 +1,11 @@
+// RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
+
+// expected-note@below{{parameter 0 has type Matrix<s, s, int>}}
+func matrixParam(m: Matrix<s, s, int>, n: int) -> int {
+    return n;
+}
+
+func EwiseFuncNonScalarParams(m: Matrix<s, s, int>, n: Matrix<s, s, int>) -> Matrix<s, s, int> {
+    // expected-error@below{{element-wise function application requires function parameters to be scalars}}
+    return m (.matrixParam) n;
+}

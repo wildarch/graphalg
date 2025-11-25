@@ -22,7 +22,7 @@ func Mul(a:int, b:int, c:int) -> int {
 }
 
 // CHECK-LABEL: @Div
-func Div(a:int, b:int, c:int) -> int {
+func Div(a:real, b:real, c:real) -> real {
     // CHECK: %[[#DIV:]] = graphalg.ewise %arg0 DIV %arg1
     // CHECK: return %[[#DIV]]
     return a / b;

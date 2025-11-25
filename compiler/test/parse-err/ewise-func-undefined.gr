@@ -1,0 +1,6 @@
+// RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
+
+func EwiseFuncUndefined(m: Matrix<s, s, int>, n: Matrix<s, s, int>) -> Matrix<s, s, int> {
+    // expected-error@below{{unknown function 'doesNotExist'}}
+    return m (.doesNotExist) n;
+}

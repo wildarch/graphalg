@@ -1,0 +1,9 @@
+// RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
+
+func NotTropIntUnsupported(
+    // expected-note@below{{operand has semiring trop_int}}
+    a: trop_int) -> trop_int {
+    // NOT is not supported for trop_int semiring (only bool)
+    // expected-error@below{{not operator is only supported for bool type}}
+    return !a;
+}

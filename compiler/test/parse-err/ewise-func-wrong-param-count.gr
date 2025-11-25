@@ -1,0 +1,11 @@
+// RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
+
+// expected-note@below{{function defined here}}
+func oneParam(a: int) -> int {
+    return a;
+}
+
+func EwiseFuncWrongParamCount(m: Matrix<s, s, int>, n: Matrix<s, s, int>) -> Matrix<s, s, int> {
+    // expected-error@below{{element-wise function application requires a function with 2 parameters, but got 1}}
+    return m (.oneParam) n;
+}
