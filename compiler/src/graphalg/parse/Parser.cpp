@@ -177,19 +177,39 @@ private:
 
   mlir::ParseResult parseBinaryOp(BinaryOp &op);
 
+  /**
+   * Check input types and build \c MatMulOp.
+   *
+   * @return \c nullptr if type checking fails.
+   */
   mlir::Value buildMatMul(mlir::Location loc, mlir::Value lhs, mlir::Value rhs);
 
+  /**
+   * Check input types and build \c ElementWiseOp.
+   *
+   * @param mustBeScalar Whether we parsed (a <op> b) or (a (.<op>) b).
+   *
+   * @return \c nullptr if type checking fails.
+   */
   mlir::Value buildElementWise(mlir::Location loc, mlir::Value lhs, BinaryOp op,
                                mlir::Value rhs, bool mustBeScalar);
 
-  mlir::Value buildElementWiseFunc(mlir::Location loc, mlir::Value lhs,
-                                   mlir::func::FuncOp funcOp, mlir::Value rhs);
+  /**
+   * Check input types and build \c ElementWiseApplyOp.
+   *
+   * @return \c nullptr if type checking fails.
+   */
+  mlir::Value buildElementWiseApply(mlir::Location loc, mlir::Value lhs,
+                                    mlir::func::FuncOp funcOp, mlir::Value rhs);
 
+  /**
+   * Builds \c TransposeOp, \c NrowsOp, \c NcolsOp or \c NvalsOp depending on \c
+   * property.
+   */
   mlir::Value buildDotProperty(mlir::Location loc, mlir::Value value,
                                llvm::StringRef property);
 
   mlir::ParseResult parseAtom(mlir::Value &v);
-
   mlir::ParseResult parseAtomMatrix(mlir::Value &v);
   mlir::ParseResult parseAtomVector(mlir::Value &v);
   mlir::ParseResult parseAtomCast(mlir::Value &v);
@@ -771,7 +791,7 @@ mlir::ParseResult Parser::parseStmtFor() {
       }
     }
 
-    // Parse condtion expression.
+    // Parse condition expression.
     mlir::Value result;
     loc = cur().loc;
     if (parseExpr(result) || eatOrError(Token::SEMI)) {
@@ -1158,7 +1178,7 @@ mlir::ParseResult Parser::parseExpr(mlir::Value &v, int minPrec) {
           return mlir::failure();
         }
 
-        atomLhs = buildElementWiseFunc(loc, atomLhs, funcOp, atomRhs);
+        atomLhs = buildElementWiseApply(loc, atomLhs, funcOp, atomRhs);
         if (!atomLhs) {
           return mlir::failure();
         }
@@ -1360,9 +1380,9 @@ mlir::Value Parser::buildElementWise(mlir::Location loc, mlir::Value lhs,
   return _builder.create<ElementWiseOp>(loc, lhs, op, rhs);
 }
 
-mlir::Value Parser::buildElementWiseFunc(mlir::Location loc, mlir::Value lhs,
-                                         mlir::func::FuncOp funcOp,
-                                         mlir::Value rhs) {
+mlir::Value Parser::buildElementWiseApply(mlir::Location loc, mlir::Value lhs,
+                                          mlir::func::FuncOp funcOp,
+                                          mlir::Value rhs) {
   // Validate element-wise function application
   auto funcType = funcOp.getFunctionType();
 
@@ -1390,6 +1410,16 @@ mlir::Value Parser::buildElementWiseFunc(mlir::Location loc, mlir::Value lhs,
         << "first parameter has type " << typeToString(param0Type);
     diag.attachNote(funcOp.getLoc())
         << "second parameter has type " << typeToString(param1Type);
+    return nullptr;
+  }
+
+  // Check that operand dimensions match
+  if (lhsType.getDims() != rhsType.getDims()) {
+    auto diag = mlir::emitError(loc) << "operands have different dimensions";
+    diag.attachNote(lhs.getLoc())
+        << "left operand has dimensions " << dimsToString(lhsType.getDims());
+    diag.attachNote(rhs.getLoc())
+        << "right operand has dimensions " << dimsToString(rhsType.getDims());
     return nullptr;
   }
 
