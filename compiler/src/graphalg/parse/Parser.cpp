@@ -181,6 +181,12 @@ private:
   mlir::Value buildElementWise(mlir::Location loc, mlir::Value lhs, BinaryOp op,
                                mlir::Value rhs, bool mustBeScalar);
 
+  mlir::Value buildElementWiseFunc(mlir::Location loc, mlir::Value lhs,
+                                   mlir::func::FuncOp funcOp, mlir::Value rhs);
+
+  mlir::Value buildDotProperty(mlir::Location loc, mlir::Value value,
+                               llvm::StringRef property);
+
   mlir::ParseResult parseAtom(mlir::Value &v);
 
   mlir::ParseResult parseLiteral(mlir::Type ring, mlir::Value &v);
@@ -1115,21 +1121,14 @@ mlir::ParseResult Parser::parseExpr(mlir::Value &v, int minPrec) {
                << "expected matrix property such as 'nrows'";
       }
 
-      if (cur().body == "T") {
-        atomLhs = _builder.create<TransposeOp>(cur().loc, atomLhs);
-      } else if (cur().body == "nrows") {
-        auto matType = llvm::cast<MatrixType>(atomLhs.getType());
-        atomLhs = _builder.create<CastDimOp>(cur().loc, matType.getRows());
-      } else if (cur().body == "ncols") {
-        auto matType = llvm::cast<MatrixType>(atomLhs.getType());
-        atomLhs = _builder.create<CastDimOp>(cur().loc, matType.getCols());
-      } else if (cur().body == "nvals") {
-        atomLhs = _builder.create<NValsOp>(cur().loc, atomLhs);
-      } else {
-        return mlir::emitError(cur().loc) << "invalid matrix property";
-      }
-
+      auto loc = cur().loc;
+      auto property = cur().body;
       eat();
+
+      atomLhs = buildDotProperty(loc, atomLhs, property);
+      if (!atomLhs) {
+        return mlir::failure();
+      }
     } else if (ewise) {
       eat(); // '('
       eat(); // '.'
@@ -1143,69 +1142,10 @@ mlir::ParseResult Parser::parseExpr(mlir::Value &v, int minPrec) {
           return mlir::failure();
         }
 
-        // Validate element-wise function application
-        auto funcType = funcOp.getFunctionType();
-
-        // Check that function takes exactly 2 parameters
-        if (funcType.getNumInputs() != 2) {
-          auto diag =
-              mlir::emitError(loc)
-              << "element-wise function application requires a function "
-                 "with 2 parameters, but got "
-              << funcType.getNumInputs();
-          diag.attachNote(funcOp.getLoc()) << "function defined here";
+        atomLhs = buildElementWiseFunc(loc, atomLhs, funcOp, atomRhs);
+        if (!atomLhs) {
           return mlir::failure();
         }
-
-        // Check that all function parameters are scalars
-        for (size_t i = 0; i < 2; i++) {
-          auto paramType = llvm::dyn_cast<MatrixType>(funcType.getInput(i));
-          if (!paramType || !paramType.isScalar()) {
-            auto diag =
-                mlir::emitError(loc)
-                << "element-wise function application requires function "
-                   "parameters to be scalars";
-            diag.attachNote(funcOp.getLoc())
-                << "parameter " << i << " has type "
-                << typeToString(funcType.getInput(i));
-            return mlir::failure();
-          }
-        }
-
-        // Check that operand types match function parameter types
-        auto lhsType = llvm::cast<MatrixType>(atomLhs.getType());
-        auto rhsType = llvm::cast<MatrixType>(atomRhs.getType());
-        auto param0Type = llvm::cast<MatrixType>(funcType.getInput(0));
-        auto param1Type = llvm::cast<MatrixType>(funcType.getInput(1));
-
-        if (lhsType.getSemiring() != param0Type.getSemiring()) {
-          auto diag =
-              mlir::emitError(loc)
-              << "left operand type does not match first parameter type";
-          diag.attachNote(atomLhs.getLoc())
-              << "left operand has type "
-              << typeToString(lhsType.getSemiring());
-          diag.attachNote(funcOp.getLoc())
-              << "first parameter has type "
-              << typeToString(param0Type.getSemiring());
-          return mlir::failure();
-        }
-
-        if (rhsType.getSemiring() != param1Type.getSemiring()) {
-          auto diag =
-              mlir::emitError(loc)
-              << "right operand type does not match second parameter type";
-          diag.attachNote(atomRhs.getLoc())
-              << "right operand has type "
-              << typeToString(rhsType.getSemiring());
-          diag.attachNote(funcOp.getLoc())
-              << "second parameter has type "
-              << typeToString(param1Type.getSemiring());
-          return mlir::failure();
-        }
-
-        atomLhs =
-            _builder.create<ApplyElementWiseOp>(loc, funcOp, atomLhs, atomRhs);
       } else {
         // element-wise binop
         auto loc = cur().loc;
@@ -1405,6 +1345,82 @@ mlir::Value Parser::buildElementWise(mlir::Location loc, mlir::Value lhs,
   }
 
   return _builder.create<ElementWiseOp>(loc, lhs, op, rhs);
+}
+
+mlir::Value Parser::buildElementWiseFunc(mlir::Location loc, mlir::Value lhs,
+                                         mlir::func::FuncOp funcOp,
+                                         mlir::Value rhs) {
+  // Validate element-wise function application
+  auto funcType = funcOp.getFunctionType();
+
+  // Check that function takes exactly 2 parameters
+  if (funcType.getNumInputs() != 2) {
+    auto diag = mlir::emitError(loc)
+                << "element-wise function application requires a function "
+                   "with 2 parameters, but got "
+                << funcType.getNumInputs();
+    diag.attachNote(funcOp.getLoc()) << "function defined here";
+    return nullptr;
+  }
+
+  // Check that all function parameters are scalars
+  for (auto [i, t] : llvm::enumerate(funcType.getInputs())) {
+    auto paramType = llvm::cast<MatrixType>(t);
+    if (!paramType.isScalar()) {
+      auto diag = mlir::emitError(loc)
+                  << "element-wise function application requires function "
+                     "parameters to be scalars";
+      diag.attachNote(funcOp.getLoc())
+          << "parameter " << i << " has type " << typeToString(paramType);
+      return nullptr;
+    }
+  }
+
+  // Check that operand types match function parameter types
+  auto lhsType = llvm::cast<MatrixType>(lhs.getType());
+  auto rhsType = llvm::cast<MatrixType>(rhs.getType());
+  auto param0Type = llvm::cast<MatrixType>(funcType.getInput(0));
+  auto param1Type = llvm::cast<MatrixType>(funcType.getInput(1));
+
+  if (lhsType.getSemiring() != param0Type.getSemiring()) {
+    auto diag = mlir::emitError(loc)
+                << "left operand type does not match first parameter type";
+    diag.attachNote(lhs.getLoc())
+        << "left operand has type " << typeToString(lhsType.getSemiring());
+    diag.attachNote(funcOp.getLoc()) << "first parameter has type "
+                                     << typeToString(param0Type.getSemiring());
+    return nullptr;
+  }
+
+  if (rhsType.getSemiring() != param1Type.getSemiring()) {
+    auto diag = mlir::emitError(loc)
+                << "right operand type does not match second parameter type";
+    diag.attachNote(rhs.getLoc())
+        << "right operand has type " << typeToString(rhsType.getSemiring());
+    diag.attachNote(funcOp.getLoc()) << "second parameter has type "
+                                     << typeToString(param1Type.getSemiring());
+    return nullptr;
+  }
+
+  return _builder.create<ApplyElementWiseOp>(loc, funcOp, lhs, rhs);
+}
+
+mlir::Value Parser::buildDotProperty(mlir::Location loc, mlir::Value value,
+                                     llvm::StringRef property) {
+  if (property == "T") {
+    return _builder.create<TransposeOp>(loc, value);
+  } else if (property == "nrows") {
+    auto matType = llvm::cast<MatrixType>(value.getType());
+    return _builder.create<CastDimOp>(loc, matType.getRows());
+  } else if (property == "ncols") {
+    auto matType = llvm::cast<MatrixType>(value.getType());
+    return _builder.create<CastDimOp>(loc, matType.getCols());
+  } else if (property == "nvals") {
+    return _builder.create<NValsOp>(loc, value);
+  } else {
+    mlir::emitError(loc) << "invalid matrix property";
+    return nullptr;
+  }
 }
 
 mlir::ParseResult Parser::parseAtom(mlir::Value &v) {
