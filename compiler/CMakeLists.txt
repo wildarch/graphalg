@@ -12,7 +12,8 @@ project(
 # it. If the LLVM build enables RTTI, we are free to choose.
 option(GRAPHALG_ENABLE_RTTI "Enable run time type information" OFF)
 
-option(ENABLE_WASM "Enable wasm-only targets" OFF)
+option(GRAPHALG_ENABLE_FUZZER "Enable building fuzzer targets" OFF)
+option(GRAPHALG_WITH_SANITIZE "Enable sanitizers" OFF)
 # ================================ END OPTIONS =================================
 
 # ================================= BEGIN LLVM =================================
@@ -46,9 +47,17 @@ endif()
 include(AddMLIR)
 # ================================== END MLIR ==================================
 
+if (GRAPHALG_WITH_SANITIZE)
+    # -fno-omit-frame-pointer added to get nicer stack traces
+    # See https://clang.llvm.org/docs/AddressSanitizer.html#usage
+    add_compile_options(-fsanitize=address,undefined,leak -fno-omit-frame-pointer)
+    add_link_options(-fsanitize=address,undefined,leak -fno-omit-frame-pointer)
+endif ()
+
 # Directories with MLIR dialects
 add_subdirectory(include/graphalg)
 
 add_subdirectory(src)
 add_subdirectory(test)
 add_subdirectory(tools)
+
