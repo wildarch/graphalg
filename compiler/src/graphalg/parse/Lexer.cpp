@@ -128,8 +128,13 @@ void Lexer::eatWhitespace() {
       continue;
     } else if (peek(2) == "//") {
       // Line comment
-      while (cur() != '\n') {
+      while (cur() && cur() != '\n') {
         eat();
+      }
+
+      if (!cur()) {
+        // End of input
+        return;
       }
 
       assert(cur() == '\n');
