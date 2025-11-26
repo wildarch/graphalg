@@ -9,5 +9,5 @@ cp compiler/test/parse-err/*.gr $CORPUS_DIR/
 
 ./compiler/configure.sh
 cmake --build ./compiler/build --target fuzz-parser
-./compiler/build/tools/fuzz-parser $CORPUS_DIR -max_len=1000 -jobs=8
+./compiler/build/tools/fuzz-parser $CORPUS_DIR -max_len=1000 -jobs=8 -only_ascii=1
 ```
