@@ -13,7 +13,7 @@ project(
 option(GRAPHALG_ENABLE_RTTI "Enable run time type information" OFF)
 
 option(GRAPHALG_ENABLE_FUZZER "Enable building fuzzer targets" OFF)
-option(GRAPHALG_WITH_SANITIZE "Enable sanitizers" OFF)
+option(GRAPHALG_ENABLE_SANITIZE "Enable sanitizers" OFF)
 # ================================ END OPTIONS =================================
 
 # ================================= BEGIN LLVM =================================
@@ -47,12 +47,19 @@ endif()
 include(AddMLIR)
 # ================================== END MLIR ==================================
 
-if (GRAPHALG_WITH_SANITIZE)
+if (GRAPHALG_ENABLE_SANITIZE)
+    # Why these sanitizers in particular?
+    # See https://stackoverflow.com/questions/50364533
+    # AddressSanitizer is the only main sanitizer documented to work well with
+    # LibFuzzer (https://llvm.org/docs/LibFuzzer.html#id24).
+    #
     # -fno-omit-frame-pointer added to get nicer stack traces
     # See https://clang.llvm.org/docs/AddressSanitizer.html#usage
     add_compile_options(-fsanitize=address,undefined,leak -fno-omit-frame-pointer)
     add_link_options(-fsanitize=address,undefined,leak -fno-omit-frame-pointer)
 endif ()
+
+
 
 # Directories with MLIR dialects
 add_subdirectory(include/graphalg)
