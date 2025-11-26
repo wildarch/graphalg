@@ -4,6 +4,6 @@ func CmpTropIntUnsupported(
     // expected-note@below{{operands have semiring trop_int}}
     a: trop_int, b: trop_int) -> bool {
     // Comparison is not supported for trop_int semiring (only int, real, trop_real)
-    // expected-error@below{{comparison is only supported for int, real, and trop_real types}}
+    // expected-error@below{{ordered compare is only supported for int and real semirings}}
     return a < b;
 }

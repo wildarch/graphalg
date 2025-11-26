@@ -4,6 +4,6 @@ func CmpBoolUnsupported(
     // expected-note@below{{operands have semiring bool}}
     a: bool, b: bool) -> bool {
     // Comparison is not supported for bool semiring (only int, real, trop_real)
-    // expected-error@below{{comparison is only supported for int, real, and trop_real types}}
+    // expected-error@below{{ordered compare is only supported for int and real semirings}}
     return a < b;
 }

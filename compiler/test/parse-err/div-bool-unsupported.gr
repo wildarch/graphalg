@@ -4,6 +4,6 @@ func DivBoolUnsupported(
     // expected-note@below{{operands have semiring bool}}
     a: bool, b: bool) -> bool {
     // Division is not supported for bool semiring (only real and trop_int)
-    // expected-error@below{{division is only supported for real and trop_int types}}
+    // expected-error@below{{division is only supported for real semiring}}
     return a / b;
 }

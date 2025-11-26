@@ -6,6 +6,6 @@ func EwiseDifferentSemirings(
     // expected-note@below{{right operand has semiring real}}
     b: Matrix<s, s, real>) -> Matrix<s, s, int> {
     // Element-wise operations require operands to have the same semiring
-    // expected-error@below{{element-wise operation requires operands to have the same semiring}}
+    // expected-error@below{{operands have different semirings}}
     return a (.+) b;
 }

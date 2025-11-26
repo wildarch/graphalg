@@ -89,9 +89,7 @@ private:
 
   DimMapper _dimMapper;
 
-  // Track parsing context
-  int _loopDepth = 0;
-  bool _hasReturn = false;
+  // Expected return type for the current function.
   mlir::Type _expectedReturnType;
 
   Token cur() { return _tokens[_offset]; }
@@ -181,7 +179,7 @@ private:
   mlir::Value buildMatMul(mlir::Location loc, mlir::Value lhs, mlir::Value rhs);
 
   mlir::Value buildElementWise(mlir::Location loc, mlir::Value lhs, BinaryOp op,
-                                mlir::Value rhs, bool isExplicitElementWise = false);
+                               mlir::Value rhs, bool mustBeScalar);
 
   mlir::ParseResult parseAtom(mlir::Value &v);
 
@@ -450,6 +448,11 @@ mlir::ParseResult Parser::parseProgram() {
   return mlir::success();
 }
 
+static bool hasReturn(mlir::Block &block) {
+  return block.mightHaveTerminator() &&
+         llvm::isa<mlir::func::ReturnOp>(block.getTerminator());
+}
+
 mlir::ParseResult Parser::parseFunction() {
   llvm::StringRef name;
   llvm::SmallVector<llvm::StringRef> paramNames;
@@ -489,14 +492,13 @@ mlir::ParseResult Parser::parseFunction() {
 
   // Set expected return type for this function
   _expectedReturnType = returnType;
-  _hasReturn = false;
 
   if (mlir::failed(parseBlock())) {
     return mlir::failure();
   }
 
   // Check for return statement
-  if (!_hasReturn) {
+  if (!hasReturn(entryBlock)) {
     return mlir::emitError(loc) << "function must have a return statement";
   }
 
@@ -567,7 +569,8 @@ mlir::ParseResult Parser::parseBlock() {
     }
 
     // Check if there are statements after a return
-    if (_hasReturn && cur().type != Token::RBRACE) {
+    if (hasReturn(*_builder.getInsertionBlock()) &&
+        cur().type != Token::RBRACE) {
       return mlir::emitError(cur().loc)
              << "statement after return is not allowed";
     }
@@ -643,9 +646,6 @@ mlir::ParseResult Parser::parseStmtFor() {
       eatOrError(Token::IN) || parseRange(range)) {
     return mlir::failure();
   }
-
-  // Increment loop depth
-  _loopDepth++;
 
   // Find the variables modified inside the loop.
   llvm::SmallVector<llvm::StringRef> varNames;
@@ -775,9 +775,6 @@ mlir::ParseResult Parser::parseStmtFor() {
     }
   }
 
-  // Decrement loop depth
-  _loopDepth--;
-
   return mlir::success();
 }
 
@@ -785,15 +782,16 @@ mlir::ParseResult Parser::parseStmtReturn() {
   auto loc = cur().loc;
 
   // Check if return is inside a loop
-  if (_loopDepth > 0) {
+  auto *parentOp = _builder.getInsertionBlock()->getParentOp();
+  if (llvm::isa<ForConstOp, ForDimOp>(parentOp)) {
     return mlir::emitError(loc)
            << "return statement inside a loop is not allowed";
   }
 
-  // Check if we already have a return statement
-  if (_hasReturn) {
-    return mlir::emitError(loc) << "multiple return statements are not allowed";
-  }
+  // The parser should not create any other nested ops apart from for loops, so
+  // we should be at the top-level of a function scope.
+  assert(llvm::isa<mlir::func::FuncOp>(parentOp) &&
+         "return outside of function body");
 
   mlir::Value returnValue;
   if (eatOrError(Token::RETURN) || parseExpr(returnValue) ||
@@ -809,7 +807,6 @@ mlir::ParseResult Parser::parseStmtReturn() {
            << typeToString(returnValue.getType());
   }
 
-  _hasReturn = true;
   _builder.create<mlir::func::ReturnOp>(loc, returnValue);
   return mlir::success();
 }
@@ -1151,10 +1148,11 @@ mlir::ParseResult Parser::parseExpr(mlir::Value &v, int minPrec) {
 
         // Check that function takes exactly 2 parameters
         if (funcType.getNumInputs() != 2) {
-          auto diag = mlir::emitError(loc)
-                      << "element-wise function application requires a function "
-                         "with 2 parameters, but got "
-                      << funcType.getNumInputs();
+          auto diag =
+              mlir::emitError(loc)
+              << "element-wise function application requires a function "
+                 "with 2 parameters, but got "
+              << funcType.getNumInputs();
           diag.attachNote(funcOp.getLoc()) << "function defined here";
           return mlir::failure();
         }
@@ -1163,9 +1161,10 @@ mlir::ParseResult Parser::parseExpr(mlir::Value &v, int minPrec) {
         for (size_t i = 0; i < 2; i++) {
           auto paramType = llvm::dyn_cast<MatrixType>(funcType.getInput(i));
           if (!paramType || !paramType.isScalar()) {
-            auto diag = mlir::emitError(loc)
-                        << "element-wise function application requires function "
-                           "parameters to be scalars";
+            auto diag =
+                mlir::emitError(loc)
+                << "element-wise function application requires function "
+                   "parameters to be scalars";
             diag.attachNote(funcOp.getLoc())
                 << "parameter " << i << " has type "
                 << typeToString(funcType.getInput(i));
@@ -1180,22 +1179,28 @@ mlir::ParseResult Parser::parseExpr(mlir::Value &v, int minPrec) {
         auto param1Type = llvm::cast<MatrixType>(funcType.getInput(1));
 
         if (lhsType.getSemiring() != param0Type.getSemiring()) {
-          auto diag = mlir::emitError(loc)
-                      << "left operand type does not match first parameter type";
+          auto diag =
+              mlir::emitError(loc)
+              << "left operand type does not match first parameter type";
           diag.attachNote(atomLhs.getLoc())
-              << "left operand has type " << typeToString(lhsType.getSemiring());
+              << "left operand has type "
+              << typeToString(lhsType.getSemiring());
           diag.attachNote(funcOp.getLoc())
-              << "first parameter has type " << typeToString(param0Type.getSemiring());
+              << "first parameter has type "
+              << typeToString(param0Type.getSemiring());
           return mlir::failure();
         }
 
         if (rhsType.getSemiring() != param1Type.getSemiring()) {
-          auto diag = mlir::emitError(loc)
-                      << "right operand type does not match second parameter type";
+          auto diag =
+              mlir::emitError(loc)
+              << "right operand type does not match second parameter type";
           diag.attachNote(atomRhs.getLoc())
-              << "right operand has type " << typeToString(rhsType.getSemiring());
+              << "right operand has type "
+              << typeToString(rhsType.getSemiring());
           diag.attachNote(funcOp.getLoc())
-              << "second parameter has type " << typeToString(param1Type.getSemiring());
+              << "second parameter has type "
+              << typeToString(param1Type.getSemiring());
           return mlir::failure();
         }
 
@@ -1211,7 +1216,8 @@ mlir::ParseResult Parser::parseExpr(mlir::Value &v, int minPrec) {
           return mlir::failure();
         }
 
-        atomLhs = buildElementWise(loc, atomLhs, binop, atomRhs, true);
+        atomLhs = buildElementWise(loc, atomLhs, binop, atomRhs,
+                                   /*mustBeScalar=*/false);
         if (!atomLhs) {
           return mlir::failure();
         }
@@ -1232,7 +1238,8 @@ mlir::ParseResult Parser::parseExpr(mlir::Value &v, int minPrec) {
           return mlir::failure();
         }
       } else {
-        atomLhs = buildElementWise(loc, atomLhs, binop, atomRhs);
+        atomLhs = buildElementWise(loc, atomLhs, binop, atomRhs,
+                                   /*mustBeScalar=*/true);
         if (!atomLhs) {
           return mlir::failure();
         }
@@ -1316,15 +1323,14 @@ mlir::Value Parser::buildMatMul(mlir::Location loc, mlir::Value lhs,
 }
 
 mlir::Value Parser::buildElementWise(mlir::Location loc, mlir::Value lhs,
-                                      BinaryOp op, mlir::Value rhs,
-                                      bool isExplicitElementWise) {
+                                     BinaryOp op, mlir::Value rhs,
+                                     bool mustBeScalar) {
   auto lhsType = llvm::cast<MatrixType>(lhs.getType());
   auto rhsType = llvm::cast<MatrixType>(rhs.getType());
 
   // Check that semirings match
   if (lhsType.getSemiring() != rhsType.getSemiring()) {
-    auto diag = mlir::emitError(loc)
-                << "element-wise operation requires operands to have the same semiring";
+    auto diag = mlir::emitError(loc) << "operands have different semirings";
     diag.attachNote(lhs.getLoc())
         << "left operand has semiring " << typeToString(lhsType.getSemiring());
     diag.attachNote(rhs.getLoc())
@@ -1332,69 +1338,66 @@ mlir::Value Parser::buildElementWise(mlir::Location loc, mlir::Value lhs,
     return nullptr;
   }
 
-  // Check that dimensions match
-  if (lhsType.getDims() != rhsType.getDims()) {
-    auto diag = mlir::emitError(loc)
-                << "element-wise operation requires operands to have the same dimensions";
-    diag.attachNote(lhs.getLoc())
-        << "left operand has dimensions " << dimsToString(lhsType.getDims());
-    diag.attachNote(rhs.getLoc())
-        << "right operand has dimensions " << dimsToString(rhsType.getDims());
-    return nullptr;
-  }
-
-  // Special checks for subtraction
-  if (op == BinaryOp::SUB) {
-    // Regular subtraction (e1 - e2) only works on scalars
-    // Element-wise subtraction (e1 (.-) e2) works on any dimensions
-    if (!isExplicitElementWise && (!lhsType.isScalar() || !rhsType.isScalar())) {
+  if (mustBeScalar) {
+    // Syntax a + b instead of a (.+) b, so require operands to be scalars.
+    if (!lhsType.isScalar() || !rhsType.isScalar()) {
       auto diag = mlir::emitError(loc)
-                  << "subtraction only works on scalars; use element-wise subtraction (.-) for matrices";
+                  << "operands are not scalar. Did you mean to use "
+                     "element-wise (a (.f) b) syntax?";
       diag.attachNote(lhs.getLoc())
-          << "left operand has type " << typeToString(lhsType);
+          << "left operand has dimensions " << dimsToString(lhsType.getDims());
       diag.attachNote(rhs.getLoc())
-          << "right operand has type " << typeToString(rhsType);
+          << "right operand has dimensions " << dimsToString(rhsType.getDims());
       return nullptr;
     }
+  } else {
+    // Dimensions must match
+    if (lhsType.getDims() != rhsType.getDims()) {
+      auto diag = mlir::emitError(loc) << "operands have different dimensions";
+      diag.attachNote(lhs.getLoc())
+          << "left operand has dimensions " << dimsToString(lhsType.getDims());
+      diag.attachNote(rhs.getLoc())
+          << "right operand has dimensions " << dimsToString(rhsType.getDims());
+      return nullptr;
+    }
+  }
 
-    // Subtraction (both forms) only supports int and real semirings
+  if (op == BinaryOp::SUB) {
+    // Subtraction only supports int and real semirings
     auto *ctx = _builder.getContext();
     auto semiring = lhsType.getSemiring();
     if (semiring != SemiringTypes::forInt(ctx) &&
         semiring != SemiringTypes::forReal(ctx)) {
       auto diag = mlir::emitError(loc)
-                  << "subtraction is only supported for int and real types";
+                  << "subtraction is only supported for int and real semirings";
       diag.attachNote(lhs.getLoc())
           << "operands have semiring " << typeToString(semiring);
       return nullptr;
     }
   }
 
-  // Special checks for division
   if (op == BinaryOp::DIV) {
-    // Division only supports real and trop_int semirings
+    // Division only supports real semiring
     auto *ctx = _builder.getContext();
     auto semiring = lhsType.getSemiring();
-    if (semiring != SemiringTypes::forReal(ctx) &&
-        semiring != SemiringTypes::forTropInt(ctx)) {
+    if (semiring != SemiringTypes::forReal(ctx)) {
       auto diag = mlir::emitError(loc)
-                  << "division is only supported for real and trop_int types";
+                  << "division is only supported for real semiring";
       diag.attachNote(lhs.getLoc())
           << "operands have semiring " << typeToString(semiring);
       return nullptr;
     }
   }
 
-  // Special checks for comparison operators
-  if (op == BinaryOp::LT || op == BinaryOp::GT || op == BinaryOp::LE || op == BinaryOp::GE) {
-    // Comparison only supports int, real, and trop_real semirings
+  if (op == BinaryOp::LT || op == BinaryOp::GT || op == BinaryOp::LE ||
+      op == BinaryOp::GE) {
+    // Ordered compare only supports int, real semirings
     auto *ctx = _builder.getContext();
     auto semiring = lhsType.getSemiring();
     if (semiring != SemiringTypes::forInt(ctx) &&
-        semiring != SemiringTypes::forReal(ctx) &&
-        semiring != SemiringTypes::forTropReal(ctx)) {
-      auto diag = mlir::emitError(loc)
-                  << "comparison is only supported for int, real, and trop_real types";
+        semiring != SemiringTypes::forReal(ctx)) {
+      auto diag = mlir::emitError(loc) << "ordered compare is only supported "
+                                          "for int and real semirings";
       diag.attachNote(lhs.getLoc())
           << "operands have semiring " << typeToString(semiring);
       return nullptr;
@@ -1557,7 +1560,8 @@ mlir::ParseResult Parser::parseAtom(mlir::Value &v) {
         // Unary apply: function must have exactly 1 argument
         if (numFuncArgs != 1) {
           auto diag = mlir::emitError(loc)
-                      << "apply() with 1 matrix argument requires a function with 1 parameter, but got "
+                      << "apply() with 1 matrix argument requires a function "
+                         "with 1 parameter, but got "
                       << numFuncArgs;
           diag.attachNote(func.getLoc()) << "function defined here";
           return mlir::failure();
@@ -1566,7 +1570,8 @@ mlir::ParseResult Parser::parseAtom(mlir::Value &v) {
         // Binary apply: function must have exactly 2 arguments
         if (numFuncArgs != 2) {
           auto diag = mlir::emitError(loc)
-                      << "apply() with 2 arguments requires a function with 2 parameters, but got "
+                      << "apply() with 2 arguments requires a function with 2 "
+                         "parameters, but got "
                       << numFuncArgs;
           diag.attachNote(func.getLoc()) << "function defined here";
           return mlir::failure();
@@ -1589,8 +1594,8 @@ mlir::ParseResult Parser::parseAtom(mlir::Value &v) {
         if (!paramType || !paramType.isScalar()) {
           auto diag = mlir::emitError(loc)
                       << "apply() requires function parameters to be scalars";
-          diag.attachNote(func.getLoc())
-              << "parameter " << i << " has type " << typeToString(funcType.getInput(i));
+          diag.attachNote(func.getLoc()) << "parameter " << i << " has type "
+                                         << typeToString(funcType.getInput(i));
           return mlir::failure();
         }
       }
@@ -1633,7 +1638,8 @@ mlir::ParseResult Parser::parseAtom(mlir::Value &v) {
         // Unary select: function must have exactly 1 argument
         if (numFuncArgs != 1) {
           auto diag = mlir::emitError(loc)
-                      << "select() with 1 matrix argument requires a function with 1 parameter, but got "
+                      << "select() with 1 matrix argument requires a function "
+                         "with 1 parameter, but got "
                       << numFuncArgs;
           diag.attachNote(func.getLoc()) << "function defined here";
           return mlir::failure();
@@ -1642,7 +1648,8 @@ mlir::ParseResult Parser::parseAtom(mlir::Value &v) {
         // Binary select: function must have exactly 2 arguments
         if (numFuncArgs != 2) {
           auto diag = mlir::emitError(loc)
-                      << "select() with 2 arguments requires a function with 2 parameters, but got "
+                      << "select() with 2 arguments requires a function with 2 "
+                         "parameters, but got "
                       << numFuncArgs;
           diag.attachNote(func.getLoc()) << "function defined here";
           return mlir::failure();
@@ -1665,8 +1672,8 @@ mlir::ParseResult Parser::parseAtom(mlir::Value &v) {
         if (!paramType || !paramType.isScalar()) {
           auto diag = mlir::emitError(loc)
                       << "select() requires function parameters to be scalars";
-          diag.attachNote(func.getLoc())
-              << "parameter " << i << " has type " << typeToString(funcType.getInput(i));
+          diag.attachNote(func.getLoc()) << "parameter " << i << " has type "
+                                         << typeToString(funcType.getInput(i));
           return mlir::failure();
         }
       }
@@ -1681,7 +1688,8 @@ mlir::ParseResult Parser::parseAtom(mlir::Value &v) {
 
       auto returnType = llvm::dyn_cast<MatrixType>(funcType.getResult(0));
       auto *ctx = _builder.getContext();
-      auto expectedReturnType = MatrixType::scalarOf(SemiringTypes::forBool(ctx));
+      auto expectedReturnType =
+          MatrixType::scalarOf(SemiringTypes::forBool(ctx));
       if (!returnType || returnType != expectedReturnType) {
         auto diag = mlir::emitError(loc)
                     << "select() requires function to return bool";
