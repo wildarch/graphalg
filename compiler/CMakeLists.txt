@@ -59,7 +59,10 @@ if (GRAPHALG_ENABLE_SANITIZE)
     add_link_options(-fsanitize=address,undefined,leak -fno-omit-frame-pointer)
 endif ()
 
-
+if (GRAPHALG_ENABLE_COVERAGE)
+    add_compile_options(-fprofile-instr-generate -fcoverage-mapping)
+    add_link_options(-fprofile-instr-generate -fcoverage-mapping)
+endif ()
 
 # Directories with MLIR dialects
 add_subdirectory(include/graphalg)

@@ -1,0 +1,13 @@
+#!/bin/bash
+WORKSPACE_ROOT=compiler/
+BUILD_DIR=$WORKSPACE_ROOT/build-coverage
+rm -rf $BUILD_DIR
+cmake -S $WORKSPACE_ROOT -B $BUILD_DIR -G Ninja \
+    -DCMAKE_BUILD_TYPE=Debug \
+    -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+    -DCMAKE_CXX_COMPILER=clang++-20  \
+    -DCMAKE_LINKER_TYPE=MOLD \
+    -DGRAPHALG_OVERRIDE_LLVM_TOOLS_BINARY_DIR="/usr/lib/llvm-20/bin" \
+    -DGRAPHALG_ENABLE_SANITIZE=ON \
+    -DGRAPHALG_ENABLE_COVERAGE=ON \
+    -DLLVM_ROOT="/opt/llvm-debug" \
