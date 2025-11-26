@@ -30,6 +30,7 @@ target_link_libraries(graphalg-exec PRIVATE
 )
 
 if (GRAPHALG_ENABLE_FUZZER)
+    # Add fuzzer targets.
     add_executable(fuzz-parser fuzz-parser.cpp)
     target_link_libraries(fuzz-parser PRIVATE
         ${llvm_libs}
