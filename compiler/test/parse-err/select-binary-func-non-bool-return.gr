@@ -1,0 +1,14 @@
+// RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
+
+// expected-note@below{{function returns real}}
+func returnsBinaryReal(a: int, b: int) -> real {
+    return real(3.14);
+}
+
+func SelectBinaryFuncNonBoolReturn(
+    a: Matrix<s, s, int>,
+    b: int) -> Matrix<s, s, int> {
+    // Binary select also requires the function to return bool
+    // expected-error@below{{select() requires function to return bool}}
+    return select(returnsBinaryReal, a, b);
+}

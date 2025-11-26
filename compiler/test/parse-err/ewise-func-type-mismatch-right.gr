@@ -1,0 +1,14 @@
+// RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
+
+// expected-note@below{{second parameter has semiring real}}
+func addMixed(a: int, b: real) -> real {
+    return cast<real>(a) + b;
+}
+
+func EwiseFuncTypeMismatchRight(
+    m: Matrix<s, s, int>,
+    // expected-note@below{{right operand has semiring int}}
+    n: Matrix<s, s, int>) -> Matrix<s, s, int> {
+    // expected-error@below{{right operand semiring does not match second parameter type}}
+    return m (.addMixed) n;
+}

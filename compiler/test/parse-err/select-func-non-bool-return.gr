@@ -1,0 +1,12 @@
+// RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
+
+// expected-note@below{{function returns int}}
+func returnsInt(a: int) -> int {
+    return a;
+}
+
+func SelectFuncNonBoolReturn(m: Matrix<s, s, int>) -> Matrix<s, s, int> {
+    // select() requires the function to return bool
+    // expected-error@below{{select() requires function to return bool}}
+    return select(returnsInt, m);
+}

@@ -1,0 +1,6 @@
+// RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
+
+func LiteralBoolFromInt() -> bool {
+    // expected-error@below{{expected 'true' or 'false'}}
+    return bool(42);
+}

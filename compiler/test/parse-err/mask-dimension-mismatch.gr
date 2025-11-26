@@ -1,0 +1,12 @@
+// RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
+
+func MaskDimensionMismatch(
+        a: Matrix<s, s, int>,
+        m: Matrix<t, t, bool>,
+        e: Matrix<s, s, int>) -> Matrix<s, s, int> {
+    // expected-error@below{{base dimensions do not match the dimensions of the mask}}
+    // expected-note@below{{base dimension: (s x s)}}
+    // expected-note@below{{mask dimensions: (t x t)}}
+    a<m> = e;
+    return a;
+}

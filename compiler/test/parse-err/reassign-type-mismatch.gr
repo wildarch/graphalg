@@ -1,0 +1,9 @@
+// RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
+
+func ReassignTypeMismatch() -> int {
+    // expected-note@below{{previous assigment was here}}
+    a = int(42);
+    // expected-error@below{{cannot assign value of type real to previously defined variable of type int}}
+    a = real(3.14);
+    return int(0);
+}

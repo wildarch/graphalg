@@ -1,0 +1,7 @@
+// RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
+
+func VectorFillNonScalar(v: Vector<s, int>, e: Vector<s, int>) -> Vector<s, int> {
+    // expected-error@below{{fill expression is not a scalar}}
+    v[:] = e;
+    return v;
+}

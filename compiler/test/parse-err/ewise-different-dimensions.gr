@@ -1,0 +1,11 @@
+// RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
+
+func EwiseDifferentDimensions(
+    // expected-note@below{{left operand has dimensions (s x s)}}
+    a: Matrix<s, s, int>,
+    // expected-note@below{{right operand has dimensions (t x t)}}
+    b: Matrix<t, t, int>) -> Matrix<s, s, int> {
+    // Element-wise operations require operands to have the same dimensions
+    // expected-error@below{{operands have different dimensions}}
+    return a (.+) b;
+}

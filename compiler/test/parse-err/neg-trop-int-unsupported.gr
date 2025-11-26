@@ -1,0 +1,9 @@
+// RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
+
+func NegTropIntUnsupported(
+    // expected-note@below{{operand has semiring trop_int}}
+    a: trop_int) -> trop_int {
+    // Negation is not supported for tropical semirings (only int and real)
+    // expected-error@below{{negation is only supported for int and real types}}
+    return -a;
+}

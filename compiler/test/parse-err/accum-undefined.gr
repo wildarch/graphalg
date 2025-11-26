@@ -1,0 +1,7 @@
+// RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
+
+func AccumUndefined() -> int {
+    // expected-error@below{{undefined variable}}
+    a += int(42);
+    return int(0);
+}

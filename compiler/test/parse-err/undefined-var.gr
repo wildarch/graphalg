@@ -1,0 +1,6 @@
+// RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
+
+func UndefinedVar() -> int {
+    // expected-error@below{{unrecognized variable}}
+    return i_am_undefined;
+}

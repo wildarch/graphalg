@@ -1,0 +1,9 @@
+// RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
+
+func NegBoolUnsupported(
+    // expected-note@below{{operand has semiring bool}}
+    a: bool) -> bool {
+    // Negation is not supported for bool semiring (only int and real)
+    // expected-error@below{{negation is only supported for int and real types}}
+    return -a;
+}

@@ -1,0 +1,8 @@
+// RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
+
+func ReturnNotLast() -> int {
+    return int(42);
+    // expected-error@below{{statement after return is not allowed}}
+    a = int(5);
+    return a;
+}

@@ -1,0 +1,6 @@
+// RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
+
+func LiteralTropRealFromBool() -> trop_real {
+    // expected-error@below{{expected a floating-point value}}
+    return trop_real(false);
+}

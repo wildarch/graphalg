@@ -1,0 +1,12 @@
+// RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
+
+// expected-note@below{{parameter 0 has type Matrix<s, s, int>}}
+func nonScalarFunc(m: Matrix<s, s, int>) -> bool {
+    return bool(true);
+}
+
+func SelectFuncNonScalarArgs(m: Matrix<s, s, int>) -> Matrix<s, s, int> {
+    // select() requires the function to have scalar arguments
+    // expected-error@below{{select() requires function parameters to be scalars}}
+    return select(nonScalarFunc, m);
+}

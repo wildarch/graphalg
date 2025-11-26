@@ -1,0 +1,9 @@
+// RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
+
+func Dup(
+        // expected-note@below{{previous definition here}}
+        a: int,
+        // expected-error@below{{duplicate parameter name 'a'}}
+        a: int) -> int {
+    return a;
+}

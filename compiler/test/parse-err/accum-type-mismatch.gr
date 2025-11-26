@@ -1,0 +1,8 @@
+// RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
+
+func AccumTypeMismatch() -> int {
+    a = int(42);
+    // expected-error@below{{type of base does not match the expression to accumulate: (int vs. real}}
+    a += real(3.14);
+    return int(0);
+}

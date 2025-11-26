@@ -1,0 +1,14 @@
+// RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
+
+func addInts(a: int, b: int) -> int {
+    return a + b;
+}
+
+func EwiseFuncDifferentDimensions(
+    // expected-note@below{{left operand has dimensions (s x s)}}
+    m: Matrix<s, s, int>,
+    // expected-note@below{{right operand has dimensions (t x t)}}
+    n: Matrix<t, t, int>) -> Matrix<s, s, int> {
+    // expected-error@below{{operands have different dimensions}}
+    return m (.addInts) n;
+}

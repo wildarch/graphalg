@@ -1,0 +1,8 @@
+// RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
+
+func VectorFillMatrix(m: Matrix<s, t, int>, x: int) -> Matrix<s, t, int> {
+    // expected-error@below{{vector fill [:] used with non-vector base}}
+    // expected-note@below{{base has type Matrix<s, t, int>}}
+    m[:] = x;
+    return m;
+}

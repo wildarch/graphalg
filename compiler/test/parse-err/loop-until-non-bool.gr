@@ -1,0 +1,10 @@
+// RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
+
+func LoopUntilNonBool() -> int {
+    a = int(0);
+    for i in int(1):int(10) {
+        a = a + int(1);
+    // expected-error@below{{loop condition does not produce a boolean scalar, got int}}
+    } until int(5);
+    return a;
+}
