@@ -34,6 +34,7 @@
 #include "graphalg/SemiringTypes.h"
 #include "graphalg/parse/Lexer.h"
 #include "graphalg/parse/Parser.h"
+#include "llvm/ADT/StringMap.h"
 
 namespace graphalg {
 
@@ -188,6 +189,21 @@ private:
                                llvm::StringRef property);
 
   mlir::ParseResult parseAtom(mlir::Value &v);
+
+  mlir::ParseResult parseAtomMatrix(mlir::Value &v);
+  mlir::ParseResult parseAtomVector(mlir::Value &v);
+  mlir::ParseResult parseAtomCast(mlir::Value &v);
+  mlir::ParseResult parseAtomZero(mlir::Value &v);
+  mlir::ParseResult parseAtomOne(mlir::Value &v);
+  mlir::ParseResult parseAtomApply(mlir::Value &v);
+  mlir::ParseResult parseAtomSelect(mlir::Value &v);
+  mlir::ParseResult parseAtomReduceRows(mlir::Value &v);
+  mlir::ParseResult parseAtomReduceCols(mlir::Value &v);
+  mlir::ParseResult parseAtomReduce(mlir::Value &v);
+  mlir::ParseResult parseAtomPickAny(mlir::Value &v);
+  mlir::ParseResult parseAtomDiag(mlir::Value &v);
+  mlir::ParseResult parseAtomTril(mlir::Value &v);
+  mlir::ParseResult parseAtomTriu(mlir::Value &v);
 
   mlir::ParseResult parseLiteral(mlir::Type ring, mlir::Value &v);
 
@@ -1302,6 +1318,7 @@ mlir::Value Parser::buildElementWise(mlir::Location loc, mlir::Value lhs,
     }
   }
 
+  // Additional validation for specific operators
   if (op == BinaryOp::SUB) {
     // Subtraction only supports int and real semirings
     auto *ctx = _builder.getContext();
@@ -1314,9 +1331,7 @@ mlir::Value Parser::buildElementWise(mlir::Location loc, mlir::Value lhs,
           << "operands have semiring " << typeToString(semiring);
       return nullptr;
     }
-  }
-
-  if (op == BinaryOp::DIV) {
+  } else if (op == BinaryOp::DIV) {
     // Division only supports real semiring
     auto *ctx = _builder.getContext();
     auto semiring = lhsType.getSemiring();
@@ -1327,10 +1342,8 @@ mlir::Value Parser::buildElementWise(mlir::Location loc, mlir::Value lhs,
           << "operands have semiring " << typeToString(semiring);
       return nullptr;
     }
-  }
-
-  if (op == BinaryOp::LT || op == BinaryOp::GT || op == BinaryOp::LE ||
-      op == BinaryOp::GE) {
+  } else if (op == BinaryOp::LT || op == BinaryOp::GT || op == BinaryOp::LE ||
+             op == BinaryOp::GE) {
     // Ordered compare only supports int, real semirings
     auto *ctx = _builder.getContext();
     auto semiring = lhsType.getSemiring();
@@ -1363,41 +1376,41 @@ mlir::Value Parser::buildElementWiseFunc(mlir::Location loc, mlir::Value lhs,
     return nullptr;
   }
 
-  // Check that all function parameters are scalars
-  for (auto [i, t] : llvm::enumerate(funcType.getInputs())) {
-    auto paramType = llvm::cast<MatrixType>(t);
-    if (!paramType.isScalar()) {
-      auto diag = mlir::emitError(loc)
-                  << "element-wise function application requires function "
-                     "parameters to be scalars";
-      diag.attachNote(funcOp.getLoc())
-          << "parameter " << i << " has type " << typeToString(paramType);
-      return nullptr;
-    }
-  }
-
-  // Check that operand types match function parameter types
   auto lhsType = llvm::cast<MatrixType>(lhs.getType());
   auto rhsType = llvm::cast<MatrixType>(rhs.getType());
   auto param0Type = llvm::cast<MatrixType>(funcType.getInput(0));
   auto param1Type = llvm::cast<MatrixType>(funcType.getInput(1));
 
+  // Check that function parameters are scalars.
+  if (!param0Type.isScalar() || !param1Type.isScalar()) {
+    auto diag = mlir::emitError(loc)
+                << "element-wise function application requires function "
+                   "parameters to be scalars";
+    diag.attachNote(funcOp.getLoc())
+        << "first parameter has type " << typeToString(param0Type);
+    diag.attachNote(funcOp.getLoc())
+        << "second parameter has type " << typeToString(param1Type);
+    return nullptr;
+  }
+
+  // Check that operand semirings match function parameter semirings
   if (lhsType.getSemiring() != param0Type.getSemiring()) {
     auto diag = mlir::emitError(loc)
-                << "left operand type does not match first parameter type";
+                << "left operand semiring does not match first parameter type";
     diag.attachNote(lhs.getLoc())
-        << "left operand has type " << typeToString(lhsType.getSemiring());
-    diag.attachNote(funcOp.getLoc()) << "first parameter has type "
+        << "left operand has semiring " << typeToString(lhsType.getSemiring());
+    diag.attachNote(funcOp.getLoc()) << "first parameter has semiring "
                                      << typeToString(param0Type.getSemiring());
     return nullptr;
   }
 
   if (rhsType.getSemiring() != param1Type.getSemiring()) {
-    auto diag = mlir::emitError(loc)
-                << "right operand type does not match second parameter type";
+    auto diag =
+        mlir::emitError(loc)
+        << "right operand semiring does not match second parameter type";
     diag.attachNote(rhs.getLoc())
-        << "right operand has type " << typeToString(rhsType.getSemiring());
-    diag.attachNote(funcOp.getLoc()) << "second parameter has type "
+        << "right operand has semiring " << typeToString(rhsType.getSemiring());
+    diag.attachNote(funcOp.getLoc()) << "second parameter has semiring "
                                      << typeToString(param1Type.getSemiring());
     return nullptr;
   }
@@ -1453,375 +1466,61 @@ mlir::ParseResult Parser::parseAtom(mlir::Value &v) {
     }
 
     if (name == "Matrix") {
-      mlir::Type ring;
-      mlir::Value rowsExpr;
-      mlir::Value colsExpr;
-      if (eatOrError(Token::LANGLE) || parseSemiring(ring) ||
-          eatOrError(Token::RANGLE) || eatOrError(Token::LPAREN) ||
-          parseExpr(rowsExpr) || eatOrError(Token::COMMA) ||
-          parseExpr(colsExpr) || eatOrError(Token::RPAREN)) {
-        return mlir::failure();
-      }
-
-      // TODO: Better ref locs
-      auto rows = inferDim(rowsExpr, loc);
-      auto cols = inferDim(colsExpr, loc);
-      if (!rows || !cols) {
-        return mlir::failure();
-      }
-
-      v = _builder.create<ConstantMatrixOp>(
-          loc, _builder.getType<MatrixType>(rows, cols, ring),
-          llvm::cast<SemiringTypeInterface>(ring).addIdentity());
-      return mlir::success();
+      return parseAtomMatrix(v);
     }
 
     if (name == "Vector") {
-      mlir::Type ring;
-      mlir::Value rowsExpr;
-      if (eatOrError(Token::LANGLE) || parseSemiring(ring) ||
-          eatOrError(Token::RANGLE) || eatOrError(Token::LPAREN) ||
-          parseExpr(rowsExpr) || eatOrError(Token::RPAREN)) {
-        return mlir::failure();
-      }
-
-      // TODO: Better ref locs
-      auto rows = inferDim(rowsExpr, loc);
-      if (!rows) {
-        return mlir::failure();
-      }
-
-      auto *ctx = _builder.getContext();
-      v = _builder.create<ConstantMatrixOp>(
-          loc, MatrixType::get(ctx, rows, DimAttr::getOne(ctx), ring),
-          llvm::cast<SemiringTypeInterface>(ring).addIdentity());
-      return mlir::success();
+      return parseAtomVector(v);
     }
 
     if (name == "cast") {
-      mlir::Type ring;
-      mlir::Value expr;
-      if (eatOrError(Token::LANGLE) || parseSemiring(ring) ||
-          eatOrError(Token::RANGLE) || eatOrError(Token::LPAREN) ||
-          parseExpr(expr) || eatOrError(Token::RPAREN)) {
-        return mlir::failure();
-      }
-
-      auto exprType = llvm::cast<MatrixType>(expr.getType());
-      auto *dialect =
-          _builder.getContext()->getLoadedDialect<GraphAlgDialect>();
-      if (!dialect->isCastLegal(exprType.getSemiring(), ring)) {
-        return mlir::emitError(loc)
-               << "invalid cast from " << typeToString(exprType.getSemiring())
-               << " to " << typeToString(ring);
-      }
-
-      v = _builder.create<CastOp>(
-          loc,
-          _builder.getType<MatrixType>(exprType.getRows(), exprType.getCols(),
-                                       ring),
-          expr);
-      return mlir::success();
+      return parseAtomCast(v);
     }
 
     if (name == "zero") {
-      mlir::Type ring;
-      if (eatOrError(Token::LPAREN) || parseSemiring(ring) ||
-          eatOrError(Token::RPAREN)) {
-        return mlir::failure();
-      }
-
-      auto value = llvm::cast<SemiringTypeInterface>(ring).addIdentity();
-      v = _builder.create<LiteralOp>(loc, value);
-      return mlir::success();
+      return parseAtomZero(v);
     }
 
     if (name == "one") {
-      mlir::Type ring;
-      if (eatOrError(Token::LPAREN) || parseSemiring(ring) ||
-          eatOrError(Token::RPAREN)) {
-        return mlir::failure();
-      }
-
-      auto value = llvm::cast<SemiringTypeInterface>(ring).mulIdentity();
-      v = _builder.create<LiteralOp>(loc, value);
-      return mlir::success();
+      return parseAtomOne(v);
     }
 
     if (name == "apply") {
-      mlir::func::FuncOp func;
-      llvm::SmallVector<mlir::Value, 2> args(1);
-      if (eatOrError(Token::LPAREN) || parseFuncRef(func) ||
-          eatOrError(Token::COMMA) || parseExpr(args[0])) {
-        return mlir::failure();
-      }
-
-      if (cur().type == Token::COMMA) {
-        // Have a second arg.
-        auto &arg = args.emplace_back();
-        if (eatOrError(Token::COMMA) || parseExpr(arg)) {
-          return mlir::failure();
-        }
-      }
-
-      if (eatOrError(Token::RPAREN)) {
-        return mlir::failure();
-      }
-
-      // Validate function signature
-      auto funcType = func.getFunctionType();
-      size_t numFuncArgs = funcType.getNumInputs();
-
-      if (args.size() == 1) {
-        // Unary apply: function must have exactly 1 argument
-        if (numFuncArgs != 1) {
-          auto diag = mlir::emitError(loc)
-                      << "apply() with 1 matrix argument requires a function "
-                         "with 1 parameter, but got "
-                      << numFuncArgs;
-          diag.attachNote(func.getLoc()) << "function defined here";
-          return mlir::failure();
-        }
-      } else {
-        // Binary apply: function must have exactly 2 arguments
-        if (numFuncArgs != 2) {
-          auto diag = mlir::emitError(loc)
-                      << "apply() with 2 arguments requires a function with 2 "
-                         "parameters, but got "
-                      << numFuncArgs;
-          diag.attachNote(func.getLoc()) << "function defined here";
-          return mlir::failure();
-        }
-
-        // Second argument must be a scalar
-        auto arg1Type = llvm::cast<MatrixType>(args[1].getType());
-        if (!arg1Type.isScalar()) {
-          auto diag = mlir::emitError(loc)
-                      << "second argument to apply() must be a scalar";
-          diag.attachNote(args[1].getLoc())
-              << "argument has type " << typeToString(arg1Type);
-          return mlir::failure();
-        }
-      }
-
-      // Check that all function parameters are scalars
-      for (size_t i = 0; i < numFuncArgs; i++) {
-        auto paramType = llvm::dyn_cast<MatrixType>(funcType.getInput(i));
-        if (!paramType || !paramType.isScalar()) {
-          auto diag = mlir::emitError(loc)
-                      << "apply() requires function parameters to be scalars";
-          diag.attachNote(func.getLoc()) << "parameter " << i << " has type "
-                                         << typeToString(funcType.getInput(i));
-          return mlir::failure();
-        }
-      }
-
-      if (args.size() == 1) {
-        v = _builder.create<ApplyUnaryOp>(loc, func, args[0]);
-      } else {
-        assert(args.size() == 2);
-        v = _builder.create<ApplyBinaryOp>(loc, func, args[0], args[1]);
-      }
-
-      return mlir::success();
+      return parseAtomApply(v);
     }
 
     if (name == "select") {
-      mlir::func::FuncOp func;
-      llvm::SmallVector<mlir::Value, 2> args(1);
-      if (eatOrError(Token::LPAREN) || parseFuncRef(func) ||
-          eatOrError(Token::COMMA) || parseExpr(args[0])) {
-        return mlir::failure();
-      }
-
-      if (cur().type == Token::COMMA) {
-        // Have a second arg.
-        auto &arg = args.emplace_back();
-        if (eatOrError(Token::COMMA) || parseExpr(arg)) {
-          return mlir::failure();
-        }
-      }
-
-      if (eatOrError(Token::RPAREN)) {
-        return mlir::failure();
-      }
-
-      // Validate function signature
-      auto funcType = func.getFunctionType();
-      size_t numFuncArgs = funcType.getNumInputs();
-
-      if (args.size() == 1) {
-        // Unary select: function must have exactly 1 argument
-        if (numFuncArgs != 1) {
-          auto diag = mlir::emitError(loc)
-                      << "select() with 1 matrix argument requires a function "
-                         "with 1 parameter, but got "
-                      << numFuncArgs;
-          diag.attachNote(func.getLoc()) << "function defined here";
-          return mlir::failure();
-        }
-      } else {
-        // Binary select: function must have exactly 2 arguments
-        if (numFuncArgs != 2) {
-          auto diag = mlir::emitError(loc)
-                      << "select() with 2 arguments requires a function with 2 "
-                         "parameters, but got "
-                      << numFuncArgs;
-          diag.attachNote(func.getLoc()) << "function defined here";
-          return mlir::failure();
-        }
-
-        // Second argument must be a scalar
-        auto arg1Type = llvm::cast<MatrixType>(args[1].getType());
-        if (!arg1Type.isScalar()) {
-          auto diag = mlir::emitError(loc)
-                      << "second argument to select() must be a scalar";
-          diag.attachNote(args[1].getLoc())
-              << "argument has type " << typeToString(arg1Type);
-          return mlir::failure();
-        }
-      }
-
-      // Check that all function parameters are scalars
-      for (size_t i = 0; i < numFuncArgs; i++) {
-        auto paramType = llvm::dyn_cast<MatrixType>(funcType.getInput(i));
-        if (!paramType || !paramType.isScalar()) {
-          auto diag = mlir::emitError(loc)
-                      << "select() requires function parameters to be scalars";
-          diag.attachNote(func.getLoc()) << "parameter " << i << " has type "
-                                         << typeToString(funcType.getInput(i));
-          return mlir::failure();
-        }
-      }
-
-      // Check that function returns a boolean scalar
-      if (funcType.getNumResults() != 1) {
-        auto diag = mlir::emitError(loc)
-                    << "select() requires function to return exactly one value";
-        diag.attachNote(func.getLoc()) << "function defined here";
-        return mlir::failure();
-      }
-
-      auto returnType = llvm::dyn_cast<MatrixType>(funcType.getResult(0));
-      auto *ctx = _builder.getContext();
-      auto expectedReturnType =
-          MatrixType::scalarOf(SemiringTypes::forBool(ctx));
-      if (!returnType || returnType != expectedReturnType) {
-        auto diag = mlir::emitError(loc)
-                    << "select() requires function to return bool";
-        diag.attachNote(func.getLoc())
-            << "function returns " << typeToString(funcType.getResult(0));
-        return mlir::failure();
-      }
-
-      if (args.size() == 1) {
-        v = _builder.create<SelectUnaryOp>(loc, func.getSymName(), args[0]);
-      } else {
-        assert(args.size() == 2);
-        v = _builder.create<SelectBinaryOp>(loc, func.getSymName(), args[0],
-                                            args[1]);
-      }
-
-      return mlir::success();
+      return parseAtomSelect(v);
     }
 
     if (name == "reduceRows") {
-      mlir::Value arg;
-      if (eatOrError(Token::LPAREN) || parseExpr(arg) ||
-          eatOrError(Token::RPAREN)) {
-        return mlir::failure();
-      }
-
-      auto inputType = llvm::cast<MatrixType>(arg.getType());
-      auto *ctx = _builder.getContext();
-      auto resultType =
-          MatrixType::get(ctx, inputType.getRows(), DimAttr::getOne(ctx),
-                          inputType.getSemiring());
-      v = _builder.create<ReduceOp>(loc, resultType, arg);
-      return mlir::success();
+      return parseAtomReduceRows(v);
     }
 
     if (name == "reduceCols") {
-      mlir::Value arg;
-      if (eatOrError(Token::LPAREN) || parseExpr(arg) ||
-          eatOrError(Token::RPAREN)) {
-        return mlir::failure();
-      }
-
-      auto inputType = llvm::cast<MatrixType>(arg.getType());
-      auto *ctx = _builder.getContext();
-      auto resultType =
-          MatrixType::get(ctx, DimAttr::getOne(ctx), inputType.getCols(),
-                          inputType.getSemiring());
-      v = _builder.create<ReduceOp>(loc, resultType, arg);
-      return mlir::success();
+      return parseAtomReduceCols(v);
     }
 
     if (name == "reduce") {
-      mlir::Value arg;
-      if (eatOrError(Token::LPAREN) || parseExpr(arg) ||
-          eatOrError(Token::RPAREN)) {
-        return mlir::failure();
-      }
-
-      auto inputType = llvm::cast<MatrixType>(arg.getType());
-      v = _builder.create<ReduceOp>(loc, inputType.asScalar(), arg);
-      return mlir::success();
+      return parseAtomReduce(v);
     }
 
     if (name == "pickAny") {
-      mlir::Value arg;
-      if (eatOrError(Token::LPAREN) || parseExpr(arg) ||
-          eatOrError(Token::RPAREN)) {
-        return mlir::failure();
-      }
-
-      v = _builder.create<PickAnyOp>(loc, arg);
-      return mlir::success();
+      return parseAtomPickAny(v);
     }
 
     if (name == "diag") {
-      mlir::Value arg;
-      if (eatOrError(Token::LPAREN) || parseExpr(arg) ||
-          eatOrError(Token::RPAREN)) {
-        return mlir::failure();
-      }
-
-      auto argType = llvm::cast<MatrixType>(arg.getType());
-      if (!argType.isColumnVector() && !argType.isRowVector()) {
-        auto diag = mlir::emitError(loc)
-                    << "diag() requires a row or column vector";
-        diag.attachNote(arg.getLoc())
-            << "argument has type " << typeToString(argType);
-        return mlir::failure();
-      }
-
-      v = _builder.create<DiagOp>(loc, arg);
-      return mlir::success();
+      return parseAtomDiag(v);
     }
 
     // TODO: Make a separate extension
     if (name == "tril") {
-      mlir::Value arg;
-      if (eatOrError(Token::LPAREN) || parseExpr(arg) ||
-          eatOrError(Token::RPAREN)) {
-        return mlir::failure();
-      }
-
-      v = _builder.create<TrilOp>(loc, arg);
-      return mlir::success();
+      return parseAtomTril(v);
     }
 
     // TODO: Make a separate extension
     if (name == "triu") {
-      mlir::Value arg;
-      if (eatOrError(Token::LPAREN) || parseExpr(arg) ||
-          eatOrError(Token::RPAREN)) {
-        return mlir::failure();
-      }
-
-      v = _builder.create<TriuOp>(loc, arg);
-      return mlir::success();
+      return parseAtomTriu(v);
     }
 
     auto var = _symbolTable.lookup(name);
@@ -1906,6 +1605,383 @@ static std::optional<llvm::APFloat> parseFloat(llvm::StringRef s) {
   }
 
   return v;
+}
+
+mlir::ParseResult Parser::parseAtomMatrix(mlir::Value &v) {
+  auto loc = cur().loc;
+  mlir::Type ring;
+  mlir::Value rowsExpr;
+  mlir::Value colsExpr;
+  if (eatOrError(Token::LANGLE) || parseSemiring(ring) ||
+      eatOrError(Token::RANGLE) || eatOrError(Token::LPAREN) ||
+      parseExpr(rowsExpr) || eatOrError(Token::COMMA) || parseExpr(colsExpr) ||
+      eatOrError(Token::RPAREN)) {
+    return mlir::failure();
+  }
+
+  auto rows = inferDim(rowsExpr, loc);
+  auto cols = inferDim(colsExpr, loc);
+  if (!rows || !cols) {
+    return mlir::failure();
+  }
+
+  v = _builder.create<ConstantMatrixOp>(
+      loc, _builder.getType<MatrixType>(rows, cols, ring),
+      llvm::cast<SemiringTypeInterface>(ring).addIdentity());
+  return mlir::success();
+}
+
+mlir::ParseResult Parser::parseAtomVector(mlir::Value &v) {
+  auto loc = cur().loc;
+  mlir::Type ring;
+  mlir::Value rowsExpr;
+  if (eatOrError(Token::LANGLE) || parseSemiring(ring) ||
+      eatOrError(Token::RANGLE) || eatOrError(Token::LPAREN) ||
+      parseExpr(rowsExpr) || eatOrError(Token::RPAREN)) {
+    return mlir::failure();
+  }
+
+  auto rows = inferDim(rowsExpr, loc);
+  if (!rows) {
+    return mlir::failure();
+  }
+
+  auto *ctx = _builder.getContext();
+  v = _builder.create<ConstantMatrixOp>(
+      loc, MatrixType::get(ctx, rows, DimAttr::getOne(ctx), ring),
+      llvm::cast<SemiringTypeInterface>(ring).addIdentity());
+  return mlir::success();
+}
+
+mlir::ParseResult Parser::parseAtomCast(mlir::Value &v) {
+  auto loc = cur().loc;
+  mlir::Type ring;
+  mlir::Value expr;
+  if (eatOrError(Token::LANGLE) || parseSemiring(ring) ||
+      eatOrError(Token::RANGLE) || eatOrError(Token::LPAREN) ||
+      parseExpr(expr) || eatOrError(Token::RPAREN)) {
+    return mlir::failure();
+  }
+
+  auto exprType = llvm::cast<MatrixType>(expr.getType());
+  auto *dialect = _builder.getContext()->getLoadedDialect<GraphAlgDialect>();
+  if (!dialect->isCastLegal(exprType.getSemiring(), ring)) {
+    return mlir::emitError(loc)
+           << "invalid cast from " << typeToString(exprType.getSemiring())
+           << " to " << typeToString(ring);
+  }
+
+  v = _builder.create<CastOp>(loc,
+                              _builder.getType<MatrixType>(
+                                  exprType.getRows(), exprType.getCols(), ring),
+                              expr);
+  return mlir::success();
+}
+
+mlir::ParseResult Parser::parseAtomZero(mlir::Value &v) {
+  auto loc = cur().loc;
+  mlir::Type ring;
+  if (eatOrError(Token::LPAREN) || parseSemiring(ring) ||
+      eatOrError(Token::RPAREN)) {
+    return mlir::failure();
+  }
+
+  auto value = llvm::cast<SemiringTypeInterface>(ring).addIdentity();
+  v = _builder.create<LiteralOp>(loc, value);
+  return mlir::success();
+}
+
+mlir::ParseResult Parser::parseAtomOne(mlir::Value &v) {
+  auto loc = cur().loc;
+  mlir::Type ring;
+  if (eatOrError(Token::LPAREN) || parseSemiring(ring) ||
+      eatOrError(Token::RPAREN)) {
+    return mlir::failure();
+  }
+
+  auto value = llvm::cast<SemiringTypeInterface>(ring).mulIdentity();
+  v = _builder.create<LiteralOp>(loc, value);
+  return mlir::success();
+}
+
+mlir::ParseResult Parser::parseAtomApply(mlir::Value &v) {
+  auto loc = cur().loc;
+  mlir::func::FuncOp func;
+  llvm::SmallVector<mlir::Value, 2> args(1);
+  if (eatOrError(Token::LPAREN) || parseFuncRef(func) ||
+      eatOrError(Token::COMMA) || parseExpr(args[0])) {
+    return mlir::failure();
+  }
+
+  if (cur().type == Token::COMMA) {
+    // Have a second arg.
+    auto &arg = args.emplace_back();
+    if (eatOrError(Token::COMMA) || parseExpr(arg)) {
+      return mlir::failure();
+    }
+  }
+
+  if (eatOrError(Token::RPAREN)) {
+    return mlir::failure();
+  }
+
+  // Validate function signature
+  auto funcType = func.getFunctionType();
+  size_t numFuncArgs = funcType.getNumInputs();
+
+  if (args.size() == 1) {
+    // Unary apply: function must have exactly 1 argument
+    if (numFuncArgs != 1) {
+      auto diag = mlir::emitError(loc)
+                  << "apply() with 1 matrix argument requires a function "
+                     "with 1 parameter, but got "
+                  << numFuncArgs;
+      diag.attachNote(func.getLoc()) << "function defined here";
+      return mlir::failure();
+    }
+  } else {
+    // Binary apply: function must have exactly 2 arguments
+    if (numFuncArgs != 2) {
+      auto diag = mlir::emitError(loc)
+                  << "apply() with 2 arguments requires a function with 2 "
+                     "parameters, but got "
+                  << numFuncArgs;
+      diag.attachNote(func.getLoc()) << "function defined here";
+      return mlir::failure();
+    }
+
+    // Second argument must be a scalar
+    auto arg1Type = llvm::cast<MatrixType>(args[1].getType());
+    if (!arg1Type.isScalar()) {
+      auto diag = mlir::emitError(loc)
+                  << "second argument to apply() must be a scalar";
+      diag.attachNote(args[1].getLoc())
+          << "argument has type " << typeToString(arg1Type);
+      return mlir::failure();
+    }
+  }
+
+  // Check that all function parameters are scalars
+  for (size_t i = 0; i < numFuncArgs; i++) {
+    auto paramType = llvm::dyn_cast<MatrixType>(funcType.getInput(i));
+    if (!paramType || !paramType.isScalar()) {
+      auto diag = mlir::emitError(loc)
+                  << "apply() requires function parameters to be scalars";
+      diag.attachNote(func.getLoc()) << "parameter " << i << " has type "
+                                     << typeToString(funcType.getInput(i));
+      return mlir::failure();
+    }
+  }
+
+  if (args.size() == 1) {
+    v = _builder.create<ApplyUnaryOp>(loc, func, args[0]);
+  } else {
+    assert(args.size() == 2);
+    v = _builder.create<ApplyBinaryOp>(loc, func, args[0], args[1]);
+  }
+
+  return mlir::success();
+}
+
+mlir::ParseResult Parser::parseAtomSelect(mlir::Value &v) {
+  auto loc = cur().loc;
+  mlir::func::FuncOp func;
+  llvm::SmallVector<mlir::Value, 2> args(1);
+  if (eatOrError(Token::LPAREN) || parseFuncRef(func) ||
+      eatOrError(Token::COMMA) || parseExpr(args[0])) {
+    return mlir::failure();
+  }
+
+  if (cur().type == Token::COMMA) {
+    // Have a second arg.
+    auto &arg = args.emplace_back();
+    if (eatOrError(Token::COMMA) || parseExpr(arg)) {
+      return mlir::failure();
+    }
+  }
+
+  if (eatOrError(Token::RPAREN)) {
+    return mlir::failure();
+  }
+
+  // Validate function signature
+  auto funcType = func.getFunctionType();
+  size_t numFuncArgs = funcType.getNumInputs();
+
+  if (args.size() == 1) {
+    // Unary select: function must have exactly 1 argument
+    if (numFuncArgs != 1) {
+      auto diag = mlir::emitError(loc)
+                  << "select() with 1 matrix argument requires a function "
+                     "with 1 parameter, but got "
+                  << numFuncArgs;
+      diag.attachNote(func.getLoc()) << "function defined here";
+      return mlir::failure();
+    }
+  } else {
+    // Binary select: function must have exactly 2 arguments
+    if (numFuncArgs != 2) {
+      auto diag = mlir::emitError(loc)
+                  << "select() with 2 arguments requires a function with 2 "
+                     "parameters, but got "
+                  << numFuncArgs;
+      diag.attachNote(func.getLoc()) << "function defined here";
+      return mlir::failure();
+    }
+
+    // Second argument must be a scalar
+    auto arg1Type = llvm::cast<MatrixType>(args[1].getType());
+    if (!arg1Type.isScalar()) {
+      auto diag = mlir::emitError(loc)
+                  << "second argument to select() must be a scalar";
+      diag.attachNote(args[1].getLoc())
+          << "argument has type " << typeToString(arg1Type);
+      return mlir::failure();
+    }
+  }
+
+  // Check that all function parameters are scalars
+  for (size_t i = 0; i < numFuncArgs; i++) {
+    auto paramType = llvm::dyn_cast<MatrixType>(funcType.getInput(i));
+    if (!paramType || !paramType.isScalar()) {
+      auto diag = mlir::emitError(loc)
+                  << "select() requires function parameters to be scalars";
+      diag.attachNote(func.getLoc()) << "parameter " << i << " has type "
+                                     << typeToString(funcType.getInput(i));
+      return mlir::failure();
+    }
+  }
+
+  // Check that function returns a boolean scalar
+  if (funcType.getNumResults() != 1) {
+    auto diag = mlir::emitError(loc)
+                << "select() requires function to return exactly one value";
+    diag.attachNote(func.getLoc()) << "function defined here";
+    return mlir::failure();
+  }
+
+  auto returnType = llvm::dyn_cast<MatrixType>(funcType.getResult(0));
+  auto *ctx = _builder.getContext();
+  auto expectedReturnType = MatrixType::scalarOf(SemiringTypes::forBool(ctx));
+  if (!returnType || returnType != expectedReturnType) {
+    auto diag = mlir::emitError(loc)
+                << "select() requires function to return bool";
+    diag.attachNote(func.getLoc())
+        << "function returns " << typeToString(funcType.getResult(0));
+    return mlir::failure();
+  }
+
+  if (args.size() == 1) {
+    v = _builder.create<SelectUnaryOp>(loc, func.getSymName(), args[0]);
+  } else {
+    assert(args.size() == 2);
+    v = _builder.create<SelectBinaryOp>(loc, func.getSymName(), args[0],
+                                        args[1]);
+  }
+
+  return mlir::success();
+}
+
+mlir::ParseResult Parser::parseAtomReduceRows(mlir::Value &v) {
+  auto loc = cur().loc;
+  mlir::Value arg;
+  if (eatOrError(Token::LPAREN) || parseExpr(arg) ||
+      eatOrError(Token::RPAREN)) {
+    return mlir::failure();
+  }
+
+  auto inputType = llvm::cast<MatrixType>(arg.getType());
+  auto *ctx = _builder.getContext();
+  auto resultType = MatrixType::get(
+      ctx, inputType.getRows(), DimAttr::getOne(ctx), inputType.getSemiring());
+  v = _builder.create<ReduceOp>(loc, resultType, arg);
+  return mlir::success();
+}
+
+mlir::ParseResult Parser::parseAtomReduceCols(mlir::Value &v) {
+  auto loc = cur().loc;
+  mlir::Value arg;
+  if (eatOrError(Token::LPAREN) || parseExpr(arg) ||
+      eatOrError(Token::RPAREN)) {
+    return mlir::failure();
+  }
+
+  auto inputType = llvm::cast<MatrixType>(arg.getType());
+  auto *ctx = _builder.getContext();
+  auto resultType = MatrixType::get(
+      ctx, DimAttr::getOne(ctx), inputType.getCols(), inputType.getSemiring());
+  v = _builder.create<ReduceOp>(loc, resultType, arg);
+  return mlir::success();
+}
+
+mlir::ParseResult Parser::parseAtomReduce(mlir::Value &v) {
+  auto loc = cur().loc;
+  mlir::Value arg;
+  if (eatOrError(Token::LPAREN) || parseExpr(arg) ||
+      eatOrError(Token::RPAREN)) {
+    return mlir::failure();
+  }
+
+  auto inputType = llvm::cast<MatrixType>(arg.getType());
+  v = _builder.create<ReduceOp>(loc, inputType.asScalar(), arg);
+  return mlir::success();
+}
+
+mlir::ParseResult Parser::parseAtomPickAny(mlir::Value &v) {
+  auto loc = cur().loc;
+  mlir::Value arg;
+  if (eatOrError(Token::LPAREN) || parseExpr(arg) ||
+      eatOrError(Token::RPAREN)) {
+    return mlir::failure();
+  }
+
+  v = _builder.create<PickAnyOp>(loc, arg);
+  return mlir::success();
+}
+
+mlir::ParseResult Parser::parseAtomDiag(mlir::Value &v) {
+  auto loc = cur().loc;
+  mlir::Value arg;
+  if (eatOrError(Token::LPAREN) || parseExpr(arg) ||
+      eatOrError(Token::RPAREN)) {
+    return mlir::failure();
+  }
+
+  auto argType = llvm::cast<MatrixType>(arg.getType());
+  if (!argType.isColumnVector() && !argType.isRowVector()) {
+    auto diag = mlir::emitError(loc)
+                << "diag() requires a row or column vector";
+    diag.attachNote(arg.getLoc())
+        << "argument has type " << typeToString(argType);
+    return mlir::failure();
+  }
+
+  v = _builder.create<DiagOp>(loc, arg);
+  return mlir::success();
+}
+
+mlir::ParseResult Parser::parseAtomTril(mlir::Value &v) {
+  auto loc = cur().loc;
+  mlir::Value arg;
+  if (eatOrError(Token::LPAREN) || parseExpr(arg) ||
+      eatOrError(Token::RPAREN)) {
+    return mlir::failure();
+  }
+
+  v = _builder.create<TrilOp>(loc, arg);
+  return mlir::success();
+}
+
+mlir::ParseResult Parser::parseAtomTriu(mlir::Value &v) {
+  auto loc = cur().loc;
+  mlir::Value arg;
+  if (eatOrError(Token::LPAREN) || parseExpr(arg) ||
+      eatOrError(Token::RPAREN)) {
+    return mlir::failure();
+  }
+
+  v = _builder.create<TriuOp>(loc, arg);
+  return mlir::success();
 }
 
 mlir::ParseResult Parser::parseLiteral(mlir::Type ring, mlir::Value &v) {

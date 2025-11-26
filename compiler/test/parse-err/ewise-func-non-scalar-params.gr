@@ -1,6 +1,7 @@
 // RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
 
-// expected-note@below{{parameter 0 has type Matrix<s, s, int>}}
+// expected-note@below{{first parameter has type Matrix<s, s, int>}}
+// expected-note@below{{second parameter has type int}}
 func matrixParam(m: Matrix<s, s, int>, n: int) -> int {
     return n;
 }
