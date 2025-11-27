@@ -143,6 +143,28 @@ Our example programs so far have only used the `int` type so far.
 There are also `bool` (`false` or `true`) and `real` (floating-point numbers, 64-bit).
 To capture the connected nature of graphs, however, we need more than simple scalar types.
 GraphAlg represents graphs as adjacency matrices.
+Consider the graph shown below:
+
+{:
+    data-ga-mode="vis"
+}
+```graphalg-matrix
+4, 4, i1;
+0, 1;
+0, 2;
+1, 3;
+2, 3;
+```
+
+In adjacency matrix representation, the same graph looks like this:
+
+```graphalg-matrix
+4, 4, i1;
+0, 1;
+0, 2;
+1, 3;
+2, 3;
+```
 
 ## TODO
 ```graphalg

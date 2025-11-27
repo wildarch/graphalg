@@ -5,6 +5,7 @@ import { indentWithTab } from "@codemirror/commands"
 import { linter, Diagnostic } from "@codemirror/lint"
 import { GraphAlg } from "codemirror-lang-graphalg"
 import { loadPlaygroundWasm } from "./binding.mjs"
+import { DataSet, Network } from "vis-network/standalone"
 
 // Load and register all webassembly bindings
 let playgroundWasmBindings = loadPlaygroundWasm();
@@ -281,16 +282,6 @@ function parseMatrix(input: string): GraphAlgMatrix {
     }
 }
 
-function buildTableAuto(m: GraphAlgMatrix): HTMLTableElement {
-    // If the matrix is not too large, we can use a matrix-style display
-    const hasSmallDimensions = m.rows < 10 && m.cols < 10;
-    if (hasSmallDimensions) {
-        return buildTableMatrix(m);
-    } else {
-        return buildTableCOO(m);
-    }
-}
-
 function buildTableMatrix(m: GraphAlgMatrix): HTMLTableElement {
     // Create an output table.
     const table = document.createElement("table");
@@ -355,6 +346,82 @@ function buildTableCOO(m: GraphAlgMatrix): HTMLTableElement {
     return table;
 }
 
+function buildVisGraph(m: GraphAlgMatrix): HTMLElement {
+    if (m.rows != m.cols) {
+        throw Error("buildVisGraph called with a non-square matrix");
+    }
+
+    const container = document.createElement("div");
+    container.style.width = "100%";
+    container.style.height = "300px";
+
+    interface NodeItem {
+        id: number;
+        label: string;
+    }
+    const nodes = new DataSet<NodeItem>();
+    for (let r = 0; r < m.rows; r++) {
+        nodes.add({ id: r, label: r.toString() });
+    }
+
+    // create an array with edges
+    interface EdgeItem {
+        id: number;
+        from: number;
+        to: number;
+        label: string;
+    }
+    const edges = new DataSet<EdgeItem>();
+    for (let val of m.values) {
+        let label = val.val.toString();
+        if (m.ring == "i1" && val.val == true) {
+            label = "";
+        }
+
+        edges.add({
+            id: edges.length,
+            from: val.row,
+            to: val.col,
+            label: label
+        });
+    }
+
+    // create a network
+    const data = {
+        nodes: nodes,
+        edges: edges,
+    };
+    var options = {
+        layout: {
+            // Deterministic layout of graphs
+            randomSeed: 42
+        },
+        edges: {
+            arrows: {
+                to: {
+                    enabled: true
+                }
+            }
+        }
+    };
+    var network = new Network(container, data, options);
+
+    return container;
+}
+
+function buildMatrixVisualization(m: GraphAlgMatrix): HTMLElement {
+    if (m.rows == 1 && m.cols == 1) {
+        // Simple scalar
+        return buildTableMatrix(m);
+    } else if (m.rows == m.cols && m.rows < 20) {
+        return buildVisGraph(m);
+    } else if (m.rows < 50 && m.cols < 20) {
+        return buildTableMatrix(m);
+    } else {
+        return buildTableCOO(m);
+    }
+}
+
 class GraphAlgEditor {
     root: Element;
     toolbar: Element;
@@ -414,7 +481,7 @@ class GraphAlgEditor {
         const argDetails = document.createElement("details");
         const argSummary = document.createElement("summary");
         argSummary.textContent = `Argument ${this.arguments.length} (${arg.ring} x ${arg.rows} x ${arg.cols})`;
-        const table = buildTableAuto(arg);
+        const table = buildMatrixVisualization(arg);
         argDetails.append(argSummary, table);
         this.argumentContainer.appendChild(argDetails);
     }
@@ -485,7 +552,7 @@ function run(editor: GraphAlgEditor, inst: PlaygroundInstance) {
     const result = inst.run(program, editor.functionName!!, editor.arguments);
     let resultElem;
     if (result.result) {
-        resultElem = buildTableAuto(result.result);
+        resultElem = buildMatrixVisualization(result.result);
     } else {
         resultElem = buildErrorNote(result.diagnostics);
     }
@@ -520,3 +587,28 @@ playgroundWasmBindings.onLoaded((bindings: any) => {
         editor.toolbar.appendChild(runButton);
     }
 });
+
+// Initialize graph views
+const graphElems = document.getElementsByClassName("language-graphalg-matrix");
+for (let elem of Array.from(graphElems)) {
+    const mat = parseMatrix(elem.textContent.trim());
+
+    let mode: string | null = null;
+    if (elem.parentElement?.tagName == 'PRE') {
+        // Have additional annotations in a pre wrapper
+        elem = elem.parentElement;
+
+        mode = elem.getAttribute('data-ga-mode');
+    }
+
+    let rendered: HTMLElement;
+    if (mode == "vis") {
+        rendered = buildVisGraph(mat);
+    } else if (mode == "coo") {
+        rendered = buildTableCOO(mat);
+    } else {
+        rendered = buildTableMatrix(mat);
+    }
+
+    elem.replaceWith(rendered);
+}
