@@ -138,6 +138,13 @@ func NotValid() -> int {
 Variable `b` is only defined inside of the loop, not in the outer function scope.
 The statement `return b;` is invalid, as `b` is undefined in this context.
 
+## Bringing Linear Algebra Into the Mix
+Our example programs so far have only used the `int` type so far.
+There are also `bool` (`false` or `true`) and `real` (floating-point numbers, 64-bit).
+To capture the connected nature of graphs, however, we need more than simple scalar types.
+GraphAlg represents graphs as adjacency matrices.
+
+## TODO
 ```graphalg
 func Reachability(
         graph: Matrix<s, s, bool>,
