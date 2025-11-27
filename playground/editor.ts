@@ -281,7 +281,46 @@ function parseMatrix(input: string): GraphAlgMatrix {
     }
 }
 
-function buildTable(m: GraphAlgMatrix): HTMLTableElement {
+function buildTableAuto(m: GraphAlgMatrix): HTMLTableElement {
+    // If the matrix is not too large, we can use a matrix-style display
+    const hasSmallDimensions = m.rows < 10 && m.cols < 10;
+    if (hasSmallDimensions) {
+        return buildTableMatrix(m);
+    } else {
+        return buildTableCOO(m);
+    }
+}
+
+function buildTableMatrix(m: GraphAlgMatrix): HTMLTableElement {
+    // Create an output table.
+    const table = document.createElement("table");
+
+    // Body
+    const tbody = document.createElement("tbody");
+
+    // Create cells
+    for (let r = 0; r < m.rows; r++) {
+        const tr = document.createElement("tr");
+        for (let c = 0; c < m.cols; c++) {
+            const td = document.createElement("td");
+            tr.appendChild(td);
+        }
+
+        tbody.appendChild(tr);
+    }
+
+    // Fill non-zero cells
+    for (let val of m.values) {
+        const row = tbody.childNodes[val.row];
+        const cell = row.childNodes[val.col];
+        cell.textContent = val.val.toString();
+    }
+
+    table.append(tbody);
+    return table;
+}
+
+function buildTableCOO(m: GraphAlgMatrix): HTMLTableElement {
     // Create an output table.
     const table = document.createElement("table");
 
@@ -375,7 +414,7 @@ class GraphAlgEditor {
         const argDetails = document.createElement("details");
         const argSummary = document.createElement("summary");
         argSummary.textContent = `Argument ${this.arguments.length} (${arg.ring} x ${arg.rows} x ${arg.cols})`;
-        const table = buildTable(arg);
+        const table = buildTableAuto(arg);
         argDetails.append(argSummary, table);
         this.argumentContainer.appendChild(argDetails);
     }
@@ -446,7 +485,7 @@ function run(editor: GraphAlgEditor, inst: PlaygroundInstance) {
     const result = inst.run(program, editor.functionName!!, editor.arguments);
     let resultElem;
     if (result.result) {
-        resultElem = buildTable(result.result);
+        resultElem = buildTableAuto(result.result);
     } else {
         resultElem = buildErrorNote(result.diagnostics);
     }
