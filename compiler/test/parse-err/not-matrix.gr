@@ -1,0 +1,9 @@
+// RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
+
+func NotMatrix(
+    // expected-note@below{{operand has type Matrix<s, s, bool>}}
+    a: Matrix<s, s, bool>) -> Matrix<s, s, bool> {
+    // NOT only supports scalar boolean inputs
+    // expected-error@below{{not operator is only supported for scalar bool type}}
+    return !a;
+}

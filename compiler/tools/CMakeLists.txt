@@ -28,3 +28,16 @@ target_link_libraries(graphalg-exec PRIVATE
     GraphAlgIR
     MLIRParser
 )
+
+if (GRAPHALG_ENABLE_FUZZER)
+    # Add fuzzer targets.
+    add_executable(fuzz-parser fuzz-parser.cpp)
+    target_link_libraries(fuzz-parser PRIVATE
+        ${llvm_libs}
+        GraphAlgIR
+        GraphAlgParse
+    )
+
+    target_compile_options(fuzz-parser PRIVATE -fsanitize=fuzzer)
+    target_link_options(fuzz-parser PRIVATE -fsanitize=fuzzer)
+endif ()

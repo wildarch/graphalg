@@ -6,6 +6,7 @@ lit.llvm.initialize(lit_config, config)
 config.llvm_tools_dir = "@LLVM_TOOLS_BINARY_DIR@"
 config.graphalg_tools_dir = "@CMAKE_BINARY_DIR@/tools"
 config.graphalg_src_root = "@CMAKE_SOURCE_DIR@"
+config.environment['LLVM_PROFILE_FILE'] = os.getcwd() + '/coverage/%4m.profraw'
 
 # Let the main config do the real work.
 lit_config.load_config(config, "@CMAKE_CURRENT_SOURCE_DIR@/lit.cfg.py")

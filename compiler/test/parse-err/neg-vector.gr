@@ -1,0 +1,9 @@
+// RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
+
+func NegVector(
+    // expected-note@below{{operand has type Vector<s, int>}}
+    a: Vector<s, int>) -> Vector<s, int> {
+    // Negation only supports scalar inputs
+    // expected-error@below{{negation is only supported for scalar types}}
+    return -a;
+}

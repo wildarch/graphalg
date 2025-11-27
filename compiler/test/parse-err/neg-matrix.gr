@@ -1,0 +1,9 @@
+// RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
+
+func NegMatrix(
+    // expected-note@below{{operand has type Matrix<s, s, int>}}
+    a: Matrix<s, s, int>) -> Matrix<s, s, int> {
+    // Negation only supports scalar inputs
+    // expected-error@below{{negation is only supported for scalar types}}
+    return -a;
+}

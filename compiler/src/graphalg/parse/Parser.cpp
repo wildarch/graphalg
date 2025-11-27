@@ -224,6 +224,8 @@ private:
   mlir::ParseResult parseAtomDiag(mlir::Value &v);
   mlir::ParseResult parseAtomTril(mlir::Value &v);
   mlir::ParseResult parseAtomTriu(mlir::Value &v);
+  mlir::ParseResult parseAtomNot(mlir::Value &v);
+  mlir::ParseResult parseAtomNeg(mlir::Value &v);
 
   mlir::ParseResult parseLiteral(mlir::Type ring, mlir::Value &v);
 
@@ -1561,47 +1563,10 @@ mlir::ParseResult Parser::parseAtom(mlir::Value &v) {
     v = var.value;
     return mlir::success();
   }
-  case Token::NOT: {
-    if (eatOrError(Token::NOT) || parseAtom(v)) {
-      return mlir::failure();
-    }
-
-    // Check that NOT is only used with bool semiring
-    auto vType = llvm::cast<MatrixType>(v.getType());
-    auto semiring = vType.getSemiring();
-    auto *ctx = _builder.getContext();
-    if (semiring != SemiringTypes::forBool(ctx)) {
-      auto diag = mlir::emitError(loc)
-                  << "not operator is only supported for bool type";
-      diag.attachNote(v.getLoc())
-          << "operand has semiring " << typeToString(semiring);
-      return mlir::failure();
-    }
-
-    v = _builder.create<NotOp>(loc, v);
-    return mlir::success();
-  }
-  case Token::MINUS: {
-    if (eatOrError(Token::MINUS) || parseAtom(v)) {
-      return mlir::failure();
-    }
-
-    // Check that negation is only used with int or real semirings
-    auto vType = llvm::cast<MatrixType>(v.getType());
-    auto semiring = vType.getSemiring();
-    auto *ctx = _builder.getContext();
-    if (semiring != SemiringTypes::forInt(ctx) &&
-        semiring != SemiringTypes::forReal(ctx)) {
-      auto diag = mlir::emitError(loc)
-                  << "negation is only supported for int and real types";
-      diag.attachNote(v.getLoc())
-          << "operand has semiring " << typeToString(semiring);
-      return mlir::failure();
-    }
-
-    v = _builder.create<NegOp>(loc, v);
-    return mlir::success();
-  }
+  case Token::NOT:
+    return parseAtomNot(v);
+  case Token::MINUS:
+    return parseAtomNeg(v);
   default:
     return mlir::emitError(cur().loc) << "invalid expression";
   }
@@ -2011,6 +1976,67 @@ mlir::ParseResult Parser::parseAtomTriu(mlir::Value &v) {
   }
 
   v = _builder.create<TriuOp>(loc, arg);
+  return mlir::success();
+}
+
+mlir::ParseResult Parser::parseAtomNot(mlir::Value &v) {
+  auto loc = cur().loc;
+  if (eatOrError(Token::NOT) || parseAtom(v)) {
+    return mlir::failure();
+  }
+
+  // Check that NOT is only used with scalar types
+  auto vType = llvm::cast<MatrixType>(v.getType());
+  if (!vType.isScalar()) {
+    auto diag = mlir::emitError(loc)
+                << "not operator is only supported for scalar bool type";
+    diag.attachNote(v.getLoc()) << "operand has type " << typeToString(vType);
+    return mlir::failure();
+  }
+
+  // Check that NOT is only used with bool semiring
+  auto semiring = vType.getSemiring();
+  auto *ctx = _builder.getContext();
+  if (semiring != SemiringTypes::forBool(ctx)) {
+    auto diag = mlir::emitError(loc)
+                << "not operator is only supported for bool type";
+    diag.attachNote(v.getLoc())
+        << "operand has semiring " << typeToString(semiring);
+    return mlir::failure();
+  }
+
+  v = _builder.create<NotOp>(loc, v);
+  return mlir::success();
+}
+
+mlir::ParseResult Parser::parseAtomNeg(mlir::Value &v) {
+  auto loc = cur().loc;
+  if (eatOrError(Token::MINUS) || parseAtom(v)) {
+    return mlir::failure();
+  }
+
+  // Check that negation is only used with scalar types
+  auto vType = llvm::cast<MatrixType>(v.getType());
+  if (!vType.isScalar()) {
+    auto diag = mlir::emitError(loc)
+                << "negation is only supported for scalar types";
+    diag.attachNote(v.getLoc()) << "operand has type " << typeToString(vType);
+    return mlir::failure();
+  }
+
+  // Check that negation is only used with int or real semirings
+  auto semiring = vType.getSemiring();
+  auto *ctx = _builder.getContext();
+  if (semiring != SemiringTypes::forInt(ctx) &&
+      semiring != SemiringTypes::forReal(ctx)) {
+    auto diag = mlir::emitError(loc)
+                << "negation is only supported for int and real types";
+    diag.attachNote(v.getLoc())
+        << "operand has semiring " << typeToString(semiring);
+    return mlir::failure();
+  }
+
+  v = _builder.create<NegOp>(loc, v);
   return mlir::success();
 }
 

@@ -1,0 +1,9 @@
+// RUN: graphalg-translate --import-graphalg --verify-diagnostics %s
+
+func NotVector(
+    // expected-note@below{{operand has type Vector<s, bool>}}
+    a: Vector<s, bool>) -> Vector<s, bool> {
+    // NOT only supports scalar boolean inputs
+    // expected-error@below{{not operator is only supported for scalar bool type}}
+    return !a;
+}
