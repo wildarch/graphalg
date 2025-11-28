@@ -166,6 +166,13 @@ In adjacency matrix representation, the same graph looks like this:
 2, 3;
 ```
 
+$$
+    \begin{bmatrix}
+    a & b \\
+    c & d
+    \end{bmatrix}
+$$
+
 ## TODO
 ```graphalg
 func Reachability(
@@ -183,11 +190,6 @@ func Reachability(
 This algorithm implements a [reachability analysis](https://en.wikipedia.org/wiki/Reachability).
 It determines which nodes in the graph are connected through any number of edges (reachable) from any of the *source* vertices.
 
-GraphAlg programs are a collection of functions.
-They are defined using the `func` keyword.
-GraphAlg is *statically typed*: you must assign types to the parameters of a function, and to the return type.
-`graph: Matrix<s, s, bool>` on line 2 defines a parameter named `graph` with type `Matrix<s, s, int>`.
-
-
-
 <script src="/playground/editor.bundle.js"></script>
+
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>

@@ -6,6 +6,7 @@ import { linter, Diagnostic } from "@codemirror/lint"
 import { GraphAlg } from "codemirror-lang-graphalg"
 import { loadPlaygroundWasm } from "./binding.mjs"
 import { DataSet, Network } from "vis-network/standalone"
+import katex from "katex"
 
 // Load and register all webassembly bindings
 let playgroundWasmBindings = loadPlaygroundWasm();
@@ -282,9 +283,26 @@ function parseMatrix(input: string): GraphAlgMatrix {
     }
 }
 
-function buildTableMatrix(m: GraphAlgMatrix): HTMLTableElement {
+function buildTableMatrix(m: GraphAlgMatrix): HTMLElement {
+    const katexCont = document.createElement("div");
+    katex.render("1 + 2", katexCont);
+    return katexCont;
+
     // Create an output table.
     const table = document.createElement("table");
+
+    const thead = document.createElement("thead");
+    const headRow = document.createElement("tr");
+    const corner = document.createElement("th");
+    corner.textContent = "Row/Col";
+    headRow.appendChild(corner);
+    for (let c = 0; c < m.cols; c++) {
+        const colHead = document.createElement("th");
+        colHead.textContent = c.toString();
+        headRow.appendChild(colHead);
+    }
+    thead.appendChild(headRow);
+
 
     // Body
     const tbody = document.createElement("tbody");
@@ -292,8 +310,15 @@ function buildTableMatrix(m: GraphAlgMatrix): HTMLTableElement {
     // Create cells
     for (let r = 0; r < m.rows; r++) {
         const tr = document.createElement("tr");
+        const rowHead = document.createElement("td");
+        // Make it look like a header cell
+        rowHead.style.textAlign = 'center';
+        rowHead.style.fontWeight = 'bold';
+        rowHead.textContent = r.toString();
+        tr.appendChild(rowHead);
         for (let c = 0; c < m.cols; c++) {
             const td = document.createElement("td");
+            td.style.textAlign = 'center';
             tr.appendChild(td);
         }
 
@@ -303,11 +328,11 @@ function buildTableMatrix(m: GraphAlgMatrix): HTMLTableElement {
     // Fill non-zero cells
     for (let val of m.values) {
         const row = tbody.childNodes[val.row];
-        const cell = row.childNodes[val.col];
+        const cell = row.childNodes[val.col + 1];
         cell.textContent = val.val.toString();
     }
 
-    table.append(tbody);
+    table.append(thead, tbody);
     return table;
 }
 
