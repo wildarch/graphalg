@@ -284,56 +284,51 @@ function parseMatrix(input: string): GraphAlgMatrix {
 }
 
 function buildTableMatrix(m: GraphAlgMatrix): HTMLElement {
-    const katexCont = document.createElement("div");
-    katex.render("1 + 2", katexCont);
-    return katexCont;
-
-    // Create an output table.
-    const table = document.createElement("table");
-
-    const thead = document.createElement("thead");
-    const headRow = document.createElement("tr");
-    const corner = document.createElement("th");
-    corner.textContent = "Row/Col";
-    headRow.appendChild(corner);
-    for (let c = 0; c < m.cols; c++) {
-        const colHead = document.createElement("th");
-        colHead.textContent = c.toString();
-        headRow.appendChild(colHead);
+    let defaultCellValue;
+    switch (m.ring) {
+        case "i1":
+        case "i64":
+        case "f64":
+            defaultCellValue = "0";
+            break;
+        case "!graphalg.trop_i64":
+        case "!graphalg.trop_f64":
+        case "!graphalg.trop_max_i64":
+            defaultCellValue = "\\infty";
+            break;
+        default:
+            defaultCellValue = "";
+            break;
     }
-    thead.appendChild(headRow);
 
-
-    // Body
-    const tbody = document.createElement("tbody");
-
-    // Create cells
+    let rows: string[][] = [];
     for (let r = 0; r < m.rows; r++) {
-        const tr = document.createElement("tr");
-        const rowHead = document.createElement("td");
-        // Make it look like a header cell
-        rowHead.style.textAlign = 'center';
-        rowHead.style.fontWeight = 'bold';
-        rowHead.textContent = r.toString();
-        tr.appendChild(rowHead);
+        let cols: string[] = [];
         for (let c = 0; c < m.cols; c++) {
-            const td = document.createElement("td");
-            td.style.textAlign = 'center';
-            tr.appendChild(td);
+            cols.push(defaultCellValue);
         }
 
-        tbody.appendChild(tr);
+        rows.push(cols);
     }
 
-    // Fill non-zero cells
     for (let val of m.values) {
-        const row = tbody.childNodes[val.row];
-        const cell = row.childNodes[val.col + 1];
-        cell.textContent = val.val.toString();
+        let renderVal = val.val.toString();
+        if (m.ring == "i1") {
+            renderVal = val.val ? "1" : "0";
+        }
+
+        rows[val.row][val.col] = renderVal;
     }
 
-    table.append(thead, tbody);
-    return table;
+    const tex =
+        "\\begin{bmatrix}\n" +
+        rows.map((row) => row.join(" & ")).join("\\\\")
+        + "\n\\end{bmatrix}";
+
+    const katexCont = document.createElement("div");
+    // TODO: We could generate MathML directly, skipping katex entirely.
+    katex.render(tex, katexCont, { output: "mathml" });
+    return katexCont;
 }
 
 function buildTableCOO(m: GraphAlgMatrix): HTMLTableElement {
@@ -636,4 +631,12 @@ for (let elem of Array.from(graphElems)) {
     }
 
     elem.replaceWith(rendered);
+}
+
+// Initialize math views
+const mathElems = document.getElementsByClassName("language-math");
+for (let elem of Array.from(mathElems)) {
+    const container = document.createElement("div");
+    katex.render(elem.textContent, container, { output: "mathml" });
+    elem.replaceWith(container);
 }

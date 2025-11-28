@@ -166,12 +166,82 @@ In adjacency matrix representation, the same graph looks like this:
 2, 3;
 ```
 
-$$
-    \begin{bmatrix}
-    a & b \\
-    c & d
-    \end{bmatrix}
-$$
+In the matrix representation we can use linear algebra operations to explore the graph.
+Want to find all reachable nodes from node 0?
+We can do that with matrix multiplication.
+
+First, we create an initial vector with value 1 at position 0, and multiply that with the adjacency matrix to get all nodes that are reachable from node 0 in a single hop:
+
+```math
+\begin{bmatrix}
+1 & 0 & 0 & 0 \\
+\end{bmatrix}
+
+\cdot
+
+\begin{bmatrix}
+0 & 1 & 1 & 0 \\
+0 & 0 & 0 & 1 \\
+0 & 0 & 0 & 1 \\
+0 & 0 & 0 & 0 \\
+\end{bmatrix}
+
+=
+
+\begin{bmatrix}
+0 & 1 & 1 & 0
+\end{bmatrix}
+```
+
+So nodes 1 and 2 are one hop away from node 0. How about two hops?
+
+```math
+\begin{bmatrix}
+1 & 0 & 0 & 0 \\
+\end{bmatrix}
+
+\cdot
+
+\begin{bmatrix}
+0 & 1 & 1 & 0 \\
+0 & 0 & 0 & 1 \\
+0 & 0 & 0 & 1 \\
+0 & 0 & 0 & 0 \\
+\end{bmatrix}
+
+\cdot
+
+\begin{bmatrix}
+0 & 1 & 1 & 0 \\
+0 & 0 & 0 & 1 \\
+0 & 0 & 0 & 1 \\
+0 & 0 & 0 & 0 \\
+\end{bmatrix}
+
+=
+
+\begin{bmatrix}
+0 & 1 & 1 & 0
+\end{bmatrix}
+
+\cdot
+
+\begin{bmatrix}
+0 & 1 & 1 & 0 \\
+0 & 0 & 0 & 1 \\
+0 & 0 & 0 & 1 \\
+0 & 0 & 0 & 0 \\
+\end{bmatrix}
+
+=
+
+\begin{bmatrix}
+0 & 0 & 0 & 1
+\end{bmatrix}
+```
+
+So node 3 is also reachable.
+All nodes in this graph are reachable from node 0!
 
 ## TODO
 ```graphalg
@@ -191,5 +261,3 @@ This algorithm implements a [reachability analysis](https://en.wikipedia.org/wik
 It determines which nodes in the graph are connected through any number of edges (reachable) from any of the *source* vertices.
 
 <script src="/playground/editor.bundle.js"></script>
-
-<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
