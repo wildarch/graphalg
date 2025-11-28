@@ -7,6 +7,7 @@ import { GraphAlg } from "codemirror-lang-graphalg"
 import { loadPlaygroundWasm } from "./binding.mjs"
 import { DataSet, Network } from "vis-network/standalone"
 import katex from "katex"
+import renderMathInElement from "katex/contrib/auto-render"
 
 // Load and register all webassembly bindings
 let playgroundWasmBindings = loadPlaygroundWasm();
@@ -283,6 +284,18 @@ function parseMatrix(input: string): GraphAlgMatrix {
     }
 }
 
+function renderValue(entry: boolean | bigint | number, ring: string) {
+    switch (ring) {
+        case 'f64':
+        case '!graphalg.trop_f64':
+            return (entry as number).toFixed(3);
+        case 'i1':
+            return (entry as boolean) ? "1" : "0";
+        default:
+            return entry.toString();
+    }
+}
+
 function renderMatrixLatex(m: GraphAlgMatrix): HTMLElement {
     let defaultCellValue;
     switch (m.ring) {
@@ -312,12 +325,7 @@ function renderMatrixLatex(m: GraphAlgMatrix): HTMLElement {
     }
 
     for (let val of m.values) {
-        let renderVal = val.val.toString();
-        if (m.ring == "i1") {
-            renderVal = val.val ? "1" : "0";
-        }
-
-        rows[val.row][val.col] = renderVal;
+        rows[val.row][val.col] = renderValue(val.val, m.ring);
     }
 
     const tex =
@@ -357,7 +365,7 @@ function renderMatrixTable(m: GraphAlgMatrix): HTMLTableElement {
         tdCol.textContent = val.col.toString();
 
         const tdVal = document.createElement("td");
-        tdVal.textContent = val.val.toString();
+        tdVal.textContent = renderValue(val.val, m.ring);
         tr.append(tdRow, tdCol, tdVal);
         tbody.appendChild(tr);
     }
@@ -368,7 +376,7 @@ function renderMatrixTable(m: GraphAlgMatrix): HTMLTableElement {
 
 function renderMatrixVisGraph(m: GraphAlgMatrix): HTMLElement {
     if (m.rows != m.cols) {
-        throw Error("buildVisGraph called with a non-square matrix");
+        throw Error("renderMatrixVisGraph called with a non-square matrix");
     }
 
     const container = document.createElement("div");
@@ -394,7 +402,7 @@ function renderMatrixVisGraph(m: GraphAlgMatrix): HTMLElement {
     }
     const edges = new DataSet<EdgeItem>();
     for (let val of m.values) {
-        let label = val.val.toString();
+        let label = renderValue(val.val, m.ring);
         if (m.ring == "i1" && val.val == true) {
             label = "";
         }
@@ -452,11 +460,18 @@ function renderVectorAsNodeProperty(
     }
     let nodes: NodeItem[] = [];
     for (let r = 0; r < vector.rows; r++) {
-        nodes.push({ id: r, label: "Node " + r.toString() });
+        let label = "Node " + r.toString();
+        if (vector.ring == '!graphalg.trop_f64'
+            || vector.ring == '!graphalg.trop_i64') {
+            label = `Node ${r}\nvalue: ∞`;
+        }
+
+        nodes.push({ id: r, label: label });
     }
 
     for (let val of vector.values) {
-        nodes[val.row].label = `Node ${val.row}\nvalue: ${val.val}`;
+        const renderVal = renderValue(val.val, vector.ring);
+        nodes[val.row].label = `Node ${val.row}\nvalue: ${renderVal}`;
         if (vector.ring == 'i1' && val.val) {
             // A shade of red to complement default blue.
             nodes[val.row].color = '#FB7E81';
@@ -474,16 +489,11 @@ function renderVectorAsNodeProperty(
     }
     const edges = new DataSet<EdgeItem>();
     for (let val of graph.values) {
-        let label = val.val.toString();
-        if (graph.ring == "i1" && val.val == true) {
-            label = "";
-        }
-
         edges.add({
             id: edges.length,
             from: val.row,
             to: val.col,
-            label: label
+            label: renderValue(val.val, graph.ring)
         });
     }
 
@@ -758,6 +768,14 @@ for (let elem of Array.from(graphElems)) {
 const mathElems = document.getElementsByClassName("language-math");
 for (let elem of Array.from(mathElems)) {
     const container = document.createElement("div");
-    katex.render(elem.textContent, container, { output: "mathml" });
+    katex.render(elem.textContent, container, { output: "mathml", displayMode: true });
     elem.replaceWith(container);
 }
+
+// Initialize inline math.
+renderMathInElement(document.body, {
+    output: 'mathml',
+    delimiters: [
+        { left: "$", right: "$", display: false },
+    ]
+})
