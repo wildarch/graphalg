@@ -26,9 +26,12 @@ Try running it by pressing the **Run** button!.
 > [WebAssembly](https://webassembly.org/).
 >
 > You can modify and run examples as much as you want.
+> The name of the function to execute appears in the *Run* button above the editor.
+> To see the values of the parameters passed to the function, click on the *Argument* accordions below the editor to expand them.
+>
 > If you write an invalid program, the editor will underline the part of your
 > program that is incorrect. Hover over the underlined code to see the error
-> message, or click *Run* to print error messages to the output.
+> message, or click *Run* to show the error messages below the editor.
 
 {:
     data-ga-func="AddOne"
@@ -60,7 +63,7 @@ func <function name>(<param name>: <param type>, ...) -> <return type> {
 
 The `AddOne` uses the `int` type for both the parameter and the return type.
 This represents a signed, 64-bit integer (similar to `long` in Java and C++).
-A function can have any number of parameter, but it must have **exactly one return value**.
+A function can have any number of parameters, but it must have **exactly one return value**.
 You may be familiar with other languages that allow returning no value at all (commonly named `void` functions).
 In GraphAlg such a function would be pointless:
 GraphAlg programs cannot write to files, make HTTP requests, or perform any other action that has [*side effects*](https://en.wikipedia.org/wiki/Side_effect_(computer_science)).
@@ -123,6 +126,9 @@ This is okay because the loop scope is defined *inside* of the function scope.
 What is not allowed however is to first define a variable in a nested scope, and then refer to it from the outer scope.
 For an example, consider the (invalid) program below.
 
+{:
+    data-ga-func="NotValid"
+}
 ```graphalg
 func NotValid() -> int {
     a = int(0);
@@ -137,6 +143,11 @@ func NotValid() -> int {
 
 Variable `b` is only defined inside of the loop, not in the outer function scope.
 The statement `return b;` is invalid, as `b` is undefined in this context.
+
+{: .note-title }
+> Experiment
+>
+> Fix the compiler error by defining `b` at the function scope before entering the loop.
 
 ## Bringing Linear Algebra Into the Mix
 Our example programs so far have only used the `int` type so far.
@@ -243,21 +254,104 @@ So nodes 1 and 2 are one hop away from node 0. How about two hops?
 So node 3 is also reachable.
 All nodes in this graph are reachable from node 0!
 
-## TODO
+## A First Graph Algorithm
+Let us now codify this strategy for finding reachable nodes in the graph by writing a GraphAlg program.
+If you run the program below (click the *Run 'Reachability'* button), you will see that it finds four nodes that are reachable from node 0.
+Two additional nodes 4 and 5 are not reachable from node 0.
+
+{:
+    data-ga-func="Reachability"
+    data-ga-arg-0="
+6, 6, i1;
+0, 1;
+0, 2;
+1, 3;
+2, 3;
+4, 5;"
+    data-ga-arg-1="6, 1, i1; 0, 0;"
+    data-ga-result-render="vertex-property"
+}
 ```graphalg
 func Reachability(
         graph: Matrix<s, s, bool>,
-        source: Vector<s, bool>) -> Matrix<s, s, bool> {
-    v = source;
+        source: Vector<s, bool>) -> Vector<s, bool> {
+    reach = source;
     for i in graph.nrows {
-        v += v * graph;
+        reach += reach * graph;
     }
 
-    return v;
+    return reach;
 }
 ```
 
-This algorithm implements a [reachability analysis](https://en.wikipedia.org/wiki/Reachability).
-It determines which nodes in the graph are connected through any number of edges (reachable) from any of the *source* vertices.
+The reachability algorithm uses a few new GraphAlg features that we have not encountered so far:
+- More complex types `Matrix<..>` and `Vector<..>` (line 2-3)
+- Iterating over the dimensions of a matrix (line 5)
+- Accumulating results using `+=` (line 6)
+- Matrix multiplication using `*` (line 6)
+
+## Matrix Types
+A `Matrix` type encodes three properties:
+1. The number of rows.
+   This example uses a *symbolic name* `s` rather than a concrete value, so that we can apply the algorithm to matrices of any size.
+2. The number of columns.
+   In the example this is also `s`, so parameter `graph` is a square matrix.
+3. The *semiring*.
+   You can see this as the type of elements in the matrix, for example `int`.
+   We will give a more precise definition further on in the tutorial.
+
+`Vector<s, bool>` is an alias for `Matrix<s, 1, bool>`, a column vector.
+
+{: .note-title}
+> A note on scalar types
+>
+> Even the simple scalar types you have seen before, such as `int`, are matrices!
+> `int` is a shorthand for `Matrix<1, 1, int>`.
+
+## Loops over Matrix Dimensions
+We have previously seen loops over an integer range such as `for i in int(0):int(10) {..}`.
+In graph algorithms it is very common to bound loops based on the number of vertices in the graph, so GraphAlg provides shorthand syntax `for i in graph.nrows {..}`.
+It is equivalent to `for i in int(0):graph.nrows {..}`.
+
+{: .note-title}
+> Common Restrictions on loop ranges
+>
+> The playground allows you to define loop range bounds based on arbitrarily complex expressions, but it is common for implementations of GraphAlg to be more restrictive. Two types of bounds are supported on all GraphAlg implementations:
+> 1. Compile-time constant loop bounds (`int(0):(int(10) + int(100)`).
+> 2. Loops over matrix dimensions (`M.nrows`).
+>
+> Support for e.g. bounds based on function parameters is implementation-dependent.
+
+## Accumulating Results
+The `+=` operator is used to combine values of one matrix with a previously defined variable in element-wise fashion.
+How entries are combined depends on the semiring.
+For `int` and `real` the two elements at the same position are summed, while for `bool` logical OR is used.
+
+{:
+    data-ga-func="Accumulate"
+    data-ga-render="latex"
+    data-ga-arg-0="
+2, 2, i64;
+0, 0, 1;
+0, 1, 2;
+1, 0, 3;
+1, 1, 4;"
+    data-ga-arg-1="
+2, 2, i64;
+0, 0, 5;
+0, 1, 6;
+1, 0, 7;
+1, 1, 8;"
+}
+```graphalg
+func Accumulate(
+        a: Matrix<s, s, int>,
+        b: Matrix<s, s, int>) -> Matrix<s, s, int> {
+    a += b;
+    return a;
+}
+```
+
+## Matrix Multiplication
 
 <script src="/playground/editor.bundle.js"></script>
