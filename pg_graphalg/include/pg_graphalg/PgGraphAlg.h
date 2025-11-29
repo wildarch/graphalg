@@ -4,6 +4,7 @@
 #include <map>
 #include <optional>
 #include <tuple>
+#include <unordered_map>
 #include <utility>
 
 extern "C" {
@@ -12,9 +13,16 @@ extern "C" {
 
 namespace pg_graphalg {
 
+using TableId = unsigned int;
+
+class MatrixTable;
+
 struct ScanState {
+  MatrixTable *table;
   std::size_t row = 0;
   std::size_t col = 0;
+
+  ScanState(MatrixTable *table) : table(table) {}
 
   void reset() {
     row = 0;
@@ -22,17 +30,37 @@ struct ScanState {
   }
 };
 
+struct MatrixTableDef {
+  std::size_t nRows;
+  std::size_t nCols;
+  // TODO: data type.
+};
+
+class MatrixTable {
+private:
+  std::size_t _nRows;
+  std::size_t _nCols;
+  std::map<std::pair<std::size_t, std::size_t>, std::int64_t> _values;
+
+public:
+  MatrixTable(const MatrixTableDef &def);
+
+  void setValue(std::size_t row, std::size_t col, std::int64_t value);
+  std::optional<std::tuple<std::size_t, std::size_t, std::int64_t>>
+  scan(ScanState &state);
+
+  std::size_t nValues() { return _values.size(); }
+};
+
 class PgGraphAlg {
 private:
-  std::map<std::pair<std::size_t, std::size_t>, std::int64_t> _values;
+  std::unordered_map<TableId, MatrixTable> _tables;
 
 public:
   PgGraphAlg();
 
-  std::size_t size() { return _values.size(); }
-  void addTuple(std::size_t row, std::size_t col, std::int64_t value);
-  std::optional<std::tuple<std::size_t, std::size_t, std::int64_t>>
-  scan(ScanState &state);
+  MatrixTable &getTable(TableId tableId);
+  MatrixTable &getOrCreateTable(TableId tableId, const MatrixTableDef &def);
 };
 
 } // namespace pg_graphalg

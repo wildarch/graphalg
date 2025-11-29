@@ -1,9 +1,14 @@
 # GraphAlg in Postgres
-We need to write a postgres C extension to add GraphAlg support to it.
-Resources:
-- https://www.postgresql.org/docs/current/xfunc-c.html
-- https://www.pgedge.com/blog/introduction-to-postgres-extension-development
-- https://stackoverflow.com/questions/76056209/postgresql-c-extension-function-table-as-argument-and-as-result
+The goal: Run GraphAlg programs in PostgreSQL.
+This is accomplished by writing a PostgreSQL extension.
+
+## Building and Testing the Extension
+Key steps, explained in more detail below:
+- Build postgreSQL v18 from source and install it to the default path `/usr/local/pgsql`.
+- Setup a dummy database in `~/pgdata`
+- Install SuiteSparse:GraphBLAS
+- Build the extension
+
 
 ## Build from source
 Download the latest postgres release source code.
@@ -70,3 +75,8 @@ Download https://github.com/DrTimothyAldenDavis/SuiteSparse/archive/refs/tags/v7
 make
 sudo make install
 ```
+
+## Resources
+- https://www.postgresql.org/docs/current/xfunc-c.html
+- https://www.pgedge.com/blog/introduction-to-postgres-extension-development
+- https://stackoverflow.com/questions/76056209/postgresql-c-extension-function-table-as-argument-and-as-result
