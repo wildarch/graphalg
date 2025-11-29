@@ -13,8 +13,8 @@ CREATE FOREIGN DATA WRAPPER graphalg_fdw
   HANDLER graphalg_fdw_handler;
 CREATE SERVER graphalg_server FOREIGN DATA WRAPPER graphalg_fdw;
 
-CREATE FOREIGN TABLE mat1 ( row bigint, col bigint, val bigint ) SERVER graphalg_server;
-CREATE FOREIGN TABLE mat2 ( row bigint, col bigint, val bigint ) SERVER graphalg_server;
+CREATE FOREIGN TABLE mat1 ( row bigint, col bigint, val bigint ) SERVER graphalg_server OPTIONS (rows '10', columns '10');
+CREATE FOREIGN TABLE mat2 ( row bigint, col bigint, val bigint ) SERVER graphalg_server OPTIONS (rows '100', columns '100');
 SELECT * FROM mat1;
 SELECT * FROM mat2;
 

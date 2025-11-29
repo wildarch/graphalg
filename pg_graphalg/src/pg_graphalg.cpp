@@ -1,3 +1,4 @@
+#include <iostream>
 #include <optional>
 #include <string_view>
 
@@ -34,33 +35,42 @@ static pg_graphalg::PgGraphAlg &getInstance() {
 
 PG_FUNCTION_INFO_V1(graphalg_fdw_handler);
 
+static std::optional<std::size_t> parseDimension(const char *c) {
+  auto v = std::atoll(c);
+  if (v <= 0) {
+    return std::nullopt;
+  } else {
+    return v;
+  }
+}
+
 static std::optional<pg_graphalg::MatrixTableDef>
 parseOptions(ForeignTable *table) {
   ListCell *cell;
-  std::optional<std::int64_t> rows = 0;
-  std::optional<std::int64_t> cols = 0;
+  std::optional<std::size_t> rows;
+  std::optional<std::size_t> cols;
 
   foreach (cell, table->options) {
     auto *def = lfirst_node(DefElem, cell);
     std::string_view defName(def->defname);
     if (defName == "rows") {
-      // TODO: Check type of option
-      rows = defGetInt64(def);
-      if (rows < 0) {
-        ereport(ERROR, (errcode(ERRCODE_FDW_ERROR),
-                        errmsg("invalid value for option \"rows\": %d must be "
-                               "a positive integer",
-                               *rows)));
+      rows = parseDimension(defGetString(def));
+      if (!rows) {
+        ereport(ERROR,
+                (errcode(ERRCODE_FDW_ERROR),
+                 errmsg("invalid value for option \"rows\": '%s' must be "
+                        "a positive integer",
+                        defGetString(def))));
         return std::nullopt;
       }
     } else if (defName == "columns") {
-      // TODO: Check type of option
-      cols = defGetInt64(def);
-      if (rows < 0) {
-        ereport(ERROR, (errcode(ERRCODE_FDW_ERROR),
-                        errmsg("invalid value for option \"cols\": %d must be "
-                               "a positive integer",
-                               *cols)));
+      cols = parseDimension(defGetString(def));
+      if (!cols) {
+        ereport(ERROR,
+                (errcode(ERRCODE_FDW_ERROR),
+                 errmsg("invalid value for option \"columns\": '%s' must be "
+                        "a positive integer",
+                        defGetString(def))));
         return std::nullopt;
       }
     } else {
@@ -76,6 +86,12 @@ parseOptions(ForeignTable *table) {
   if (!rows) {
     ereport(ERROR, (errcode(ERRCODE_FDW_ERROR),
                     errmsg("missing required option \"rows\"")));
+    return std::nullopt;
+  }
+
+  if (!cols) {
+    ereport(ERROR, (errcode(ERRCODE_FDW_ERROR),
+                    errmsg("missing required option \"columns\"")));
     return std::nullopt;
   }
 
