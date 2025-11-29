@@ -1,17 +1,25 @@
+#include <optional>
+#include <string_view>
+
 #include "pg_graphalg/PgGraphAlg.h"
 
 extern "C" {
 
 #include <postgres.h>
 
+#include <commands/defrem.h>
 #include <executor/tuptable.h>
 #include <fmgr.h>
 #include <foreign/fdwapi.h>
+#include <foreign/foreign.h>
+#include <nodes/parsenodes.h>
 #include <nodes/pg_list.h>
 #include <optimizer/pathnode.h>
 #include <optimizer/planmain.h>
 #include <optimizer/restrictinfo.h>
+#include <utils/elog.h>
 #include <utils/palloc.h>
+#include <utils/rel.h>
 
 PG_MODULE_MAGIC;
 
@@ -26,9 +34,66 @@ static pg_graphalg::PgGraphAlg &getInstance() {
 
 PG_FUNCTION_INFO_V1(graphalg_fdw_handler);
 
+static std::optional<pg_graphalg::MatrixTableDef>
+parseOptions(ForeignTable *table) {
+  ListCell *cell;
+  std::optional<std::int64_t> rows = 0;
+  std::optional<std::int64_t> cols = 0;
+
+  foreach (cell, table->options) {
+    auto *def = lfirst_node(DefElem, cell);
+    std::string_view defName(def->defname);
+    if (defName == "rows") {
+      // TODO: Check type of option
+      rows = defGetInt64(def);
+      if (rows < 0) {
+        ereport(ERROR, (errcode(ERRCODE_FDW_ERROR),
+                        errmsg("invalid value for option \"rows\": %d must be "
+                               "a positive integer",
+                               *rows)));
+        return std::nullopt;
+      }
+    } else if (defName == "columns") {
+      // TODO: Check type of option
+      cols = defGetInt64(def);
+      if (rows < 0) {
+        ereport(ERROR, (errcode(ERRCODE_FDW_ERROR),
+                        errmsg("invalid value for option \"cols\": %d must be "
+                               "a positive integer",
+                               *cols)));
+        return std::nullopt;
+      }
+    } else {
+      ereport(ERROR,
+              (errcode(ERRCODE_FDW_INVALID_OPTION_NAME),
+               errmsg("invalid option \"%s\"", def->defname),
+               errhint("Valid table options for graphalg are \"rows\", and "
+                       "\"columns\"")));
+      return std::nullopt;
+    }
+  }
+
+  if (!rows) {
+    ereport(ERROR, (errcode(ERRCODE_FDW_ERROR),
+                    errmsg("missing required option \"rows\"")));
+    return std::nullopt;
+  }
+
+  return pg_graphalg::MatrixTableDef{
+      static_cast<size_t>(*rows),
+      static_cast<size_t>(*cols),
+  };
+}
+
 static void GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel,
                               Oid foreigntableid) {
-  baserel->rows = getInstance().size();
+  auto tableDef = parseOptions(GetForeignTable(foreigntableid));
+  if (!tableDef) {
+    return;
+  }
+
+  auto &table = getInstance().getOrCreateTable(foreigntableid, *tableDef);
+  baserel->rows = table.nValues();
 }
 
 static void GetForeignPaths(PlannerInfo *root, RelOptInfo *baserel,
@@ -64,8 +129,17 @@ static ForeignScan *GetForeignPlan(PlannerInfo *root, RelOptInfo *baserel,
 }
 
 static void BeginForeignScan(ForeignScanState *node, int eflags) {
+  auto tableId = RelationGetRelid(node->ss.ss_currentRelation);
+  // TODO: Avoid parsing options multiple times?
+  auto tableDef = parseOptions(GetForeignTable(tableId));
+  if (!tableDef) {
+    return;
+  }
+
+  auto &table = getInstance().getOrCreateTable(tableId, *tableDef);
+
   auto *state = palloc(sizeof(pg_graphalg::ScanState));
-  new (state) pg_graphalg::ScanState();
+  new (state) pg_graphalg::ScanState(&table);
   node->fdw_state = state;
 }
 
@@ -74,7 +148,8 @@ static TupleTableSlot *IterateForeignScan(ForeignScanState *node) {
   ExecClearTuple(slot);
 
   auto *scanState = static_cast<pg_graphalg::ScanState *>(node->fdw_state);
-  if (auto res = getInstance().scan(*scanState)) {
+  auto &table = *scanState->table;
+  if (auto res = table.scan(*scanState)) {
     slot->tts_isnull[0] = false;
     slot->tts_isnull[1] = false;
     slot->tts_isnull[2] = false;
@@ -100,6 +175,15 @@ static void EndForeignScan(ForeignScanState *node) {
 static TupleTableSlot *ExecForeignInsert(EState *estate, ResultRelInfo *rinfo,
                                          TupleTableSlot *slot,
                                          TupleTableSlot *planSlot) {
+  auto tableId = RelationGetRelid(rinfo->ri_RelationDesc);
+  // TODO: Avoid parsing options multiple times?
+  auto tableDef = parseOptions(GetForeignTable(tableId));
+  if (!tableDef) {
+    return NULL;
+  }
+
+  auto &table = getInstance().getOrCreateTable(tableId, *tableDef);
+
   slot_getsomeattrs(slot, 3);
   if (slot->tts_isnull[0] || slot->tts_isnull[1] || slot->tts_isnull[2]) {
     // Ignore nulls
@@ -109,7 +193,7 @@ static TupleTableSlot *ExecForeignInsert(EState *estate, ResultRelInfo *rinfo,
   std::size_t row = DatumGetUInt64(slot->tts_values[0]);
   std::size_t col = DatumGetUInt64(slot->tts_values[1]);
   std::int64_t val = DatumGetInt64(slot->tts_values[2]);
-  getInstance().addTuple(row, col, val);
+  table.setValue(row, col, val);
   return slot;
 }
 

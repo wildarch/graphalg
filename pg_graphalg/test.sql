@@ -1,4 +1,5 @@
-DROP FOREIGN TABLE IF EXISTS mat;
+DROP FOREIGN TABLE IF EXISTS mat1;
+DROP FOREIGN TABLE IF EXISTS mat2;
 DROP SERVER IF EXISTS graphalg_server;
 DROP FOREIGN DATA WRAPPER IF EXISTS graphalg_fdw;
 DROP FUNCTION IF EXISTS graphalg_fdw_handler;
@@ -12,18 +13,28 @@ CREATE FOREIGN DATA WRAPPER graphalg_fdw
   HANDLER graphalg_fdw_handler;
 CREATE SERVER graphalg_server FOREIGN DATA WRAPPER graphalg_fdw;
 
-CREATE FOREIGN TABLE mat ( row bigint, col bigint, val bigint ) SERVER graphalg_server;
-SELECT * FROM mat;
+CREATE FOREIGN TABLE mat1 ( row bigint, col bigint, val bigint ) SERVER graphalg_server;
+CREATE FOREIGN TABLE mat2 ( row bigint, col bigint, val bigint ) SERVER graphalg_server;
+SELECT * FROM mat1;
+SELECT * FROM mat2;
 
-INSERT INTO mat VALUES
+INSERT INTO mat1 VALUES
   (0, 0, 42),
   (0, 1, 43),
   (1, 0, 44),
   (1, 1, 45);
 
-SELECT * FROM mat;
+INSERT INTO mat2 VALUES
+  (0, 0, 420),
+  (0, 1, 430),
+  (1, 0, 440),
+  (1, 1, 450);
 
-INSERT INTO mat VALUES
+SELECT * FROM mat1;
+
+SELECT * FROM mat2;
+
+INSERT INTO mat1 VALUES
   (0, 1, 4000);
 
-SELECT * FROM mat;
+SELECT * FROM mat1;
