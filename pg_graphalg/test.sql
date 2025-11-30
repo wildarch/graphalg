@@ -3,14 +3,21 @@ DROP FOREIGN TABLE IF EXISTS mat2;
 DROP SERVER IF EXISTS graphalg_server;
 DROP FOREIGN DATA WRAPPER IF EXISTS graphalg_fdw;
 DROP FUNCTION IF EXISTS graphalg_fdw_handler;
+DROP FUNCTION IF EXISTS graphalg_fdw_validator;
 
 CREATE FUNCTION graphalg_fdw_handler()
 RETURNS fdw_handler
 AS '/workspaces/graphalg/pg_graphalg/build/src/libpg_graphalg.so'
 LANGUAGE C STRICT;
 
+CREATE FUNCTION graphalg_fdw_validator(text[], oid)
+RETURNS void
+AS '/workspaces/graphalg/pg_graphalg/build/src/libpg_graphalg.so'
+LANGUAGE C STRICT;
+
 CREATE FOREIGN DATA WRAPPER graphalg_fdw
-  HANDLER graphalg_fdw_handler;
+  HANDLER graphalg_fdw_handler
+  VALIDATOR graphalg_fdw_validator;
 CREATE SERVER graphalg_server FOREIGN DATA WRAPPER graphalg_fdw;
 
 CREATE FOREIGN TABLE mat1 ( row bigint, col bigint, val bigint ) SERVER graphalg_server OPTIONS (rows '10', columns '10');

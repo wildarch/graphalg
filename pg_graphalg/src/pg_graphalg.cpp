@@ -1,6 +1,7 @@
-#include <iostream>
+#include <charconv>
 #include <optional>
 #include <string_view>
+#include <system_error>
 
 #include "pg_graphalg/PgGraphAlg.h"
 
@@ -8,6 +9,7 @@ extern "C" {
 
 #include <postgres.h>
 
+#include <access/reloptions.h>
 #include <commands/defrem.h>
 #include <executor/tuptable.h>
 #include <fmgr.h>
@@ -34,14 +36,41 @@ static pg_graphalg::PgGraphAlg &getInstance() {
 }
 
 PG_FUNCTION_INFO_V1(graphalg_fdw_handler);
+PG_FUNCTION_INFO_V1(graphalg_fdw_validator);
 
-static std::optional<std::size_t> parseDimension(const char *c) {
-  auto v = std::atoll(c);
-  if (v <= 0) {
-    return std::nullopt;
-  } else {
+static std::optional<std::size_t> parseDimension(std::string_view s) {
+  std::size_t v;
+  auto res = std::from_chars(s.data(), s.data() + s.size(), v);
+  if (res.ec == std::errc()) {
     return v;
+  } else {
+    return std::nullopt;
   }
+}
+
+static bool validateOption(DefElem *def) {
+  std::string_view optName{def->defname};
+  const char *optValue = defGetString(def);
+
+  bool isValid = false;
+  if (optName == "rows" || optName == "columns") {
+    // NOTE: foreign data wrapper options are always strings.
+    if (!parseDimension(optValue)) {
+      ereport(ERROR, (errcode(ERRCODE_FDW_ERROR),
+                      errmsg("invalid value for option \"%s\": '%s' must be "
+                             "a non-negative integer",
+                             def->defname, optValue)));
+      isValid = true;
+    }
+  } else {
+    ereport(ERROR, (errcode(ERRCODE_FDW_INVALID_OPTION_NAME),
+                    errmsg("invalid option \"%s\"", def->defname),
+                    errhint("Valid table options are \"rows\", and "
+                            "\"columns\"")));
+    isValid = true;
+  }
+
+  return isValid;
 }
 
 static std::optional<pg_graphalg::MatrixTableDef>
@@ -53,33 +82,13 @@ parseOptions(ForeignTable *table) {
   foreach (cell, table->options) {
     auto *def = lfirst_node(DefElem, cell);
     std::string_view defName(def->defname);
-    if (defName == "rows") {
+
+    if (!validateOption(def)) {
+      return std::nullopt;
+    } else if (defName == "rows") {
       rows = parseDimension(defGetString(def));
-      if (!rows) {
-        ereport(ERROR,
-                (errcode(ERRCODE_FDW_ERROR),
-                 errmsg("invalid value for option \"rows\": '%s' must be "
-                        "a positive integer",
-                        defGetString(def))));
-        return std::nullopt;
-      }
     } else if (defName == "columns") {
       cols = parseDimension(defGetString(def));
-      if (!cols) {
-        ereport(ERROR,
-                (errcode(ERRCODE_FDW_ERROR),
-                 errmsg("invalid value for option \"columns\": '%s' must be "
-                        "a positive integer",
-                        defGetString(def))));
-        return std::nullopt;
-      }
-    } else {
-      ereport(ERROR,
-              (errcode(ERRCODE_FDW_INVALID_OPTION_NAME),
-               errmsg("invalid option \"%s\"", def->defname),
-               errhint("Valid table options for graphalg are \"rows\", and "
-                       "\"columns\"")));
-      return std::nullopt;
     }
   }
 
@@ -132,6 +141,15 @@ static ForeignScan *GetForeignPlan(PlannerInfo *root, RelOptInfo *baserel,
                                    Oid foreigntableid, ForeignPath *best_path,
                                    List *tlist, List *scan_clauses,
                                    Plan *outer_plan) {
+  // Resolve to a matrix table.
+  auto tableDef = parseOptions(GetForeignTable(foreigntableid));
+  if (!tableDef) {
+    NULL;
+  }
+
+  // Create table if it does not exist yet.
+  getInstance().getOrCreateTable(foreigntableid, *tableDef);
+
   // On extract_actual_clauses:
   // https://www.postgresql.org/docs/current/fdw-planning.html
   scan_clauses = extract_actual_clauses(scan_clauses, false);
@@ -146,13 +164,7 @@ static ForeignScan *GetForeignPlan(PlannerInfo *root, RelOptInfo *baserel,
 
 static void BeginForeignScan(ForeignScanState *node, int eflags) {
   auto tableId = RelationGetRelid(node->ss.ss_currentRelation);
-  // TODO: Avoid parsing options multiple times?
-  auto tableDef = parseOptions(GetForeignTable(tableId));
-  if (!tableDef) {
-    return;
-  }
-
-  auto &table = getInstance().getOrCreateTable(tableId, *tableDef);
+  auto &table = getInstance().getTable(tableId);
 
   auto *state = palloc(sizeof(pg_graphalg::ScanState));
   new (state) pg_graphalg::ScanState(&table);
@@ -188,17 +200,22 @@ static void EndForeignScan(ForeignScanState *node) {
   // No-Op
 }
 
+static void BeginForeignModify(ModifyTableState *mtstate, ResultRelInfo *rinfo,
+                               List *fdw_private, int subplan_index,
+                               int eflags) {
+  // Ensure table exists before modifying it.
+  auto tableId = RelationGetRelid(rinfo->ri_RelationDesc);
+  auto tableDef = parseOptions(GetForeignTable(tableId));
+  if (tableDef) {
+    getInstance().getOrCreateTable(tableId, *tableDef);
+  }
+}
+
 static TupleTableSlot *ExecForeignInsert(EState *estate, ResultRelInfo *rinfo,
                                          TupleTableSlot *slot,
                                          TupleTableSlot *planSlot) {
   auto tableId = RelationGetRelid(rinfo->ri_RelationDesc);
-  // TODO: Avoid parsing options multiple times?
-  auto tableDef = parseOptions(GetForeignTable(tableId));
-  if (!tableDef) {
-    return NULL;
-  }
-
-  auto &table = getInstance().getOrCreateTable(tableId, *tableDef);
+  auto &table = getInstance().getTable(tableId);
 
   slot_getsomeattrs(slot, 3);
   if (slot->tts_isnull[0] || slot->tts_isnull[1] || slot->tts_isnull[2]) {
@@ -224,8 +241,24 @@ Datum graphalg_fdw_handler(PG_FUNCTION_ARGS) {
   fdwRoutine->ReScanForeignScan = ReScanForeignScan;
   fdwRoutine->EndForeignScan = EndForeignScan;
 
+  fdwRoutine->BeginForeignModify = BeginForeignModify;
   fdwRoutine->ExecForeignInsert = ExecForeignInsert;
 
   PG_RETURN_POINTER(fdwRoutine);
+}
+
+Datum graphalg_fdw_validator(PG_FUNCTION_ARGS) {
+  List *options = untransformRelOptions(PG_GETARG_DATUM(0));
+
+  ListCell *cell;
+  foreach (cell, options) {
+    auto *def = static_cast<DefElem *>(lfirst(cell));
+    validateOption(def);
+  }
+
+  // NOTE: Not checking that required options are set, because this validator is
+  // also called when checking options defined on the wrapper or the server.
+
+  PG_RETURN_VOID();
 }
 }
