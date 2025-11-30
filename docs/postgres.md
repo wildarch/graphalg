@@ -59,9 +59,6 @@ CREATE FUNCTION add_one(integer) RETURNS integer
 
 ## Foreign Data Wrapper
 Resources:
-- https://www.postgresql.org/docs/current/fdwhandler.html
-- https://www.dolthub.com/blog/2022-01-26-creating-a-postgres-foreign-data-wrapper/
-- https://github.com/Kentik-Archive/wdb_fdw
 
 ## GraphBLAS
 We need to link to SuiteSparse:GraphBLAS.
@@ -80,3 +77,6 @@ sudo make install
 - https://www.postgresql.org/docs/current/xfunc-c.html
 - https://www.pgedge.com/blog/introduction-to-postgres-extension-development
 - https://stackoverflow.com/questions/76056209/postgresql-c-extension-function-table-as-argument-and-as-result
+- https://www.postgresql.org/docs/current/fdwhandler.html
+- https://www.dolthub.com/blog/2022-01-26-creating-a-postgres-foreign-data-wrapper/
+- https://github.com/Kentik-Archive/wdb_fdw
