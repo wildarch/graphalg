@@ -84,6 +84,7 @@ mlir::LogicalResult Evaluator::evaluate(DiagOp op) {
   MatrixAttrReader input(_values[op.getInput()]);
   MatrixAttrBuilder result(op.getType());
 
+  // TODO: Need to handle row vector case.
   for (auto row : llvm::seq(input.nRows())) {
     result.set(row, row, input.at(row, 0));
   }
