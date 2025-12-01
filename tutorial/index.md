@@ -63,7 +63,7 @@ func <function name>(<param name>: <param type>, ...) -> <return type> {
 }
 ```
 
-The `AddOne` uses the `int` type for both the parameter and the return type.
+The `AddOne` function uses the `int` type for both the parameter and the return type.
 This represents a signed, 64-bit integer (similar to `long` in Java and C++).
 A function can have any number of parameters, but it must have **exactly one return value**.
 You may be familiar with other languages that allow returning no value at all (commonly named `void` functions).
@@ -312,7 +312,7 @@ A `Matrix` type encodes three properties:
 
 ## Loops over Matrix Dimensions
 We have previously seen loops over an integer range such as `for i in int(0):int(10) {..}`.
-In graph algorithms it is very common to bound loops based on the number of vertices in the graph, so GraphAlg provides shorthand syntax `for i in graph.nrows {..}`.
+In graph algorithms it is very common to bound loops based on the number of nodes in the graph, so GraphAlg provides shorthand syntax `for i in graph.nrows {..}`.
 It is equivalent to `for i in int(0):graph.nrows {..}`.
 
 {: .note-title}
@@ -468,7 +468,7 @@ The main difference is the semiring used (`trop_real` instead of `bool`).
 By using floating-point values rather than booleans, we can record not just that a node is connected, but also keep track of the distance from the source.
 The use of $+$ for multiplication means we add the cost of edges the current distance from the source, whereas using $\min$ for addition ensures that we keep only the shortest distance.
 
-If you are interested to learn more about the use of semirings (and linear algebra in general) in the context of graph algorithms, we recommend the book [*Graph Algorithms in the Language of Linear Algebra*](https://epubs.siam.org/doi/book/10.1137/1.9780898719918) by Jeremy Kepner and John Gilbert.
+If you are interested to learn more about the use of semirings (and linear algebra more broadly) in the context of graph algorithms, we recommend the book [*Graph Algorithms in the Language of Linear Algebra*](https://epubs.siam.org/doi/book/10.1137/1.9780898719918) by Jeremy Kepner and John Gilbert.
 We can also recommend [various resources](https://github.com/GraphBLAS/GraphBLAS-Pointers) related to [GraphBLAS](https://graphblas.org/), an API that provides building blocks for graph algorithms also based on linear algebra.
 The more conceptual of those resources are also applicable to GraphAlg.
 
@@ -481,258 +481,32 @@ The more conceptual of those resources are also applicable to GraphAlg.
 > If you want to follow progress on the GraphBLAS integration, you can follow the [GraphAlg Repository on GitHub](https://github.com/wildarch/graphalg).
 
 ## The Real Deal: PageRank
-TODO: What is PageRank?
+Let us now move to a more complex algorithm.
+[PageRank](http://ilpubs.stanford.edu:8090/422/1/1999-66.pdf) is a well-known and widely used algorithm for computing the *importance* of nodes in a graph.
+It was made famous by Google, who used it to the measure the importance of websites in the graph that is the World Wide Web.
+The algorithm is still in wide use today, for example to [analyze the influence of scientific publications](https://graph.openaire.eu/docs/graph-production-workflow/indicators-ingestion/impact-indicators/#pagerank-pr--influence).
+Below you can find an implementation of PageRank in GraphAlg.
 
 {:
     data-ga-func="PR"
     data-ga-arg-0="
-        50, 50, i1;
-        0, 18;
-        0, 20;
-        0, 21;
-        0, 26;
-        0, 30;
-        0, 36;
-        0, 44;
-        0, 47;
+        11, 11, i1;
         1, 2;
-        1, 19;
-        1, 38;
-        1, 45;
-        2, 5;
-        2, 9;
-        2, 31;
-        2, 40;
-        2, 44;
-        3, 14;
-        4, 14;
-        4, 15;
-        4, 17;
-        4, 27;
-        4, 46;
-        5, 48;
-        6, 5;
-        6, 26;
-        6, 42;
-        6, 45;
+        2, 1;
+        3, 0;
+        3, 1;
+        4, 1;
+        4, 3;
+        5, 1;
+        5, 4;
+        6, 1;
+        6, 4;
+        7, 1;
         7, 4;
-        7, 20;
-        7, 28;
-        7, 29;
-        7, 31;
-        7, 42;
-        8, 15;
-        8, 17;
-        8, 20;
-        8, 27;
-        8, 29;
-        8, 34;
-        8, 39;
-        9, 8;
-        9, 12;
-        9, 27;
-        9, 28;
-        9, 32;
-        10, 2;
-        10, 38;
-        11, 46;
-        11, 49;
-        12, 6;
-        12, 11;
-        12, 16;
-        12, 31;
-        12, 47;
-        13, 3;
-        13, 19;
-        13, 20;
-        13, 34;
-        13, 37;
-        13, 39;
-        14, 7;
-        14, 23;
-        14, 30;
-        14, 34;
-        14, 43;
-        16, 4;
-        16, 8;
-        16, 10;
-        16, 15;
-        16, 25;
-        16, 36;
-        17, 0;
-        17, 11;
-        17, 27;
-        17, 29;
-        17, 43;
-        17, 44;
-        17, 46;
-        17, 49;
-        18, 9;
-        18, 10;
-        18, 12;
-        18, 26;
-        18, 37;
-        19, 14;
-        19, 24;
-        20, 21;
-        20, 26;
-        20, 30;
-        20, 31;
-        20, 39;
-        21, 18;
-        21, 25;
-        21, 26;
-        21, 30;
-        22, 21;
-        22, 34;
-        22, 35;
-        22, 37;
-        22, 39;
-        22, 45;
-        22, 46;
-        23, 8;
-        23, 12;
-        23, 14;
-        23, 33;
-        23, 35;
-        23, 49;
-        24, 7;
-        24, 23;
-        24, 29;
-        24, 33;
-        24, 40;
-        24, 46;
-        25, 6;
-        25, 30;
-        25, 36;
-        25, 39;
-        25, 43;
-        25, 46;
-        26, 30;
-        26, 32;
-        26, 42;
-        27, 7;
-        27, 31;
-        27, 41;
-        27, 44;
-        28, 0;
-        28, 1;
-        28, 11;
-        28, 13;
-        28, 15;
-        28, 18;
-        28, 19;
-        28, 35;
-        29, 8;
-        29, 23;
-        29, 33;
-        29, 43;
-        30, 10;
-        30, 16;
-        30, 31;
-        30, 38;
-        30, 45;
-        30, 46;
-        31, 1;
-        31, 27;
-        31, 28;
-        31, 29;
-        31, 30;
-        32, 6;
-        32, 7;
-        32, 8;
-        32, 9;
-        32, 31;
-        32, 33;
-        32, 36;
-        33, 25;
-        33, 47;
-        34, 2;
-        34, 9;
-        34, 16;
-        34, 23;
-        34, 25;
-        34, 27;
-        34, 32;
-        34, 40;
-        35, 19;
-        35, 20;
-        35, 28;
-        35, 31;
-        35, 45;
-        36, 0;
-        36, 4;
-        36, 8;
-        36, 12;
-        36, 22;
-        36, 23;
-        37, 1;
-        37, 21;
-        37, 49;
-        38, 5;
-        38, 7;
-        38, 19;
-        38, 27;
-        38, 29;
-        38, 46;
-        38, 47;
-        39, 4;
-        39, 6;
-        39, 7;
-        39, 10;
-        39, 32;
-        39, 33;
-        39, 36;
-        39, 48;
-        40, 23;
-        40, 42;
-        42, 0;
-        42, 1;
-        42, 10;
-        42, 14;
-        42, 16;
-        42, 28;
-        42, 37;
-        42, 46;
-        43, 10;
-        43, 12;
-        43, 14;
-        44, 4;
-        44, 10;
-        44, 11;
-        44, 20;
-        44, 23;
-        45, 22;
-        45, 23;
-        45, 25;
-        45, 30;
-        45, 35;
-        45, 40;
-        46, 7;
-        46, 13;
-        46, 15;
-        46, 27;
-        46, 28;
-        46, 33;
-        46, 34;
-        46, 39;
-        46, 41;
-        46, 45;
-        46, 49;
-        47, 7;
-        47, 18;
-        47, 29;
-        47, 34;
-        47, 37;
-        47, 42;
-        47, 49;
-        48, 6;
-        48, 7;
-        48, 16;
-        48, 17;
-        49, 3;
-        49, 27;
-        49, 46;"
+        8, 1;
+        8, 4;
+        9, 4;
+        10, 4;"
     data-ga-result-render="vertex-property"
 }
 ```graphalg
@@ -740,32 +514,53 @@ func withDamping(degree:int, damping:real) -> real {
     return cast<real>(degree) / damping;
 }
 
-func PR(graph: Matrix<s1, s1, bool>) -> Vector<s1, real> {
+func PR(graph: Matrix<s, s, bool>) -> Vector<s, real> {
+    // A commonly-used value for the damping factor (85%).
     damping = real(0.85);
+    // Run for 10 iterations
     iterations = int(10);
+
+    // Number of nodes in the graph
     n = graph.nrows;
+
+    // Per-node probability that a random surfer will jump to that
+    // node.
     teleport = (real(1.0) - damping) / cast<real>(n);
-    rdiff = real(1.0);
 
+    // Per-node out degree (number of outgoing edges)
     d_out = reduceRows(cast<int>(graph));
-
+    // .. with damping applied.
     d = apply(withDamping, d_out, damping);
 
+    // Sinks are nodes that have no outgoing edges.
+    // Sometimes also called 'dangling nodes' or 'dead-ends'.
     connected = reduceRows(graph);
     sinks = Vector<bool>(n);
     sinks<!connected>[:] = bool(true);
 
+    // Initial PageRank score: equally distributed over all nodes.
     pr = Vector<real>(n);
     pr[:] = real(1.0) / cast<real>(n);
 
     for i in int(0):iterations {
+        // total PageRank score across all sinks.
         sink_pr = Vector<real>(n);
         sink_pr<sinks> = pr;
+
+        // redistribute PageRank score from sinks
         redist = (damping / cast<real>(n)) * reduce(sink_pr);
 
+        // Previous PageRank score divided by the (damped) out degree.
+        // This gives us a per-node score amount to distributed to its
+        // outgoing edges.
         w = pr (./) d;
 
+        // Initialize next PageRank scores with the uniform teleport
+        // probability and the amount redistributed from the sinks.
         pr[:] = teleport + redist;
+
+        // Distribute the previous PageRank scores over the outgoing
+        // edges (and add to the new PageRank score).
         pr += cast<real>(graph).T * w;
     }
 
@@ -773,21 +568,36 @@ func PR(graph: Matrix<s1, s1, bool>) -> Vector<s1, real> {
 }
 ```
 
-New ops:
-- cast
-- reduceRows
-- apply
-- M[:] = c
-- A<M> = B
-- reduce
-- (.f)
-- M.T
+If you run the algorithm, you will see that node 1 is the most influentation node in the graph (it has the highest rank).
+This makes sense given that many nodes have an edge to node 1.
+Notice, though, that node 2 is also highly influential, yet it has very few incoming edges.
+Its high ranking comes from the influential node 1, whose only outgoing edge is to node 2, boosting the influence of node 2.
 
-TODO: Where to find docs on additional operations
+The PageRank implementation presented above uses a few new language constructs:
+- `cast<T>` (line 2, 9, etc.) casts the input to a different semiring `T`.
+  For example, `cast<real>` on line 2 promotes an integer value to floating-point.
+- `reduceRows(M)` (line 12) collapses a matrix `M` into a column vector, summing elements using the addition operator.
+- `apply` (line 14) applies a scalar function to every element of a matrix.
+  An additional second scalar argument can be specified that is passed as the second argument to the function.
+- `M[:] = c` (line 18, 21, 30) replaced every element of `M` by scalar value `c`.
+- `A<M> = B` (line 18, 25) assigns elements from `B` to the same position in `A` iff `M` has a nonzero value at that position.
+- `reduce` (line 25) sums all elements of a matrix to scalar.
+- `A (./) B` (line 28) represents elementwise division.
+  It applies the division operator to each position of `A` and `B`.
+  The output is defined as $O_{ij} = A_{ij} / B_{ij}$.
+  Other operators such as `+` and `*` and even arbitary functions (`A (.myFunc) B`) also support elementwise application.
 
-Consult the [list of all operations](../spec/operations) available in GraphAlg.
+For a detailed explanation of these and other GraphAlg operations, see the [operations](../spec/operations) section of the language specification.
 
-TODO: More example programs at the playground.
-Play around with more algorithms there.
+## Where Next?
+This concludes our introduction to the GraphAlg language.
+Where you go from here depends on your needs:
+- Do you want to experiment more with different algorithms?
+  Check out [GraphAlg Playground](../playground).
+- Are you ready to move beyond experiments and use GraphAlg to analyze large graphs?
+  See the [available implementations](../integration/available).
+- If you want to learn more about the design, features and theoretical foundations for the GraphAlg language, you can find a more details in the [language specification](../spec).
+  In particular, you can find a full overview of all [operations](../spec/operations) available in the GraphAlg there.
+- Are you a system developer looking to integrate GraphAlg? See our guide for [new integrators](../integration/new_integration).
 
 <script src="/playground/editor.bundle.js"></script>
