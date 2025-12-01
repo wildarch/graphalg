@@ -7,6 +7,11 @@ nav_order: 1
 
 # GraphAlg Syntax
 
+{:.warning-title}
+> Under Construction
+>
+> This part of the documentation is not yet finished.
+
 ## Lexical Analysis
 TODO:
 - ASCII characters only

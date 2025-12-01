@@ -5,7 +5,7 @@ parent: Integrating
 nav_order: 2
 ---
 
-# Integrating GraphAlg Into new Systems
+# Integrating GraphAlg into Existing Systems
 GraphAlg is specifically designed to be integrated into existing systems.
 The GraphAlg [compiler](https://github.com/wildarch/graphalg/tree/main/compiler) source code is freely available under a permissive license.
 The compiler can be integrated into other systems as a C++ library.
@@ -36,4 +36,4 @@ To do this you should use the provided [parser]() and run the [pipeline](https:/
 {: .note-title }
 > Example integration
 >
-> We do not currently have an example integration for this approach, although a GraphBLAS is planned and would use this strategy.
+> We do not currently have an example integration for this approach, although a GraphBLAS backend is planned that would use this strategy.
