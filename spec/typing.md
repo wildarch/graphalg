@@ -2,7 +2,7 @@
 title: Type System
 layout: page
 parent: Language Specification
-nav_order: 2
+nav_order: 3
 ---
 
 # Type System

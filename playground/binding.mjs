@@ -24,7 +24,7 @@ export function loadPlaygroundWasm() {
     let bindings = new PlaygroundWasmBindings();
     playgroundWasmFactory({
         locateFile: function (path, prefix) {
-            return playgroundWasm;
+            return prefix + playgroundWasm;
         },
     }).then((instance) => {
         bindings.ga_new = instance.cwrap('ga_new', 'number', []);

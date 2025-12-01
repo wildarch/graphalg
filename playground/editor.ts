@@ -5,6 +5,9 @@ import { indentWithTab } from "@codemirror/commands"
 import { linter, Diagnostic } from "@codemirror/lint"
 import { GraphAlg } from "codemirror-lang-graphalg"
 import { loadPlaygroundWasm } from "./binding.mjs"
+import { DataSet, Network } from "vis-network/standalone"
+import katex from "katex"
+import renderMathInElement from "katex/contrib/auto-render"
 
 // Load and register all webassembly bindings
 let playgroundWasmBindings = loadPlaygroundWasm();
@@ -281,7 +284,62 @@ function parseMatrix(input: string): GraphAlgMatrix {
     }
 }
 
-function buildTable(m: GraphAlgMatrix): HTMLTableElement {
+function renderValue(entry: boolean | bigint | number, ring: string) {
+    switch (ring) {
+        case 'f64':
+        case '!graphalg.trop_f64':
+            return (entry as number).toFixed(3);
+        case 'i1':
+            return (entry as boolean) ? "1" : "0";
+        default:
+            return entry.toString();
+    }
+}
+
+function renderMatrixLatex(m: GraphAlgMatrix): HTMLElement {
+    let defaultCellValue;
+    switch (m.ring) {
+        case "i1":
+        case "i64":
+        case "f64":
+            defaultCellValue = "0";
+            break;
+        case "!graphalg.trop_i64":
+        case "!graphalg.trop_f64":
+        case "!graphalg.trop_max_i64":
+            defaultCellValue = "\\infty";
+            break;
+        default:
+            defaultCellValue = "";
+            break;
+    }
+
+    let rows: string[][] = [];
+    for (let r = 0; r < m.rows; r++) {
+        let cols: string[] = [];
+        for (let c = 0; c < m.cols; c++) {
+            cols.push(defaultCellValue);
+        }
+
+        rows.push(cols);
+    }
+
+    for (let val of m.values) {
+        rows[val.row][val.col] = renderValue(val.val, m.ring);
+    }
+
+    const tex =
+        "\\begin{bmatrix}\n" +
+        rows.map((row) => row.join(" & ")).join("\\\\")
+        + "\n\\end{bmatrix}";
+
+    const katexCont = document.createElement("div");
+    // TODO: We could generate MathML directly, skipping katex entirely.
+    katex.render(tex, katexCont, { output: "mathml" });
+    return katexCont;
+}
+
+function renderMatrixTable(m: GraphAlgMatrix): HTMLTableElement {
     // Create an output table.
     const table = document.createElement("table");
 
@@ -307,13 +365,193 @@ function buildTable(m: GraphAlgMatrix): HTMLTableElement {
         tdCol.textContent = val.col.toString();
 
         const tdVal = document.createElement("td");
-        tdVal.textContent = val.val.toString();
+        tdVal.textContent = renderValue(val.val, m.ring);
         tr.append(tdRow, tdCol, tdVal);
         tbody.appendChild(tr);
     }
 
     table.append(thead, tbody);
     return table;
+}
+
+function renderMatrixVisGraph(m: GraphAlgMatrix): HTMLElement {
+    if (m.rows != m.cols) {
+        throw Error("renderMatrixVisGraph called with a non-square matrix");
+    }
+
+    const container = document.createElement("div");
+    container.style.width = "100%";
+    container.style.height = "300px";
+    container.style.border = "1px solid black";
+
+    interface NodeItem {
+        id: number;
+        label: string;
+    }
+    const nodes = new DataSet<NodeItem>();
+    for (let r = 0; r < m.rows; r++) {
+        nodes.add({ id: r, label: r.toString() });
+    }
+
+    // create an array with edges
+    interface EdgeItem {
+        id: number;
+        from: number;
+        to: number;
+        label: string;
+    }
+    const edges = new DataSet<EdgeItem>();
+    for (let val of m.values) {
+        let label = renderValue(val.val, m.ring);
+        if (m.ring == "i1" && val.val == true) {
+            label = "";
+        }
+
+        edges.add({
+            id: edges.length,
+            from: val.row,
+            to: val.col,
+            label: label
+        });
+    }
+
+    // create a network
+    const data = {
+        nodes: nodes,
+        edges: edges,
+    };
+    var options = {
+        layout: {
+            // Deterministic layout of graphs
+            randomSeed: 42
+        },
+        edges: {
+            arrows: {
+                to: {
+                    enabled: true
+                }
+            }
+        }
+    };
+    var network = new Network(container, data, options);
+
+    return container;
+}
+
+function renderVectorAsNodeProperty(
+    vector: GraphAlgMatrix,
+    graph: GraphAlgMatrix): HTMLElement {
+    if (vector.rows != graph.rows
+        || graph.rows != graph.cols
+        || vector.cols != 1) {
+        console.warn("cannot render as node property due to incompatible dimensions, falling back to default output rendering");
+        return renderMatrixAuto(vector);
+    }
+
+    const container = document.createElement("div");
+    container.style.width = "100%";
+    container.style.height = "300px";
+    container.style.border = "1px solid black";
+
+    interface NodeItem {
+        id: number;
+        label: string;
+        color?: string;
+    }
+    let nodes: NodeItem[] = [];
+    for (let r = 0; r < vector.rows; r++) {
+        let label = "Node " + r.toString();
+        if (vector.ring == '!graphalg.trop_f64'
+            || vector.ring == '!graphalg.trop_i64') {
+            label = `Node ${r}\nvalue: ∞`;
+        }
+
+        nodes.push({ id: r, label: label });
+    }
+
+    for (let val of vector.values) {
+        const renderVal = renderValue(val.val, vector.ring);
+        nodes[val.row].label = `Node ${val.row}\nvalue: ${renderVal}`;
+        if (vector.ring == 'i1' && val.val) {
+            // A shade of red to complement default blue.
+            nodes[val.row].color = '#FB7E81';
+        }
+    }
+
+    const nodeDataSet = new DataSet(nodes);
+
+    // create an array with edges
+    interface EdgeItem {
+        id: number;
+        from: number;
+        to: number;
+        label: string;
+    }
+    const edges = new DataSet<EdgeItem>();
+    for (let val of graph.values) {
+        edges.add({
+            id: edges.length,
+            from: val.row,
+            to: val.col,
+            label: renderValue(val.val, graph.ring)
+        });
+    }
+
+    // create a network
+    const data = {
+        nodes: nodes,
+        edges: edges,
+    };
+    var options = {
+        layout: {
+            // Deterministic layout of graphs
+            randomSeed: 42
+        },
+        edges: {
+            arrows: {
+                to: {
+                    enabled: true
+                }
+            }
+        }
+    };
+    var network = new Network(container, data, options);
+
+    return container;
+}
+
+function renderMatrixAuto(m: GraphAlgMatrix): HTMLElement {
+    if (m.rows == 1 && m.cols == 1) {
+        // Simple scalar
+        return renderMatrixLatex(m);
+    } else if (m.rows == m.cols && m.rows < 20) {
+        return renderMatrixVisGraph(m);
+    } else if (m.rows < 20 && m.cols < 20) {
+        return renderMatrixLatex(m);
+    } else {
+        return renderMatrixTable(m);
+    }
+}
+
+enum MatrixRenderMode {
+    AUTO,
+    LATEX,
+    VIS_GRAPH,
+    TABLE,
+    VERTEX_PROPERTY,
+}
+
+function renderMatrix(m: GraphAlgMatrix, mode: MatrixRenderMode) {
+    switch (mode) {
+        case MatrixRenderMode.LATEX:
+            return renderMatrixLatex(m);
+        case MatrixRenderMode.VIS_GRAPH:
+            return renderMatrixVisGraph(m);
+        case MatrixRenderMode.TABLE:
+            return renderMatrixTable(m);
+        default:
+            return renderMatrixAuto(m);
+    }
 }
 
 class GraphAlgEditor {
@@ -326,6 +564,8 @@ class GraphAlgEditor {
     initialProgram: string;
     functionName?: string;
     arguments: GraphAlgMatrix[] = [];
+    renderMode: MatrixRenderMode = MatrixRenderMode.AUTO;
+    resultRenderMode: MatrixRenderMode = MatrixRenderMode.AUTO;
 
     editorView?: EditorView;
 
@@ -375,7 +615,7 @@ class GraphAlgEditor {
         const argDetails = document.createElement("details");
         const argSummary = document.createElement("summary");
         argSummary.textContent = `Argument ${this.arguments.length} (${arg.ring} x ${arg.rows} x ${arg.cols})`;
-        const table = buildTable(arg);
+        const table = renderMatrix(arg, this.renderMode);
         argDetails.append(argSummary, table);
         this.argumentContainer.appendChild(argDetails);
     }
@@ -399,6 +639,12 @@ for (let elem of Array.from(codeElems)) {
             editor.functionName = func;
         }
 
+        // NOTE: Need to configure this before we add arguments.
+        const defaultRender = elem.getAttribute('data-ga-render');
+        if (defaultRender == 'latex') {
+            editor.renderMode = MatrixRenderMode.LATEX;
+        }
+
         for (let i = 0; ; i++) {
             const arg = elem.getAttribute('data-ga-arg-' + i);
             if (!arg) {
@@ -407,6 +653,15 @@ for (let elem of Array.from(codeElems)) {
 
             const parsed = parseMatrix(arg);
             editor.addArgument(parsed);
+        }
+
+        const resultRender = elem.getAttribute('data-ga-result-render');
+        if (!resultRender) {
+            editor.resultRenderMode = editor.renderMode;
+        } if (resultRender == 'vertex-property') {
+            editor.resultRenderMode = MatrixRenderMode.VERTEX_PROPERTY;
+        } if (resultRender == 'latex') {
+            editor.resultRenderMode = MatrixRenderMode.LATEX;
         }
     }
 
@@ -446,7 +701,11 @@ function run(editor: GraphAlgEditor, inst: PlaygroundInstance) {
     const result = inst.run(program, editor.functionName!!, editor.arguments);
     let resultElem;
     if (result.result) {
-        resultElem = buildTable(result.result);
+        if (editor.resultRenderMode == MatrixRenderMode.VERTEX_PROPERTY) {
+            resultElem = renderVectorAsNodeProperty(result.result, editor.arguments[0]);
+        } else {
+            resultElem = renderMatrix(result.result, editor.resultRenderMode);
+        }
     } else {
         resultElem = buildErrorNote(result.diagnostics);
     }
@@ -481,3 +740,44 @@ playgroundWasmBindings.onLoaded((bindings: any) => {
         editor.toolbar.appendChild(runButton);
     }
 });
+
+// Initialize graph views
+const graphElems = document.getElementsByClassName("language-graphalg-matrix");
+for (let elem of Array.from(graphElems)) {
+    const mat = parseMatrix(elem.textContent.trim());
+
+    let mode: string | null = null;
+    if (elem.parentElement?.tagName == 'PRE') {
+        // Have additional annotations in a pre wrapper
+        elem = elem.parentElement;
+
+        mode = elem.getAttribute('data-ga-mode');
+    }
+
+    let rendered: HTMLElement;
+    if (mode == "vis") {
+        rendered = renderMatrixVisGraph(mat);
+    } else if (mode == "coo") {
+        rendered = renderMatrixTable(mat);
+    } else {
+        rendered = renderMatrixLatex(mat);
+    }
+
+    elem.replaceWith(rendered);
+}
+
+// Initialize math views
+const mathElems = document.getElementsByClassName("language-math");
+for (let elem of Array.from(mathElems)) {
+    const container = document.createElement("div");
+    katex.render(elem.textContent, container, { output: "mathml", displayMode: true });
+    elem.replaceWith(container);
+}
+
+// Initialize inline math.
+renderMathInElement(document.body, {
+    output: 'mathml',
+    delimiters: [
+        { left: "$", right: "$", display: false },
+    ]
+})

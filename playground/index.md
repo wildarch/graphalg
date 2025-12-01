@@ -1,7 +1,7 @@
 ---
 title: GraphAlg Playground
 layout: page
-nav_order: 3
+nav_order: 4
 ---
 
 # GraphAlg Playground
@@ -38,6 +38,7 @@ Compile and execute GraphAlg programs in your browser!
     data-ga-arg-1="
         10, 1, i1;
         0, 0;"
+    data-ga-result-render="vertex-property"
 }
 ```graphalg
 func setDepth(b:bool, iter:int) -> int {
@@ -91,6 +92,7 @@ func BFS(
         6, 5;
         6, 7;
         7, 5;"
+    data-ga-result-render="latex"
 }
 ```graphalg
 func isMax(v: int, max: trop_max_int) -> bool {
@@ -387,6 +389,7 @@ func CDLP(graph: Matrix<s, s, bool>) -> Matrix<s, s, bool> {
         49, 3;
         49, 27;
         49, 46;"
+    data-ga-result-render="vertex-property"
 }
 ```graphalg
 func withDamping(degree:int, damping:real) -> real {
@@ -448,6 +451,7 @@ func PR(graph: Matrix<s1, s1, bool>) -> Vector<s1, real> {
     data-ga-arg-1="
         10, 1, i1;
         0, 0;"
+    data-ga-result-render="vertex-property"
 }
 ```graphalg
 func SSSP(
@@ -477,6 +481,7 @@ func SSSP(
         5, 7;
         6, 5;
         8, 2;"
+    data-ga-result-render="latex"
 }
 ```graphalg
 func WCC(graph: Matrix<s, s, bool>) -> Matrix<s, s, bool> {
