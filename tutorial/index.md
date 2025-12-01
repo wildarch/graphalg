@@ -600,4 +600,4 @@ Where you go from here depends on your needs:
   In particular, you can find a full overview of all [operations](../spec/operations) available in the GraphAlg there.
 - Are you a system developer looking to integrate GraphAlg? See our guide for [new integrators](../integration/new_integration).
 
-<script src="/playground/editor.bundle.js"></script>
+<script src="{{ '/playground/editor.bundle.js' | relative_url }}"></script>

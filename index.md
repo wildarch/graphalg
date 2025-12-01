@@ -63,4 +63,4 @@ You can experiment with GraphAlg in our [Playground](./playground), or use a [sy
 
 For a detailed overview of the GraphAlg language, see the [language specification](./spec).
 
-<script src="/playground/editor.bundle.js"></script>
+<script src="{{ '/playground/editor.bundle.js' | relative_url }}"></script>
