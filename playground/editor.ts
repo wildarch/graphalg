@@ -526,7 +526,7 @@ function renderMatrixAuto(m: GraphAlgMatrix): HTMLElement {
         return renderMatrixLatex(m);
     } else if (m.rows == m.cols && m.rows < 20) {
         return renderMatrixVisGraph(m);
-    } else if (m.rows < 50 && m.cols < 50) {
+    } else if (m.rows < 20 && m.cols < 20) {
         return renderMatrixLatex(m);
     } else {
         return renderMatrixTable(m);
@@ -660,6 +660,8 @@ for (let elem of Array.from(codeElems)) {
             editor.resultRenderMode = editor.renderMode;
         } if (resultRender == 'vertex-property') {
             editor.resultRenderMode = MatrixRenderMode.VERTEX_PROPERTY;
+        } if (resultRender == 'latex') {
+            editor.resultRenderMode = MatrixRenderMode.LATEX;
         }
     }
 

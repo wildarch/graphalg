@@ -21,11 +21,13 @@ To follow along, all you need are:
 Let us start with an example program to introduce key concepts of the GraphAlg language.
 Try running it by pressing the **Run** button!.
 
-{: .note }
+{: .note-title }
+> Running example programs
+>
 > The examples shown in this tutorial run inside your own browser using
 > [WebAssembly](https://webassembly.org/).
->
 > You can modify and run examples as much as you want.
+>
 > The name of the function to execute appears in the *Run* button above the editor.
 > To see the values of the parameters passed to the function, click on the *Argument* accordions below the editor to expand them.
 >
@@ -466,12 +468,20 @@ The main difference is the semiring used (`trop_real` instead of `bool`).
 By using floating-point values rather than booleans, we can record not just that a node is connected, but also keep track of the distance from the source.
 The use of $+$ for multiplication means we add the cost of edges the current distance from the source, whereas using $\min$ for addition ensures that we keep only the shortest distance.
 
-TODO: Links to learning more about tropical semirings.
+If you are interested to learn more about the use of semirings (and linear algebra in general) in the context of graph algorithms, we recommend the book [*Graph Algorithms in the Language of Linear Algebra*](https://epubs.siam.org/doi/book/10.1137/1.9780898719918) by Jeremy Kepner and John Gilbert.
+We can also recommend [various resources](https://github.com/GraphBLAS/GraphBLAS-Pointers) related to [GraphBLAS](https://graphblas.org/), an API that provides building blocks for graph algorithms also based on linear algebra.
+The more conceptual of those resources are also applicable to GraphAlg.
+
+{: .note-title }
+> GraphBLAS vs. GraphAlg
+>
+> GraphBLAS defines a C library with sparse linear algebra routines, so it operates at a lower abstraction level than GraphAlg.
+> Operations are similar, but there are subtle and important differences between the two.
+> Work is in progress to build a GraphBLAS target for GraphAlg, which would allow running GraphAlg programs using a runtime based on GraphBLAS.
+> If you want to follow progress on the GraphBLAS integration, you can follow the [GraphAlg Repository on GitHub](https://github.com/wildarch/graphalg).
 
 ## The Real Deal: PageRank
-TODO: Write about PageRank, and where to find docs on all supported operations.
-
-Consult the [list of all operations](../spec/operations) available in GraphAlg.
+TODO: What is PageRank?
 
 {:
     data-ga-func="PR"
@@ -762,5 +772,22 @@ func PR(graph: Matrix<s1, s1, bool>) -> Vector<s1, real> {
     return pr;
 }
 ```
+
+New ops:
+- cast
+- reduceRows
+- apply
+- M[:] = c
+- A<M> = B
+- reduce
+- (.f)
+- M.T
+
+TODO: Where to find docs on additional operations
+
+Consult the [list of all operations](../spec/operations) available in GraphAlg.
+
+TODO: More example programs at the playground.
+Play around with more algorithms there.
 
 <script src="/playground/editor.bundle.js"></script>
