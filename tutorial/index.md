@@ -128,9 +128,6 @@ This is okay because the loop scope is defined *inside* of the function scope.
 What is not allowed however is to first define a variable in a nested scope, and then refer to it from the outer scope.
 For an example, consider the (invalid) program below.
 
-{:
-    data-ga-func="NotValid"
-}
 ```graphalg
 func NotValid() -> int {
     a = int(0);
