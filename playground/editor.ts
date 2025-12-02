@@ -697,7 +697,7 @@ function buildErrorNote(diagnostics: GraphAlgDiagnostic[]): HTMLQuoteElement {
     const quote = document.createElement("blockquote");
     quote.setAttribute('class', 'error-title');
     const title = document.createElement("p");
-    title.textContent = "Run failed";
+    title.textContent = "Compiler error";
     quote.appendChild(title);
 
     for (let diag of diagnostics) {
@@ -712,17 +712,13 @@ function buildErrorNote(diagnostics: GraphAlgDiagnostic[]): HTMLQuoteElement {
 function buildCompileSuccessNote(): HTMLQuoteElement {
     const quote = document.createElement("blockquote");
     quote.setAttribute('class', 'success-title');
-    const messages = [
-        "Compiled successfully",
-        "Parser: OK, syntax is valid",
-        "Type checker: OK, types are valid",
-    ];
-
-    for (let msg of messages) {
-        const pelem = document.createElement("p");
-        pelem.textContent = msg;
-        quote.appendChild(pelem);
-    }
+    quote.innerHTML = `
+        <p>Compiled successfully</p>
+        <p>
+            Parser: Syntax valid ✓
+            <br/>
+            Type checker: Types valid ✓
+        </p>`;
 
     return quote;
 }
