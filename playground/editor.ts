@@ -86,9 +86,26 @@ class PlaygroundInstance {
         return this.getDiagnosticsAndFree(pg);
     }
 
+    compile(program: string): GraphAlgDiagnostic[] {
+        const ga_new = this.bindings.ga_new;
+        const ga_parse = this.bindings.ga_parse;
+        const ga_desugar = this.bindings.ga_desugar;
+
+        const pg = ga_new();
+
+        if (!ga_parse(pg, program)) {
+            return this.getDiagnosticsAndFree(pg);
+        }
+
+        if (!ga_desugar(pg)) {
+            return this.getDiagnosticsAndFree(pg);
+        }
+
+        return [];
+    }
+
     run(program: string, func: string, args: GraphAlgMatrix[]): RunResults {
         const ga_new = this.bindings.ga_new;
-        const ga_free = this.bindings.ga_free;
         const ga_parse = this.bindings.ga_parse;
         const ga_desugar = this.bindings.ga_desugar;
         const ga_add_arg = this.bindings.ga_add_arg;
@@ -692,6 +709,24 @@ function buildErrorNote(diagnostics: GraphAlgDiagnostic[]): HTMLQuoteElement {
     return quote;
 }
 
+function buildCompileSuccessNote(): HTMLQuoteElement {
+    const quote = document.createElement("blockquote");
+    quote.setAttribute('class', 'success-title');
+    const messages = [
+        "Compiled successfully",
+        "Parser: OK, syntax is valid",
+        "Type checker: OK, types are valid",
+    ];
+
+    for (let msg of messages) {
+        const pelem = document.createElement("p");
+        pelem.textContent = msg;
+        quote.appendChild(pelem);
+    }
+
+    return quote;
+}
+
 function run(editor: GraphAlgEditor, inst: PlaygroundInstance) {
     const program = editor.editorView?.state.doc.toString();
     if (!program) {
@@ -719,25 +754,56 @@ function run(editor: GraphAlgEditor, inst: PlaygroundInstance) {
     editor.outputContainer.replaceChildren(details);
 }
 
+function compile(editor: GraphAlgEditor, inst: PlaygroundInstance) {
+    const program = editor.editorView?.state.doc.toString();
+    if (!program) {
+        throw new Error("No program to compile");
+    }
+
+    const diagnostics = inst.compile(program);
+    let resultElem;
+    if (diagnostics.length > 0) {
+        resultElem = buildErrorNote(diagnostics);
+    } else {
+        resultElem = buildCompileSuccessNote();
+    }
+
+    // Place output in a default-open accordion
+    const details = document.createElement("details");
+    details.setAttribute('open', 'true');
+    const summary = document.createElement("summary");
+    summary.textContent = "Output";
+    details.append(summary, resultElem);
+    editor.outputContainer.replaceChildren(details);
+}
+
 // Add run buttons
 playgroundWasmBindings.onLoaded((bindings: any) => {
     const instance = new PlaygroundInstance(bindings);
 
     for (let editor of editors) {
-        if (!editor.functionName) {
-            // No function to run
-            continue;
+        if (editor.functionName) {
+            const runButton = document.createElement("button");
+            runButton.setAttribute('type', 'button');
+            runButton.setAttribute('name', 'run');
+            runButton.setAttribute('class', 'btn');
+            runButton.textContent = `Run '${editor.functionName}'`;
+            runButton.addEventListener('click', () => {
+                run(editor, instance);
+            });
+            editor.toolbar.appendChild(runButton);
+        } else {
+            // No function to run, compile only
+            const compileButton = document.createElement("button");
+            compileButton.setAttribute('type', 'button');
+            compileButton.setAttribute('name', 'compile');
+            compileButton.setAttribute('class', 'btn');
+            compileButton.textContent = "Compile";
+            compileButton.addEventListener('click', () => {
+                compile(editor, instance);
+            });
+            editor.toolbar.appendChild(compileButton);
         }
-
-        const runButton = document.createElement("button");
-        runButton.setAttribute('type', 'button');
-        runButton.setAttribute('name', 'run');
-        runButton.setAttribute('class', 'btn');
-        runButton.textContent = `Run '${editor.functionName}'`;
-        runButton.addEventListener('click', () => {
-            run(editor, instance);
-        });
-        editor.toolbar.appendChild(runButton);
     }
 });
 
