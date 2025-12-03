@@ -84,9 +84,16 @@ mlir::LogicalResult Evaluator::evaluate(DiagOp op) {
   MatrixAttrReader input(_values[op.getInput()]);
   MatrixAttrBuilder result(op.getType());
 
-  // TODO: Need to handle row vector case.
-  for (auto row : llvm::seq(input.nRows())) {
-    result.set(row, row, input.at(row, 0));
+  auto inputType = llvm::cast<MatrixType>(op.getInput().getType());
+  if (inputType.isColumnVector()) {
+    for (auto row : llvm::seq(input.nRows())) {
+      result.set(row, row, input.at(row, 0));
+    }
+  } else {
+    assert(inputType.isRowVector());
+    for (auto col : llvm::seq(input.nCols())) {
+      result.set(col, col, input.at(0, col));
+    }
   }
 
   _values[op.getResult()] = result.build();
