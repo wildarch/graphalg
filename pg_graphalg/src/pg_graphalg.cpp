@@ -1,4 +1,5 @@
 #include <charconv>
+#include <iostream>
 #include <optional>
 #include <string_view>
 #include <system_error>
@@ -9,7 +10,10 @@ extern "C" {
 
 #include <postgres.h>
 
+#include <access/htup_details.h>
 #include <access/reloptions.h>
+#include <catalog/pg_proc.h>
+#include <catalog/pg_type.h>
 #include <commands/defrem.h>
 #include <executor/tuptable.h>
 #include <fmgr.h>
@@ -21,8 +25,10 @@ extern "C" {
 #include <optimizer/planmain.h>
 #include <optimizer/restrictinfo.h>
 #include <utils/elog.h>
+#include <utils/fmgrprotos.h>
 #include <utils/palloc.h>
 #include <utils/rel.h>
+#include <utils/syscache.h>
 
 PG_MODULE_MAGIC;
 
@@ -37,6 +43,9 @@ static pg_graphalg::PgGraphAlg &getInstance() {
 
 PG_FUNCTION_INFO_V1(graphalg_fdw_handler);
 PG_FUNCTION_INFO_V1(graphalg_fdw_validator);
+PG_FUNCTION_INFO_V1(graphalg_pl_call_handler);
+PG_FUNCTION_INFO_V1(graphalg_pl_inline_handler);
+PG_FUNCTION_INFO_V1(graphalg_pl_validator);
 
 static std::optional<std::size_t> parseDimension(std::string_view s) {
   std::size_t v;
@@ -259,6 +268,69 @@ Datum graphalg_fdw_validator(PG_FUNCTION_ARGS) {
   // NOTE: Not checking that required options are set, because this validator is
   // also called when checking options defined on the wrapper or the server.
 
+  PG_RETURN_VOID();
+}
+
+static Datum executeCall(FunctionCallInfo fcinfo) {
+  auto procTuple = SearchSysCache(
+      PROCOID, ObjectIdGetDatum(fcinfo->flinfo->fn_oid), 0, 0, 0);
+  if (!HeapTupleIsValid(procTuple)) {
+    elog(ERROR, "cache lookup failed for function %s", fcinfo->flinfo->fn_oid);
+    PG_RETURN_VOID();
+  }
+
+  auto procStruct = (Form_pg_proc)GETSTRUCT(procTuple);
+
+  bool isnull;
+  auto sourceDatum =
+      SysCacheGetAttr(PROCOID, procTuple, Anum_pg_proc_prosrc, &isnull);
+  if (isnull) {
+    elog(ERROR, "NULL procedure source");
+    PG_RETURN_VOID();
+  }
+
+  char *procCode = DatumGetCString(DirectFunctionCall1(textout, sourceDatum));
+  std::cerr << "GraphAlg source: " << procCode << "\n";
+
+  auto funcName = procStruct->proname.data;
+  std::cerr << "function name: " << funcName << "\n";
+
+  // TODO: Get string values of arguments.
+  for (int i = 0; i < fcinfo->nargs; i++) {
+    auto arg = fcinfo->args[i];
+    if (arg.isnull) {
+      elog(ERROR, "Argument %d is NULL", i);
+      PG_RETURN_VOID();
+    }
+
+    auto argType = procStruct->proargtypes.values[i];
+    auto typeTuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(argType));
+    auto typeStruct = (Form_pg_type)GETSTRUCT(typeTuple);
+    FmgrInfo typeInfo;
+    fmgr_info(typeStruct->typoutput, &typeInfo);
+
+    char *value = OutputFunctionCall(&typeInfo, arg.value);
+    std::cerr << "arg value: " << value << "\n";
+  }
+
+  // TODO: release sys cache.
+
+  elog(ERROR, "execute not implemented");
+  PG_RETURN_VOID();
+}
+
+Datum graphalg_pl_call_handler(PG_FUNCTION_ARGS) {
+  std::cerr << "call handler!\n";
+  return executeCall(fcinfo);
+}
+
+Datum graphalg_pl_inline_handler(PG_FUNCTION_ARGS) {
+  std::cerr << "inline handler!\n";
+  PG_RETURN_VOID();
+}
+
+Datum graphalg_pl_validator(PG_FUNCTION_ARGS) {
+  std::cerr << "validator!\n";
   PG_RETURN_VOID();
 }
 }
