@@ -80,13 +80,25 @@ CREATE FOREIGN TABLE lhs(row bigint, col bigint, val bigint)
 SERVER graphalg_server
 OPTIONS (rows '10', columns '10');
 
+INSERT INTO lhs VALUES
+  (0, 0, 42),
+  (0, 1, 43),
+  (1, 0, 44),
+  (1, 1, 45);
 CREATE FOREIGN TABLE rhs(row bigint, col bigint, val bigint)
 SERVER graphalg_server
 OPTIONS (rows '10', columns '10');
+INSERT INTO rhs VALUES
+  (0, 0, 46),
+  (0, 1, 47),
+  (1, 0, 48),
+  (1, 1, 49);
 
 CREATE FOREIGN TABLE matmul_out(row bigint, col bigint, val bigint)
 SERVER graphalg_server
 OPTIONS (rows '10', columns '10');
+-- HACK: Necessary because we don't get a callback from CREATE
+SELECT * FROM matmul_out;
 
 CREATE PROCEDURE matmul(text, text, text)
 LANGUAGE graphalg

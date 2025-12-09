@@ -1,11 +1,15 @@
 #pragma once
 
+#include "llvm/ADT/StringMap.h"
+#include "llvm/ADT/StringRef.h"
 #include <cstdint>
 #include <map>
 #include <optional>
+#include <string>
 #include <tuple>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 #include <mlir/Dialect/Func/Extensions/InlinerExtension.h>
 #include <mlir/Dialect/Func/IR/FuncOps.h>
@@ -48,6 +52,7 @@ struct MatrixTableDef {
 
 class MatrixTable {
 private:
+  std::string _name;
   std::size_t _nRows;
   std::size_t _nCols;
   std::map<std::pair<std::size_t, std::size_t>, std::int64_t> _values;
@@ -67,12 +72,14 @@ private:
   mlir::DialectRegistry _registry;
   mlir::MLIRContext _ctx;
   std::unordered_map<TableId, MatrixTable> _tables;
+  llvm::StringMap<TableId> _nameToId;
 
 public:
   PgGraphAlg();
 
   MatrixTable &getTable(TableId tableId);
   MatrixTable &getOrCreateTable(TableId tableId, const MatrixTableDef &def);
+  MatrixTable *lookupTable(llvm::StringRef tableName);
 };
 
 } // namespace pg_graphalg

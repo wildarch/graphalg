@@ -1,4 +1,5 @@
 #include <cassert>
+#include <iostream>
 #include <optional>
 #include <tuple>
 
@@ -7,7 +8,7 @@
 namespace pg_graphalg {
 
 MatrixTable::MatrixTable(const MatrixTableDef &def)
-    : _nRows(def.nRows), _nCols(def.nCols) {}
+    : _name(def.name), _nRows(def.nRows), _nCols(def.nCols) {}
 
 void MatrixTable::setValue(std::size_t row, std::size_t col,
                            std::int64_t value) {
@@ -50,9 +51,19 @@ MatrixTable &PgGraphAlg::getOrCreateTable(TableId tableId,
                                           const MatrixTableDef &def) {
   if (!_tables.count(tableId)) {
     _tables.emplace(tableId, def);
+    _nameToId[def.name] = tableId;
+    std::cerr << "registered table " << def.name << "\n";
   }
 
   return getTable(tableId);
+}
+
+MatrixTable *PgGraphAlg::lookupTable(llvm::StringRef tableName) {
+  if (_nameToId.contains(tableName)) {
+    return &getTable(_nameToId[tableName]);
+  } else {
+    return nullptr;
+  }
 }
 
 } // namespace pg_graphalg

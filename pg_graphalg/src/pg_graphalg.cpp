@@ -307,7 +307,6 @@ static Datum executeCall(FunctionCallInfo fcinfo) {
   auto funcName = procStruct->proname.data;
   std::cerr << "function name: " << funcName << "\n";
 
-  // TODO: Get string values of arguments.
   for (int i = 0; i < fcinfo->nargs; i++) {
     auto arg = fcinfo->args[i];
     if (arg.isnull) {
@@ -315,6 +314,7 @@ static Datum executeCall(FunctionCallInfo fcinfo) {
       PG_RETURN_VOID();
     }
 
+    // TODO: We know this is a string, so can we make this simpler?
     auto argType = procStruct->proargtypes.values[i];
     auto typeTuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(argType));
     auto typeStruct = (Form_pg_type)GETSTRUCT(typeTuple);
@@ -322,7 +322,12 @@ static Datum executeCall(FunctionCallInfo fcinfo) {
     fmgr_info(typeStruct->typoutput, &typeInfo);
 
     char *value = OutputFunctionCall(&typeInfo, arg.value);
-    std::cerr << "arg value: " << value << "\n";
+
+    auto *argTable = getInstance().lookupTable(value);
+    if (!argTable) {
+      elog(ERROR, "No such matrix table '%s'", value);
+      PG_RETURN_VOID();
+    }
 
     ReleaseSysCache(typeTuple);
   }
