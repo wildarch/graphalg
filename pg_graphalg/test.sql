@@ -78,7 +78,7 @@ SELECT * FROM mat1;
 
 CREATE FOREIGN TABLE lhs(row bigint, col bigint, val bigint)
 SERVER graphalg_server
-OPTIONS (rows '10', columns '10');
+OPTIONS (rows '2', columns '2');
 
 INSERT INTO lhs VALUES
   (0, 0, 42),
@@ -87,7 +87,7 @@ INSERT INTO lhs VALUES
   (1, 1, 45);
 CREATE FOREIGN TABLE rhs(row bigint, col bigint, val bigint)
 SERVER graphalg_server
-OPTIONS (rows '10', columns '10');
+OPTIONS (rows '2', columns '2');
 INSERT INTO rhs VALUES
   (0, 0, 46),
   (0, 1, 47),
@@ -96,7 +96,7 @@ INSERT INTO rhs VALUES
 
 CREATE FOREIGN TABLE matmul_out(row bigint, col bigint, val bigint)
 SERVER graphalg_server
-OPTIONS (rows '10', columns '10');
+OPTIONS (rows '2', columns '2');
 -- HACK: Necessary because we don't get a callback from CREATE
 SELECT * FROM matmul_out;
 
@@ -111,3 +111,4 @@ AS $$
 $$;
 
 CALL matmul('lhs', 'rhs', 'matmul_out');
+SELECT * FROM matmul_out;

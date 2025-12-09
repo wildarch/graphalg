@@ -4,6 +4,9 @@
 #include <string_view>
 #include <system_error>
 
+#include <llvm/ADT/SmallVector.h>
+#include <mlir/IR/Diagnostics.h>
+
 #include "pg_graphalg/PgGraphAlg.h"
 
 extern "C" {
@@ -32,10 +35,15 @@ extern "C" {
 
 PG_MODULE_MAGIC;
 
+static void diagHandler(mlir::Diagnostic &diag) {
+  std::string msg = diag.str();
+  elog(ERROR, "%s", msg.c_str());
+}
+
 static pg_graphalg::PgGraphAlg *SINGLETON = nullptr;
 static pg_graphalg::PgGraphAlg &getInstance() {
   if (!SINGLETON) {
-    SINGLETON = new pg_graphalg::PgGraphAlg();
+    SINGLETON = new pg_graphalg::PgGraphAlg(diagHandler);
   }
 
   return *SINGLETON;
@@ -307,6 +315,7 @@ static Datum executeCall(FunctionCallInfo fcinfo) {
   auto funcName = procStruct->proname.data;
   std::cerr << "function name: " << funcName << "\n";
 
+  llvm::SmallVector<pg_graphalg::MatrixTable *> arguments;
   for (int i = 0; i < fcinfo->nargs; i++) {
     auto arg = fcinfo->args[i];
     if (arg.isnull) {
@@ -322,6 +331,7 @@ static Datum executeCall(FunctionCallInfo fcinfo) {
     fmgr_info(typeStruct->typoutput, &typeInfo);
 
     char *value = OutputFunctionCall(&typeInfo, arg.value);
+    ReleaseSysCache(typeTuple);
 
     auto *argTable = getInstance().lookupTable(value);
     if (!argTable) {
@@ -329,12 +339,21 @@ static Datum executeCall(FunctionCallInfo fcinfo) {
       PG_RETURN_VOID();
     }
 
-    ReleaseSysCache(typeTuple);
+    arguments.push_back(argTable);
   }
 
-  ReleaseSysCache(procTuple);
+  if (arguments.empty()) {
+    elog(ERROR, "must have at least one argument");
+    PG_RETURN_VOID();
+  }
 
-  elog(ERROR, "execute not implemented");
+  auto *output = arguments.pop_back_val();
+
+  // No need to check the result here, postgres infers success based on
+  // diagnostics.
+  getInstance().execute(procCode, funcName, arguments, *output);
+
+  ReleaseSysCache(procTuple);
   PG_RETURN_VOID();
 }
 

@@ -1,5 +1,9 @@
 #pragma once
 
+#include "mlir/IR/Diagnostics.h"
+#include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/STLFunctionalExtras.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringRef.h"
 #include <cstdint>
@@ -60,6 +64,11 @@ private:
 public:
   MatrixTable(const MatrixTableDef &def);
 
+  std::size_t nRows() const { return _nRows; }
+  std::size_t nCols() const { return _nCols; }
+  const auto &values() const { return _values; }
+
+  void clear();
   void setValue(std::size_t row, std::size_t col, std::int64_t value);
   std::optional<std::tuple<std::size_t, std::size_t, std::int64_t>>
   scan(ScanState &state);
@@ -75,11 +84,15 @@ private:
   llvm::StringMap<TableId> _nameToId;
 
 public:
-  PgGraphAlg();
+  PgGraphAlg(llvm::function_ref<void(mlir::Diagnostic &)> diagHandler);
 
   MatrixTable &getTable(TableId tableId);
   MatrixTable &getOrCreateTable(TableId tableId, const MatrixTableDef &def);
   MatrixTable *lookupTable(llvm::StringRef tableName);
+
+  bool execute(llvm::StringRef programSource, llvm::StringRef function,
+               llvm::ArrayRef<const MatrixTable *> arguments,
+               MatrixTable &output);
 };
 
 } // namespace pg_graphalg
