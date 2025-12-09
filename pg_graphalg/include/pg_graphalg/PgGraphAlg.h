@@ -7,9 +7,18 @@
 #include <unordered_map>
 #include <utility>
 
-extern "C" {
-#include "GraphBLAS.h"
-}
+#include <mlir/Dialect/Func/Extensions/InlinerExtension.h>
+#include <mlir/Dialect/Func/IR/FuncOps.h>
+#include <mlir/IR/DialectRegistry.h>
+#include <mlir/IR/MLIRContext.h>
+
+#include <graphalg/GraphAlgAttr.h>
+#include <graphalg/GraphAlgDialect.h>
+#include <graphalg/GraphAlgPasses.h>
+#include <graphalg/GraphAlgTypes.h>
+#include <graphalg/SemiringTypes.h>
+#include <graphalg/evaluate/Evaluator.h>
+#include <graphalg/parse/Parser.h>
 
 namespace pg_graphalg {
 
@@ -54,6 +63,8 @@ public:
 
 class PgGraphAlg {
 private:
+  mlir::DialectRegistry _registry;
+  mlir::MLIRContext _ctx;
   std::unordered_map<TableId, MatrixTable> _tables;
 
 public:

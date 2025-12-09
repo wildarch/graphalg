@@ -2,11 +2,7 @@
 #include <optional>
 #include <tuple>
 
-extern "C" {
-#include "GraphBLAS.h"
-}
-
-#include "pg_graphalg/PgGraphAlg.h"
+#include <pg_graphalg/PgGraphAlg.h>
 
 namespace pg_graphalg {
 
@@ -34,9 +30,16 @@ MatrixTable::scan(ScanState &state) {
   return std::make_tuple(row, col, val);
 }
 
-PgGraphAlg::PgGraphAlg() {
-  // TODO: init graphblas
+static mlir::DialectRegistry createDialectRegistry() {
+  mlir::DialectRegistry registry;
+  registry.insert<graphalg::GraphAlgDialect>();
+  registry.insert<mlir::func::FuncDialect>();
+  mlir::func::registerInlinerExtension(registry);
+  return registry;
 }
+
+PgGraphAlg::PgGraphAlg()
+    : _registry(createDialectRegistry()), _ctx(_registry) {}
 
 MatrixTable &PgGraphAlg::getTable(TableId tableId) {
   assert(_tables.count(tableId) && "getTable called before getOrCreateTable");
