@@ -61,7 +61,6 @@ static bool validateOption(DefElem *def) {
   std::string_view optName{def->defname};
   const char *optValue = defGetString(def);
 
-  bool isValid = false;
   if (optName == "rows" || optName == "columns") {
     // NOTE: foreign data wrapper options are always strings.
     if (!parseDimension(optValue)) {
@@ -69,33 +68,30 @@ static bool validateOption(DefElem *def) {
                       errmsg("invalid value for option \"%s\": '%s' must be "
                              "a non-negative integer",
                              def->defname, optValue)));
-      isValid = true;
+      return false;
     }
   } else {
     ereport(ERROR, (errcode(ERRCODE_FDW_INVALID_OPTION_NAME),
                     errmsg("invalid option \"%s\"", def->defname),
                     errhint("Valid table options are \"rows\", and "
                             "\"columns\"")));
-    isValid = true;
+    return false;
   }
 
-  return isValid;
+  return true;
 }
 
 static std::optional<pg_graphalg::MatrixTableDef>
 parseOptions(ForeignTable *table) {
-  std::cerr << "parsing options\n";
-
   // Get the name of the table.
   auto relTuple = SearchSysCache1(RELOID, table->relid);
   if (!HeapTupleIsValid(relTuple)) {
-    elog(ERROR, "Cannot retrieve table name for oid");
+    elog(ERROR, "cannot retrieve table name for oid");
     return std::nullopt;
   }
 
   auto relStruct = (Form_pg_class)GETSTRUCT(relTuple);
   std::string tableName{NameStr(relStruct->relname)};
-  std::cerr << "table name: " << tableName << "\n";
   ReleaseSysCache(relTuple);
 
   // Parse the options
@@ -328,11 +324,10 @@ static Datum executeCall(FunctionCallInfo fcinfo) {
     char *value = OutputFunctionCall(&typeInfo, arg.value);
     std::cerr << "arg value: " << value << "\n";
 
-    // ReleaseSysCache(typeTuple);
+    ReleaseSysCache(typeTuple);
   }
 
-  // TODO: release sys cache.
-  // ReleaseSysCache(procTuple);
+  ReleaseSysCache(procTuple);
 
   elog(ERROR, "execute not implemented");
   PG_RETURN_VOID();
