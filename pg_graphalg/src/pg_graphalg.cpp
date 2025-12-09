@@ -7,6 +7,7 @@
 #include <llvm/ADT/SmallVector.h>
 #include <mlir/IR/Diagnostics.h>
 
+#include "pg_graphalg/MatrixTable.h"
 #include "pg_graphalg/PgGraphAlg.h"
 
 extern "C" {
@@ -195,8 +196,8 @@ static void BeginForeignScan(ForeignScanState *node, int eflags) {
   auto tableId = RelationGetRelid(node->ss.ss_currentRelation);
   auto &table = getInstance().getTable(tableId);
 
-  auto *state = palloc(sizeof(pg_graphalg::ScanState));
-  new (state) pg_graphalg::ScanState(&table);
+  auto *state = palloc(sizeof(pg_graphalg::MatrixTableScanState));
+  new (state) pg_graphalg::MatrixTableScanState(&table);
   node->fdw_state = state;
 }
 
@@ -204,7 +205,8 @@ static TupleTableSlot *IterateForeignScan(ForeignScanState *node) {
   TupleTableSlot *slot = node->ss.ss_ScanTupleSlot;
   ExecClearTuple(slot);
 
-  auto *scanState = static_cast<pg_graphalg::ScanState *>(node->fdw_state);
+  auto *scanState =
+      static_cast<pg_graphalg::MatrixTableScanState *>(node->fdw_state);
   auto &table = *scanState->table;
   if (auto res = table.scan(*scanState)) {
     slot->tts_isnull[0] = false;
@@ -221,7 +223,8 @@ static TupleTableSlot *IterateForeignScan(ForeignScanState *node) {
 }
 
 static void ReScanForeignScan(ForeignScanState *node) {
-  auto *scanState = static_cast<pg_graphalg::ScanState *>(node->fdw_state);
+  auto *scanState =
+      static_cast<pg_graphalg::MatrixTableScanState *>(node->fdw_state);
   scanState->reset();
 }
 
