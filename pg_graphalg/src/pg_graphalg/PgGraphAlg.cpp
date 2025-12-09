@@ -16,6 +16,7 @@
 #include <graphalg/evaluate/Evaluator.h>
 #include <graphalg/parse/Parser.h>
 
+#include <pg_graphalg/MatrixTable.h>
 #include <pg_graphalg/PgGraphAlg.h>
 
 namespace pg_graphalg {
@@ -36,13 +37,14 @@ PgGraphAlg::PgGraphAlg(llvm::function_ref<void(mlir::Diagnostic &)> diagHandler)
 
 MatrixTable &PgGraphAlg::getTable(TableId tableId) {
   assert(_tables.count(tableId) && "getTable called before getOrCreateTable");
-  return _tables.at(tableId);
+  return *_tables[tableId];
 }
 
 MatrixTable &PgGraphAlg::getOrCreateTable(TableId tableId,
                                           const MatrixTableDef &def) {
   if (!_tables.count(tableId)) {
-    _tables.emplace(tableId, def);
+    // TODO: More types
+    _tables[tableId] = std::make_unique<MatrixTableInt>(def);
     _nameToId[def.name] = tableId;
   }
 
@@ -117,7 +119,9 @@ bool PgGraphAlg::execute(llvm::StringRef programSource,
        llvm::zip_equal(arguments, funcOp.getFunctionType().getInputs())) {
     auto matType = llvm::cast<graphalg::MatrixType>(type);
     graphalg::MatrixAttrBuilder builder(matType);
-    for (auto [pos, val] : arg->values()) {
+    // TODO: support more value types.
+    const auto &values = llvm::cast<MatrixTableInt>(arg)->values();
+    for (auto [pos, val] : values) {
       auto [row, col] = pos;
       // TODO: support more value types
       auto valAttr = mlir::IntegerAttr::get(matType.getSemiring(), val);
@@ -136,6 +140,9 @@ bool PgGraphAlg::execute(llvm::StringRef programSource,
   // TODO: Check rows/cols match.
   // TODO: Check semiring is compatible with value type.
   output.clear();
+
+  // TODO: more value types
+  auto &outputInt = llvm::cast<MatrixTableInt>(output);
   auto defaultValue = resultReader.ring().addIdentity();
   for (auto r : llvm::seq(resultReader.nRows())) {
     for (auto c : llvm::seq(resultReader.nCols())) {
@@ -143,7 +150,7 @@ bool PgGraphAlg::execute(llvm::StringRef programSource,
       if (v != defaultValue) {
         // TODO: Support bool/real value types
         auto vInt = llvm::cast<mlir::IntegerAttr>(v).getInt();
-        output.setValue(r, c, vInt);
+        outputInt.setValue(r, c, vInt);
       }
     }
   }

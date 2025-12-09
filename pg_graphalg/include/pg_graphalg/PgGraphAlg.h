@@ -1,8 +1,9 @@
 #pragma once
 
-#include <unordered_map>
+#include <memory>
 
 #include <llvm/ADT/ArrayRef.h>
+#include <llvm/ADT/DenseMap.h>
 #include <llvm/ADT/StringMap.h>
 #include <llvm/ADT/StringRef.h>
 #include <mlir/IR/Diagnostics.h>
@@ -19,7 +20,7 @@ class PgGraphAlg {
 private:
   mlir::DialectRegistry _registry;
   mlir::MLIRContext _ctx;
-  std::unordered_map<TableId, MatrixTable> _tables;
+  llvm::DenseMap<TableId, std::unique_ptr<MatrixTable>> _tables;
   llvm::StringMap<TableId> _nameToId;
 
 public:

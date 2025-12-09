@@ -137,6 +137,8 @@ parseOptions(ForeignTable *table) {
       tableName,
       static_cast<size_t>(*rows),
       static_cast<size_t>(*cols),
+      // TODO: Determine from column type.
+      pg_graphalg::MatrixValueType::INT,
   };
 }
 
@@ -207,7 +209,8 @@ static TupleTableSlot *IterateForeignScan(ForeignScanState *node) {
 
   auto *scanState =
       static_cast<pg_graphalg::MatrixTableScanState *>(node->fdw_state);
-  auto &table = *scanState->table;
+  // TODO: Check type
+  auto &table = llvm::cast<pg_graphalg::MatrixTableInt>(*scanState->table);
   if (auto res = table.scan(*scanState)) {
     slot->tts_isnull[0] = false;
     slot->tts_isnull[1] = false;
@@ -247,7 +250,9 @@ static TupleTableSlot *ExecForeignInsert(EState *estate, ResultRelInfo *rinfo,
                                          TupleTableSlot *slot,
                                          TupleTableSlot *planSlot) {
   auto tableId = RelationGetRelid(rinfo->ri_RelationDesc);
-  auto &table = getInstance().getTable(tableId);
+  // TODO: More types
+  auto &table =
+      llvm::cast<pg_graphalg::MatrixTableInt>(getInstance().getTable(tableId));
 
   slot_getsomeattrs(slot, 3);
   if (slot->tts_isnull[0] || slot->tts_isnull[1] || slot->tts_isnull[2]) {
