@@ -40,6 +40,7 @@ struct ScanState {
 };
 
 struct MatrixTableDef {
+  std::string name;
   std::size_t nRows;
   std::size_t nCols;
   // TODO: data type.

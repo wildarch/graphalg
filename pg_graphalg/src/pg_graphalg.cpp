@@ -84,6 +84,21 @@ static bool validateOption(DefElem *def) {
 
 static std::optional<pg_graphalg::MatrixTableDef>
 parseOptions(ForeignTable *table) {
+  std::cerr << "parsing options\n";
+
+  // Get the name of the table.
+  auto relTuple = SearchSysCache1(RELOID, table->relid);
+  if (!HeapTupleIsValid(relTuple)) {
+    elog(ERROR, "Cannot retrieve table name for oid");
+    return std::nullopt;
+  }
+
+  auto relStruct = (Form_pg_class)GETSTRUCT(relTuple);
+  std::string tableName{NameStr(relStruct->relname)};
+  std::cerr << "table name: " << tableName << "\n";
+  ReleaseSysCache(relTuple);
+
+  // Parse the options
   ListCell *cell;
   std::optional<std::size_t> rows;
   std::optional<std::size_t> cols;
@@ -114,6 +129,7 @@ parseOptions(ForeignTable *table) {
   }
 
   return pg_graphalg::MatrixTableDef{
+      tableName,
       static_cast<size_t>(*rows),
       static_cast<size_t>(*cols),
   };
@@ -153,7 +169,7 @@ static ForeignScan *GetForeignPlan(PlannerInfo *root, RelOptInfo *baserel,
   // Resolve to a matrix table.
   auto tableDef = parseOptions(GetForeignTable(foreigntableid));
   if (!tableDef) {
-    NULL;
+    return nullptr;
   }
 
   // Create table if it does not exist yet.
@@ -311,9 +327,12 @@ static Datum executeCall(FunctionCallInfo fcinfo) {
 
     char *value = OutputFunctionCall(&typeInfo, arg.value);
     std::cerr << "arg value: " << value << "\n";
+
+    // ReleaseSysCache(typeTuple);
   }
 
   // TODO: release sys cache.
+  // ReleaseSysCache(procTuple);
 
   elog(ERROR, "execute not implemented");
   PG_RETURN_VOID();

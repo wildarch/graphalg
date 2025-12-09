@@ -9,10 +9,10 @@ DROP FUNCTION IF EXISTS graphalg_fdw_handler;
 DROP FUNCTION IF EXISTS graphalg_fdw_validator;
 
 DROP PROCEDURE IF EXISTS matmul;
+DROP LANGUAGE IF EXISTS graphalg;
 DROP FUNCTION IF EXISTS graphalg_pl_call_handler;
 DROP FUNCTION IF EXISTS graphalg_pl_inline_handler;
 DROP FUNCTION IF EXISTS graphalg_pl_validator;
-DROP LANGUAGE IF EXISTS graphalg;
 
 -- Foreign data wrapper
 CREATE FUNCTION graphalg_fdw_handler()
