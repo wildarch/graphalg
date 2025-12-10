@@ -1,9 +1,8 @@
 #include <charconv>
-#include <iostream>
 #include <optional>
 #include <string_view>
-#include <system_error>
 
+#include <llvm/ADT/Sequence.h>
 #include <llvm/ADT/SmallVector.h>
 #include <mlir/IR/Diagnostics.h>
 
@@ -14,8 +13,10 @@ extern "C" {
 
 #include <postgres.h>
 
+#include <access/htup.h>
 #include <access/htup_details.h>
 #include <access/reloptions.h>
+#include <access/tupdesc.h>
 #include <catalog/pg_proc.h>
 #include <catalog/pg_type.h>
 #include <commands/defrem.h>
@@ -34,6 +35,7 @@ extern "C" {
 #include <utils/fmgrprotos.h>
 #include <utils/palloc.h>
 #include <utils/rel.h>
+#include <utils/relcache.h>
 #include <utils/syscache.h>
 
 PG_MODULE_MAGIC;
@@ -92,25 +94,84 @@ static bool validateOption(DefElem *def) {
   return true;
 }
 
-static std::optional<pg_graphalg::MatrixTableDef>
-parseOptions(ForeignTable *table) {
-  // Get the name of the table.
-  auto relTuple = SearchSysCache1(RELOID, table->relid);
-  if (!HeapTupleIsValid(relTuple)) {
-    elog(ERROR, "cannot retrieve table name for oid");
+static std::optional<pg_graphalg::MatrixValueType> mapValueType(Oid typeId) {
+  switch (typeId) {
+  case BOOLOID:
+    return pg_graphalg::MatrixValueType::BOOL;
+  case INT8OID:
+    return pg_graphalg::MatrixValueType::INT;
+  case FLOAT8OID:
+    return pg_graphalg::MatrixValueType::FLOAT;
+  default:
+    return std::nullopt;
+  }
+}
+
+struct SysCacheTupleScope {
+  HeapTuple tup;
+
+  SysCacheTupleScope(SysCacheIdentifier cacheId, Oid key)
+      : tup(SearchSysCache1(cacheId, key)) {}
+  ~SysCacheTupleScope() {
+    if (HeapTupleIsValid(tup)) {
+      ReleaseSysCache(tup);
+    }
+  }
+};
+
+struct RelationScope {
+  Relation rel;
+
+  RelationScope(Oid relid) : rel(RelationIdGetRelation(relid)) {}
+  ~RelationScope() { RelationClose(rel); }
+};
+
+static std::optional<pg_graphalg::MatrixTableDef> lookupMatrixTable(Oid relid) {
+  // Must be a foreign table
+  // TODO: Check that it uses a graphalg server.
+  auto *fTable = GetForeignTable(relid);
+  if (!fTable) {
+    elog(ERROR, "relation with oid %u is not a foreign table", relid);
     return std::nullopt;
   }
 
-  auto relStruct = (Form_pg_class)GETSTRUCT(relTuple);
-  std::string tableName{NameStr(relStruct->relname)};
-  ReleaseSysCache(relTuple);
+  RelationScope rel(relid);
+  std::string tableName{NameStr(rel.rel->rd_rel->relname)};
+
+  // Validate the column types.
+  int nAttrs = RelationGetNumberOfAttributes(rel.rel);
+  if (nAttrs != 3) {
+    elog(ERROR, "matrix table must have 3 columns, got %d", nAttrs);
+    return std::nullopt;
+  }
+
+  TupleDesc tupleDesc = rel.rel->rd_att;
+  auto rowAttr = TupleDescAttr(tupleDesc, 0);
+  if (rowAttr->atttypid != INT8OID) {
+    elog(ERROR, "first column (row index) must have type bigint");
+    return std::nullopt;
+  }
+
+  auto colAttr = TupleDescAttr(tupleDesc, 1);
+  if (colAttr->atttypid != INT8OID) {
+    elog(ERROR, "second column (column index) must have type bigint");
+    return std::nullopt;
+  }
+
+  auto valAttr = TupleDescAttr(tupleDesc, 2);
+  auto valType = mapValueType(valAttr->atttypid);
+  if (!valType) {
+    elog(ERROR, "third column (value) must have type boolean, bigint or double "
+                "precision");
+    return std::nullopt;
+  }
 
   // Parse the options
   ListCell *cell;
   std::optional<std::size_t> rows;
   std::optional<std::size_t> cols;
 
-  foreach (cell, table->options) {
+  foreach (cell, fTable->options) {
     auto *def = lfirst_node(DefElem, cell);
     std::string_view defName(def->defname);
 
@@ -140,18 +201,8 @@ parseOptions(ForeignTable *table) {
       static_cast<size_t>(*rows),
       static_cast<size_t>(*cols),
       // TODO: Determine from column type.
-      pg_graphalg::MatrixValueType::INT,
+      *valType,
   };
-}
-
-static std::optional<pg_graphalg::MatrixTableDef> lookupMatrixTable(Oid relid) {
-  auto *fTable = GetForeignTable(relid);
-  if (!fTable) {
-    elog(ERROR, "relation with oid %u is not a foreign table", relid);
-    return std::nullopt;
-  }
-
-  return parseOptions(fTable);
 }
 
 static void GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel,
@@ -291,6 +342,7 @@ Datum graphalg_fdw_validator(PG_FUNCTION_ARGS) {
   ListCell *cell;
   foreach (cell, options) {
     auto *def = static_cast<DefElem *>(lfirst(cell));
+    // TODO: Only allow options at the table level.
     validateOption(def);
   }
 
@@ -414,18 +466,15 @@ static Datum executeCall(FunctionCallInfo fcinfo) {
   PG_RETURN_VOID();
 }
 
-Datum graphalg_pl_call_handler(PG_FUNCTION_ARGS) {
-  std::cerr << "call handler!\n";
-  return executeCall(fcinfo);
-}
+Datum graphalg_pl_call_handler(PG_FUNCTION_ARGS) { return executeCall(fcinfo); }
 
 Datum graphalg_pl_inline_handler(PG_FUNCTION_ARGS) {
-  std::cerr << "inline handler!\n";
+  elog(ERROR, "inline handler not implemented");
   PG_RETURN_VOID();
 }
 
 Datum graphalg_pl_validator(PG_FUNCTION_ARGS) {
-  std::cerr << "validator!\n";
+  elog(INFO, "NOTE: language validator not implemented");
   PG_RETURN_VOID();
 }
 }

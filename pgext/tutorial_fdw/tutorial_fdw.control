@@ -1,5 +1,0 @@
-comment = 'Tutorial FDW.'
-default_version = '1.0'
-module_pathname = '/tutorial_fdw'
-relocatable = true
-
