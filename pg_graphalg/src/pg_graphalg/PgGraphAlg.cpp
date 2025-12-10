@@ -1,4 +1,5 @@
 #include <cassert>
+#include <memory>
 #include <optional>
 
 #include <llvm/ADT/SmallVector.h>
@@ -35,28 +36,19 @@ PgGraphAlg::PgGraphAlg(llvm::function_ref<void(mlir::Diagnostic &)> diagHandler)
   engine.registerHandler(diagHandler);
 }
 
-MatrixTable &PgGraphAlg::getTable(TableId tableId) {
-  assert(_tables.count(tableId) && "getTable called before getOrCreateTable");
-  return *_tables[tableId];
-}
+std::optional<MatrixTable *> PgGraphAlg::getOrCreateTable(
+    TableId tableId,
+    llvm::function_ref<std::optional<MatrixTableDef>(TableId id)> createFunc) {
+  if (!_tables.contains(tableId)) {
+    auto def = createFunc(tableId);
+    if (!def) {
+      return std::nullopt;
+    }
 
-MatrixTable &PgGraphAlg::getOrCreateTable(TableId tableId,
-                                          const MatrixTableDef &def) {
-  if (!_tables.count(tableId)) {
-    // TODO: More types
-    _tables[tableId] = std::make_unique<MatrixTableInt>(def);
-    _nameToId[def.name] = tableId;
+    // TODO: Different types.
+    _tables[tableId] = std::make_unique<MatrixTableInt>(*def);
   }
-
-  return getTable(tableId);
-}
-
-MatrixTable *PgGraphAlg::lookupTable(llvm::StringRef tableName) {
-  if (_nameToId.contains(tableName)) {
-    return &getTable(_nameToId[tableName]);
-  } else {
-    return nullptr;
-  }
+  return _tables[tableId].get();
 }
 
 bool PgGraphAlg::execute(llvm::StringRef programSource,

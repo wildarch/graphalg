@@ -12,9 +12,11 @@ Download the latest postgres release source code.
 
 ```bash
 # Dependencies for building PostgreSQL
+sudo apt update
 sudo apt install bison flex libreadline-dev libicu-dev
 
 # Download the sources
+mkdir -p thirdparty/
 cd thirdparty/
 wget https://ftp.postgresql.org/pub/source/v18.1/postgresql-18.1.tar.bz2
 tar xf postgresql-18.1.tar.bz2

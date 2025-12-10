@@ -19,6 +19,7 @@ extern "C" {
 #include <catalog/pg_proc.h>
 #include <catalog/pg_type.h>
 #include <commands/defrem.h>
+#include <executor/spi.h>
 #include <executor/tuptable.h>
 #include <fmgr.h>
 #include <foreign/fdwapi.h>
@@ -28,6 +29,7 @@ extern "C" {
 #include <optimizer/pathnode.h>
 #include <optimizer/planmain.h>
 #include <optimizer/restrictinfo.h>
+#include <postgres_ext.h>
 #include <utils/elog.h>
 #include <utils/fmgrprotos.h>
 #include <utils/palloc.h>
@@ -142,15 +144,23 @@ parseOptions(ForeignTable *table) {
   };
 }
 
-static void GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel,
-                              Oid foreigntableid) {
-  auto tableDef = parseOptions(GetForeignTable(foreigntableid));
-  if (!tableDef) {
-    return;
+static std::optional<pg_graphalg::MatrixTableDef> lookupMatrixTable(Oid relid) {
+  auto *fTable = GetForeignTable(relid);
+  if (!fTable) {
+    elog(ERROR, "relation with oid %u is not a foreign table", relid);
+    return std::nullopt;
   }
 
-  auto &table = getInstance().getOrCreateTable(foreigntableid, *tableDef);
-  baserel->rows = table.nValues();
+  return parseOptions(fTable);
+}
+
+static void GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel,
+                              Oid foreigntableid) {
+  auto table =
+      getInstance().getOrCreateTable(foreigntableid, lookupMatrixTable);
+  if (table) {
+    baserel->rows = (*table)->nValues();
+  }
 }
 
 static void GetForeignPaths(PlannerInfo *root, RelOptInfo *baserel,
@@ -173,15 +183,6 @@ static ForeignScan *GetForeignPlan(PlannerInfo *root, RelOptInfo *baserel,
                                    Oid foreigntableid, ForeignPath *best_path,
                                    List *tlist, List *scan_clauses,
                                    Plan *outer_plan) {
-  // Resolve to a matrix table.
-  auto tableDef = parseOptions(GetForeignTable(foreigntableid));
-  if (!tableDef) {
-    return nullptr;
-  }
-
-  // Create table if it does not exist yet.
-  getInstance().getOrCreateTable(foreigntableid, *tableDef);
-
   // On extract_actual_clauses:
   // https://www.postgresql.org/docs/current/fdw-planning.html
   scan_clauses = extract_actual_clauses(scan_clauses, false);
@@ -196,10 +197,13 @@ static ForeignScan *GetForeignPlan(PlannerInfo *root, RelOptInfo *baserel,
 
 static void BeginForeignScan(ForeignScanState *node, int eflags) {
   auto tableId = RelationGetRelid(node->ss.ss_currentRelation);
-  auto &table = getInstance().getTable(tableId);
+  auto table = getInstance().getOrCreateTable(tableId, lookupMatrixTable);
+  if (!table) {
+    return;
+  }
 
   auto *state = palloc(sizeof(pg_graphalg::MatrixTableScanState));
-  new (state) pg_graphalg::MatrixTableScanState(&table);
+  new (state) pg_graphalg::MatrixTableScanState(*table);
   node->fdw_state = state;
 }
 
@@ -240,19 +244,16 @@ static void BeginForeignModify(ModifyTableState *mtstate, ResultRelInfo *rinfo,
                                int eflags) {
   // Ensure table exists before modifying it.
   auto tableId = RelationGetRelid(rinfo->ri_RelationDesc);
-  auto tableDef = parseOptions(GetForeignTable(tableId));
-  if (tableDef) {
-    getInstance().getOrCreateTable(tableId, *tableDef);
-  }
+  getInstance().getOrCreateTable(tableId, lookupMatrixTable);
 }
 
 static TupleTableSlot *ExecForeignInsert(EState *estate, ResultRelInfo *rinfo,
                                          TupleTableSlot *slot,
                                          TupleTableSlot *planSlot) {
   auto tableId = RelationGetRelid(rinfo->ri_RelationDesc);
+  auto &table = **getInstance().getOrCreateTable(tableId, lookupMatrixTable);
   // TODO: More types
-  auto &table =
-      llvm::cast<pg_graphalg::MatrixTableInt>(getInstance().getTable(tableId));
+  auto &tableInt = llvm::cast<pg_graphalg::MatrixTableInt>(table);
 
   slot_getsomeattrs(slot, 3);
   if (slot->tts_isnull[0] || slot->tts_isnull[1] || slot->tts_isnull[2]) {
@@ -263,7 +264,7 @@ static TupleTableSlot *ExecForeignInsert(EState *estate, ResultRelInfo *rinfo,
   std::size_t row = DatumGetUInt64(slot->tts_values[0]);
   std::size_t col = DatumGetUInt64(slot->tts_values[1]);
   std::int64_t val = DatumGetInt64(slot->tts_values[2]);
-  table.setValue(row, col, val);
+  tableInt.setValue(row, col, val);
   return slot;
 }
 
@@ -299,6 +300,58 @@ Datum graphalg_fdw_validator(PG_FUNCTION_ARGS) {
   PG_RETURN_VOID();
 }
 
+// NOTE: Assumes a working SPI connection
+static std::optional<Oid> lookupForeignTable(Oid argType, Datum argValue) {
+  constexpr bool READ_ONLY = true;
+  /*
+   * Allow up to 2 results.
+   * n == 0: ERROR Table not found
+   * n  > 1: ERROR Multiple oids for the given name
+   * n == 1: OK Name uniquely identifies table
+   */
+  constexpr long TCOUNT = 2;
+  int execRes = SPI_execute_with_args(
+      "SELECT oid FROM pg_class WHERE relname=$1 AND relkind = 'f'", 1,
+      &argType, &argValue, nullptr, READ_ONLY, TCOUNT);
+  if (execRes < 0) {
+    elog(ERROR, "internal error finding argument tables");
+    PG_RETURN_VOID();
+  }
+
+  // Expect exactly one result.
+  if (SPI_processed != 1) {
+    // TODO: We know this is a string, so can we make this simpler?
+    auto typeTuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(argType));
+    auto typeStruct = (Form_pg_type)GETSTRUCT(typeTuple);
+    FmgrInfo typeInfo;
+    fmgr_info(typeStruct->typoutput, &typeInfo);
+    char *value = OutputFunctionCall(&typeInfo, argValue);
+    ReleaseSysCache(typeTuple);
+
+    if (SPI_processed == 0) {
+      elog(ERROR, "no such matrix table '%s'", value);
+    } else {
+      elog(ERROR, "multiple tables named '%s'", value);
+    }
+
+    PG_RETURN_VOID();
+  }
+
+  auto *tuptable = SPI_tuptable;
+  auto tupdesc = tuptable->tupdesc;
+  bool oidNull = false;
+  auto tableOidDatum =
+      SPI_getbinval(tuptable->vals[0], tuptable->tupdesc, 1, &oidNull);
+  return DatumGetObjectId(tableOidDatum);
+}
+
+/** Automatically calls SPI_finish() when it goes out of scope. */
+class SPIConnection {
+public:
+  SPIConnection() { SPI_connect(); }
+  ~SPIConnection() { SPI_finish(); }
+};
+
 static Datum executeCall(FunctionCallInfo fcinfo) {
   auto procTuple = SearchSysCache(
       PROCOID, ObjectIdGetDatum(fcinfo->flinfo->fn_oid), 0, 0, 0);
@@ -309,20 +362,19 @@ static Datum executeCall(FunctionCallInfo fcinfo) {
 
   auto procStruct = (Form_pg_proc)GETSTRUCT(procTuple);
 
-  bool isnull;
+  // Extract program source code
+  bool sourceIsNull;
   auto sourceDatum =
-      SysCacheGetAttr(PROCOID, procTuple, Anum_pg_proc_prosrc, &isnull);
-  if (isnull) {
+      SysCacheGetAttr(PROCOID, procTuple, Anum_pg_proc_prosrc, &sourceIsNull);
+  if (sourceIsNull) {
     elog(ERROR, "NULL procedure source");
     PG_RETURN_VOID();
   }
 
   char *procCode = DatumGetCString(DirectFunctionCall1(textout, sourceDatum));
-  std::cerr << "GraphAlg source: " << procCode << "\n";
 
-  auto funcName = procStruct->proname.data;
-  std::cerr << "function name: " << funcName << "\n";
-
+  // Get argument matrix tables.
+  SPIConnection spiConnection;
   llvm::SmallVector<pg_graphalg::MatrixTable *> arguments;
   for (int i = 0; i < fcinfo->nargs; i++) {
     auto arg = fcinfo->args[i];
@@ -331,23 +383,18 @@ static Datum executeCall(FunctionCallInfo fcinfo) {
       PG_RETURN_VOID();
     }
 
-    // TODO: We know this is a string, so can we make this simpler?
     auto argType = procStruct->proargtypes.values[i];
-    auto typeTuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(argType));
-    auto typeStruct = (Form_pg_type)GETSTRUCT(typeTuple);
-    FmgrInfo typeInfo;
-    fmgr_info(typeStruct->typoutput, &typeInfo);
-
-    char *value = OutputFunctionCall(&typeInfo, arg.value);
-    ReleaseSysCache(typeTuple);
-
-    auto *argTable = getInstance().lookupTable(value);
-    if (!argTable) {
-      elog(ERROR, "No such matrix table '%s'", value);
+    auto tableOid = lookupForeignTable(argType, arg.value);
+    if (!tableOid) {
       PG_RETURN_VOID();
     }
 
-    arguments.push_back(argTable);
+    auto table = getInstance().getOrCreateTable(*tableOid, lookupMatrixTable);
+    if (!table) {
+      PG_RETURN_VOID();
+    }
+
+    arguments.push_back(*table);
   }
 
   if (arguments.empty()) {
@@ -355,10 +402,12 @@ static Datum executeCall(FunctionCallInfo fcinfo) {
     PG_RETURN_VOID();
   }
 
+  // Output is written to the final procedure argument.
   auto *output = arguments.pop_back_val();
 
   // No need to check the result here, postgres infers success based on
   // diagnostics.
+  auto funcName = procStruct->proname.data;
   getInstance().execute(procCode, funcName, arguments, *output);
 
   ReleaseSysCache(procTuple);

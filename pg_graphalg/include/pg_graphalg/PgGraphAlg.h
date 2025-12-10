@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/DenseMap.h>
@@ -9,6 +10,7 @@
 #include <mlir/IR/Diagnostics.h>
 #include <mlir/IR/DialectRegistry.h>
 #include <mlir/IR/MLIRContext.h>
+#include <mlir/Support/LLVM.h>
 
 #include "pg_graphalg/MatrixTable.h"
 
@@ -21,14 +23,13 @@ private:
   mlir::DialectRegistry _registry;
   mlir::MLIRContext _ctx;
   llvm::DenseMap<TableId, std::unique_ptr<MatrixTable>> _tables;
-  llvm::StringMap<TableId> _nameToId;
 
 public:
   PgGraphAlg(llvm::function_ref<void(mlir::Diagnostic &)> diagHandler);
 
-  MatrixTable &getTable(TableId tableId);
-  MatrixTable &getOrCreateTable(TableId tableId, const MatrixTableDef &def);
-  MatrixTable *lookupTable(llvm::StringRef tableName);
+  std::optional<MatrixTable *> getOrCreateTable(
+      TableId tableId,
+      llvm::function_ref<std::optional<MatrixTableDef>(TableId id)> createFunc);
 
   bool execute(llvm::StringRef programSource, llvm::StringRef function,
                llvm::ArrayRef<const MatrixTable *> arguments,

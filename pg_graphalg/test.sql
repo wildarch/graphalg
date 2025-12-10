@@ -97,8 +97,6 @@ INSERT INTO rhs VALUES
 CREATE FOREIGN TABLE matmul_out(row bigint, col bigint, val bigint)
 SERVER graphalg_server
 OPTIONS (rows '2', columns '2');
--- HACK: Necessary because we don't get a callback from CREATE
-SELECT * FROM matmul_out;
 
 CREATE PROCEDURE matmul(text, text, text)
 LANGUAGE graphalg
