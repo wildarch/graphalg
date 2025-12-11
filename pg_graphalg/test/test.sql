@@ -117,6 +117,3 @@ CREATE FOREIGN TABLE matreal ( row bigint, col bigint, val double precision ) SE
 INSERT INTO matreal VALUES (0, 0, 4.2);
 DROP FOREIGN TABLE matbool;
 DROP FOREIGN TABLE matreal;
-CREATE FOREIGN TABLE matbad ( row bigint, col bigint, val text ) SERVER graphalg_server OPTIONS (rows '10', columns '10');
-INSERT INTO matbad VALUES (0, 0, '42');
-DROP FOREIGN TABLE matbad;

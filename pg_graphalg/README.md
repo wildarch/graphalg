@@ -63,5 +63,5 @@ After the extension has been built, start the server and then run the `test.sql`
 /usr/local/pgsql/bin/postgres -D ~/pgdata
 
 # Run the tests
-/usr/local/pgsql/bin/psql postgres -f pg_graphalg/test.sql
+/usr/local/pgsql/bin/psql postgres -f pg_graphalg/test/test.sql
 ```

@@ -1,19 +1,24 @@
 #include <cassert>
 #include <memory>
 #include <optional>
+#include <variant>
 
 #include <llvm/ADT/SmallVector.h>
+#include <llvm/Support/Casting.h>
 #include <mlir/Dialect/Func/Extensions/InlinerExtension.h>
+#include <mlir/IR/BuiltinAttributeInterfaces.h>
 #include <mlir/IR/BuiltinAttributes.h>
 #include <mlir/IR/BuiltinOps.h>
 #include <mlir/IR/Diagnostics.h>
 #include <mlir/IR/Location.h>
+#include <mlir/IR/MLIRContext.h>
 #include <mlir/IR/OwningOpRef.h>
 #include <mlir/Transforms/Passes.h>
 
 #include <graphalg/GraphAlgAttr.h>
 #include <graphalg/GraphAlgPasses.h>
 #include <graphalg/GraphAlgTypes.h>
+#include <graphalg/SemiringTypes.h>
 #include <graphalg/evaluate/Evaluator.h>
 #include <graphalg/parse/Parser.h>
 
@@ -45,10 +50,66 @@ std::optional<MatrixTable *> PgGraphAlg::getOrCreateTable(
       return std::nullopt;
     }
 
-    // TODO: Different types.
-    _tables[tableId] = std::make_unique<MatrixTableInt>(*def);
+    _tables[tableId] = std::make_unique<MatrixTable>(*def);
   }
   return _tables[tableId].get();
+}
+
+static mlir::TypedAttr
+matrixValueToAttr(mlir::Type t, std::variant<bool, std::int64_t, double> v) {
+  auto *ctx = t.getContext();
+  auto intType = graphalg::SemiringTypes::forInt(ctx);
+  auto realType = graphalg::SemiringTypes::forReal(ctx);
+  auto tropIntType = graphalg::SemiringTypes::forTropInt(ctx);
+  auto tropRealType = graphalg::SemiringTypes::forTropReal(ctx);
+  auto tropMaxIntType = graphalg::SemiringTypes::forTropMaxInt(ctx);
+  if (t == graphalg::SemiringTypes::forBool(ctx)) {
+    assert(std::holds_alternative<bool>(v));
+    return mlir::BoolAttr::get(ctx, std::get<bool>(v));
+  } else if (t == intType) {
+    assert(std::holds_alternative<std::int64_t>(v));
+    return mlir::IntegerAttr::get(intType, std::get<std::int64_t>(v));
+  } else if (t == realType) {
+    assert(std::holds_alternative<double>(v));
+    return mlir::FloatAttr::get(realType, std::get<double>(v));
+  } else if (t == tropIntType) {
+    assert(std::holds_alternative<std::int64_t>(v));
+    return graphalg::TropIntAttr::get(
+        ctx, tropIntType,
+        mlir::IntegerAttr::get(intType, std::get<std::int64_t>(v)));
+  } else if (t == tropRealType) {
+    assert(std::holds_alternative<double>(v));
+    return graphalg::TropFloatAttr::get(
+        ctx, tropRealType, mlir::FloatAttr::get(realType, std::get<double>(v)));
+  } else if (t == tropMaxIntType) {
+    assert(std::holds_alternative<std::int64_t>(v));
+    return graphalg::TropIntAttr::get(
+        ctx, tropMaxIntType,
+        mlir::IntegerAttr::get(intType, std::get<std::int64_t>(v)));
+  } else {
+    mlir::emitError(mlir::UnknownLoc::get(ctx))
+        << "invalid target type for matrix value: " << t;
+    return nullptr;
+  }
+}
+
+static std::variant<bool, std::int64_t, double>
+attrToMatrixValue(mlir::TypedAttr attr) {
+  if (auto b = llvm::dyn_cast<mlir::BoolAttr>(attr)) {
+    return b.getValue();
+  } else if (auto i = llvm::dyn_cast<mlir::IntegerAttr>(attr)) {
+    return i.getInt();
+  } else if (auto f = llvm::dyn_cast<mlir::FloatAttr>(attr)) {
+    return f.getValueAsDouble();
+  } else if (auto i = llvm::dyn_cast<graphalg::TropIntAttr>(attr)) {
+    return i.getValue().getInt();
+  } else if (auto f = llvm::dyn_cast<graphalg::TropFloatAttr>(attr)) {
+    return f.getValue().getValueAsDouble();
+  } else {
+    mlir::emitError(mlir::UnknownLoc::get(attr.getContext()))
+        << "attribute cannot be converted to matrix value: " << attr;
+    std::abort();
+  }
 }
 
 bool PgGraphAlg::execute(llvm::StringRef programSource,
@@ -111,12 +172,10 @@ bool PgGraphAlg::execute(llvm::StringRef programSource,
        llvm::zip_equal(arguments, funcOp.getFunctionType().getInputs())) {
     auto matType = llvm::cast<graphalg::MatrixType>(type);
     graphalg::MatrixAttrBuilder builder(matType);
-    // TODO: support more value types.
-    const auto &values = llvm::cast<MatrixTableInt>(arg)->values();
+    const auto &values = arg->values();
     for (auto [pos, val] : values) {
       auto [row, col] = pos;
-      // TODO: support more value types
-      auto valAttr = mlir::IntegerAttr::get(matType.getSemiring(), val);
+      auto valAttr = matrixValueToAttr(matType.getSemiring(), val);
       builder.set(row, col, valAttr);
     }
 
@@ -133,16 +192,12 @@ bool PgGraphAlg::execute(llvm::StringRef programSource,
   // TODO: Check semiring is compatible with value type.
   output.clear();
 
-  // TODO: more value types
-  auto &outputInt = llvm::cast<MatrixTableInt>(output);
   auto defaultValue = resultReader.ring().addIdentity();
   for (auto r : llvm::seq(resultReader.nRows())) {
     for (auto c : llvm::seq(resultReader.nCols())) {
       auto v = resultReader.at(r, c);
       if (v != defaultValue) {
-        // TODO: Support bool/real value types
-        auto vInt = llvm::cast<mlir::IntegerAttr>(v).getInt();
-        outputInt.setValue(r, c, vInt);
+        output.setValue(r, c, attrToMatrixValue(v));
       }
     }
   }

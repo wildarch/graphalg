@@ -1,6 +1,7 @@
 #include <charconv>
 #include <optional>
 #include <string_view>
+#include <variant>
 
 #include <llvm/ADT/Sequence.h>
 #include <llvm/ADT/SmallVector.h>
@@ -42,7 +43,18 @@ PG_MODULE_MAGIC;
 
 static void diagHandler(mlir::Diagnostic &diag) {
   std::string msg = diag.str();
-  elog(ERROR, "%s", msg.c_str());
+  switch (diag.getSeverity()) {
+  case mlir::DiagnosticSeverity::Note:
+  case mlir::DiagnosticSeverity::Remark:
+    elog(INFO, "%s", msg.c_str());
+    break;
+  case mlir::DiagnosticSeverity::Warning:
+    elog(WARNING, "%s", msg.c_str());
+    break;
+  case mlir::DiagnosticSeverity::Error:
+    elog(ERROR, "%s", msg.c_str());
+    break;
+  }
 }
 
 static pg_graphalg::PgGraphAlg *SINGLETON = nullptr;
@@ -200,7 +212,6 @@ static std::optional<pg_graphalg::MatrixTableDef> lookupMatrixTable(Oid relid) {
       tableName,
       static_cast<size_t>(*rows),
       static_cast<size_t>(*cols),
-      // TODO: Determine from column type.
       *valType,
   };
 }
@@ -258,14 +269,35 @@ static void BeginForeignScan(ForeignScanState *node, int eflags) {
   node->fdw_state = state;
 }
 
+static Datum matrixValueGetDatum(std::variant<bool, std::int64_t, double> v) {
+  if (auto *b = std::get_if<bool>(&v)) {
+    return BoolGetDatum(*b);
+  } else if (auto *i = std::get_if<std::int64_t>(&v)) {
+    return Int64GetDatum(*i);
+  } else {
+    return Float8GetDatum(std::get<double>(v));
+  }
+}
+
+static std::variant<bool, std::int64_t, double>
+datumGetMatrixValue(pg_graphalg::MatrixValueType type, Datum v) {
+  switch (type) {
+  case pg_graphalg::MatrixValueType::BOOL:
+    return DatumGetBool(v);
+  case pg_graphalg::MatrixValueType::INT:
+    return DatumGetInt64(v);
+  case pg_graphalg::MatrixValueType::FLOAT:
+    return DatumGetFloat8(v);
+  }
+}
+
 static TupleTableSlot *IterateForeignScan(ForeignScanState *node) {
   TupleTableSlot *slot = node->ss.ss_ScanTupleSlot;
   ExecClearTuple(slot);
 
   auto *scanState =
       static_cast<pg_graphalg::MatrixTableScanState *>(node->fdw_state);
-  // TODO: Check type
-  auto &table = llvm::cast<pg_graphalg::MatrixTableInt>(*scanState->table);
+  auto &table = *scanState->table;
   if (auto res = table.scan(*scanState)) {
     slot->tts_isnull[0] = false;
     slot->tts_isnull[1] = false;
@@ -273,7 +305,7 @@ static TupleTableSlot *IterateForeignScan(ForeignScanState *node) {
     auto [row, col, val] = *res;
     slot->tts_values[0] = UInt64GetDatum(row);
     slot->tts_values[1] = UInt64GetDatum(col);
-    slot->tts_values[2] = UInt64GetDatum(val);
+    slot->tts_values[2] = matrixValueGetDatum(val);
     ExecStoreVirtualTuple(slot);
   }
 
@@ -303,8 +335,6 @@ static TupleTableSlot *ExecForeignInsert(EState *estate, ResultRelInfo *rinfo,
                                          TupleTableSlot *planSlot) {
   auto tableId = RelationGetRelid(rinfo->ri_RelationDesc);
   auto &table = **getInstance().getOrCreateTable(tableId, lookupMatrixTable);
-  // TODO: More types
-  auto &tableInt = llvm::cast<pg_graphalg::MatrixTableInt>(table);
 
   slot_getsomeattrs(slot, 3);
   if (slot->tts_isnull[0] || slot->tts_isnull[1] || slot->tts_isnull[2]) {
@@ -314,8 +344,8 @@ static TupleTableSlot *ExecForeignInsert(EState *estate, ResultRelInfo *rinfo,
 
   std::size_t row = DatumGetUInt64(slot->tts_values[0]);
   std::size_t col = DatumGetUInt64(slot->tts_values[1]);
-  std::int64_t val = DatumGetInt64(slot->tts_values[2]);
-  tableInt.setValue(row, col, val);
+  auto val = datumGetMatrixValue(table.getType(), slot->tts_values[2]);
+  table.setValue(row, col, val);
   return slot;
 }
 
