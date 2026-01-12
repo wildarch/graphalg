@@ -35,6 +35,7 @@ interface GraphAlgMatrix {
 interface RunResults {
     result?: GraphAlgMatrix;
     diagnostics: GraphAlgDiagnostic[];
+    coreIR?: string;
 }
 
 class PlaygroundInstance {
@@ -108,6 +109,7 @@ class PlaygroundInstance {
         const ga_new = this.bindings.ga_new;
         const ga_parse = this.bindings.ga_parse;
         const ga_desugar = this.bindings.ga_desugar;
+        const ga_print_module = this.bindings.ga_print_module;
         const ga_add_arg = this.bindings.ga_add_arg;
         const ga_set_dims = this.bindings.ga_set_dims;
         const ga_set_arg_bool = this.bindings.ga_set_arg_bool;
@@ -137,6 +139,9 @@ class PlaygroundInstance {
             };
         }
 
+        const coreIR = UTF8ToString(ga_print_module(pg));
+        console.log(coreIR);
+
         for (let arg of args) {
             ga_add_arg(pg, arg.rows, arg.cols);
         }
@@ -144,6 +149,7 @@ class PlaygroundInstance {
         if (!ga_set_dims(pg, func)) {
             return {
                 diagnostics: this.getDiagnosticsAndFree(pg),
+                coreIR: coreIR,
             };
         }
 
@@ -169,6 +175,7 @@ class PlaygroundInstance {
         if (!ga_evaluate(pg)) {
             return {
                 diagnostics: this.getDiagnosticsAndFree(pg),
+                coreIR: coreIR,
             };
         }
 
@@ -220,6 +227,7 @@ class PlaygroundInstance {
                 values: resultVals,
             },
             diagnostics: this.getDiagnosticsAndFree(pg),
+            coreIR: coreIR,
         };
     }
 }
@@ -741,13 +749,27 @@ function run(editor: GraphAlgEditor, inst: PlaygroundInstance) {
         resultElem = buildErrorNote(result.diagnostics);
     }
 
+    let outputElems: Node[] = [];
+    if (result.coreIR) {
+        const details = document.createElement("details");
+        const summary = document.createElement("summary");
+        summary.textContent = "Core IR";
+        const pre = document.createElement("pre");
+        const code = document.createElement("code");
+        code.textContent = result.coreIR;
+        pre.appendChild(code);
+        details.append(summary, pre);
+        outputElems.push(details);
+    }
+
     // Place output in a default-open accordion
     const details = document.createElement("details");
     details.setAttribute('open', 'true');
     const summary = document.createElement("summary");
     summary.textContent = "Output";
     details.append(summary, resultElem);
-    editor.outputContainer.replaceChildren(details);
+    outputElems.push(details);
+    editor.outputContainer.replaceChildren(...outputElems);
 }
 
 function compile(editor: GraphAlgEditor, inst: PlaygroundInstance) {

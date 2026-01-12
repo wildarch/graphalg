@@ -41,6 +41,7 @@ export function loadPlaygroundWasm() {
         bindings.ga_diag_col_end = instance.cwrap('ga_diag_col_end', 'number', ['number', 'number']);
         bindings.ga_diag_msg = instance.cwrap('ga_diag_msg', 'number', ['number', 'number']);
         bindings.ga_desugar = instance.cwrap('ga_desugar', 'number', ['number'])
+        bindings.ga_print_module = instance.cwrap('ga_print_module', 'number', ['number'])
         bindings.ga_add_arg = instance.cwrap('ga_add_arg', null, ['number', 'number', 'number']);
         bindings.ga_set_dims = instance.cwrap('ga_set_dims', 'number', ['number', 'string']);
         bindings.ga_set_arg_bool = instance.cwrap('ga_set_arg_bool', 'number', ['number', 'number', 'number', 'number', 'number']);

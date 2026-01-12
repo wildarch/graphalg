@@ -44,6 +44,7 @@ private:
   mlir::MLIRContext _ctx;
   llvm::SmallVector<Diagnostic> _diagnostics;
   mlir::OwningOpRef<mlir::ModuleOp> _moduleOp;
+  std::string _moduleString;
   llvm::SmallVector<graphalg::CallArgumentDimensions> _argDims;
   mlir::func::FuncOp _funcOp;
   llvm::SmallVector<graphalg::MatrixAttrBuilder> _argBuilders;
@@ -63,6 +64,8 @@ public:
   const Diagnostic &getDiagnostic(std::size_t i) { return _diagnostics[i]; }
 
   bool desugarToCore();
+
+  const char *printModule();
 
   void addArgument(std::size_t rows, std::size_t cols);
   bool setDimensions(llvm::StringRef func);
@@ -166,6 +169,13 @@ bool Playground::desugarToCore() {
   } else {
     return true;
   }
+}
+
+const char *Playground::printModule() {
+  _moduleString.clear();
+  llvm::raw_string_ostream os(_moduleString);
+  _moduleOp->print(os);
+  return _moduleString.c_str();
 }
 
 bool Playground::setDimensions(llvm::StringRef func) {
@@ -274,6 +284,8 @@ const char *ga_diag_msg(Playground *pg, std::size_t i) {
 }
 
 bool ga_desugar(Playground *pg) { return pg->desugarToCore(); }
+
+const char *ga_print_module(Playground *pg) { return pg->printModule(); }
 
 void ga_add_arg(Playground *pg, std::size_t rows, std::size_t cols) {
   pg->addArgument(rows, cols);
