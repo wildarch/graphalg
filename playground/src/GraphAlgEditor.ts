@@ -7,11 +7,25 @@ import { Extension } from "@codemirror/state"
 import { keymap } from "@codemirror/view"
 import { indentWithTab } from "@codemirror/commands"
 import { GraphAlg } from "codemirror-lang-graphalg"
+import { parseMatrix, ParseMatrixError } from "./matrixParsing"
 
 export enum GraphAlgEditorMode {
     TUTORIAL,
     PLAYGROUND,
 }
+
+class EditorArgument {
+    rootElem: HTMLDetailsElement;
+    value?: GraphAlgMatrix;
+
+    constructor(root: HTMLDetailsElement) {
+        this.rootElem = root;
+    }
+
+    destroy() {
+        // TODO: Cleanup network vis etc.
+    }
+};
 
 export class GraphAlgEditor {
     root: Element;
@@ -22,7 +36,7 @@ export class GraphAlgEditor {
 
     initialProgram: string;
     functionName?: string;
-    arguments: GraphAlgMatrix[] = [];
+    arguments: EditorArgument[] = [];
     editorMode: GraphAlgEditorMode = GraphAlgEditorMode.TUTORIAL;
     renderMode: MatrixRenderMode = MatrixRenderMode.AUTO;
     resultRenderMode: MatrixRenderMode = MatrixRenderMode.AUTO;
@@ -66,38 +80,47 @@ export class GraphAlgEditor {
             parent: this.editorContainer,
             doc: this.initialProgram,
         });
-    }
-
-    addArgument(arg: GraphAlgMatrix) {
-        this.arguments.push(arg);
-
-        // Display in accordion below the editor.
-        const argDetails = document.createElement("details");
-        const argSummary = document.createElement("summary");
-        argSummary.textContent = `Argument ${this.arguments.length} (${arg.ring} x ${arg.rows} x ${arg.cols})`;
-        argDetails.appendChild(argSummary);
 
         if (this.editorMode == GraphAlgEditorMode.PLAYGROUND) {
-            // Allow uploading a replacement file.
-            const inputFile = document.createElement("input");
-            inputFile.setAttribute("type", "file");
-            console.log(inputFile);
-            argDetails.appendChild(inputFile);
-
-            inputFile.addEventListener("change", async () => {
-                if (inputFile.files?.length != 1) {
-                    return;
-                }
-
-                const file = inputFile.files[0];
-                const content = await file.text();
-                console.log(content);
+            // Add argument button
+            const addButton = document.createElement("button");
+            addButton.setAttribute('type', 'button');
+            addButton.setAttribute('class', 'btn');
+            addButton.textContent = "Add Argument";
+            addButton.addEventListener('click', () => {
+                this.addArgument();
             });
-        }
+            this.toolbar.appendChild(addButton);
 
-        const table = renderMatrix(arg, this.renderMode);
-        argDetails.appendChild(table);
-        this.argumentContainer.appendChild(argDetails);
+            // Remove argument button
+            const removeButton = document.createElement("button");
+            removeButton.setAttribute('type', 'button');
+            removeButton.setAttribute('class', 'btn');
+            removeButton.textContent = "Remove Argument";
+            removeButton.addEventListener('click', () => {
+                this.dropArgument();
+            });
+            this.toolbar.appendChild(removeButton);
+        }
+    }
+
+    addArgument(value?: GraphAlgMatrix) {
+        const argElem = document.createElement("details");
+        const argument = new EditorArgument(argElem);
+        argument.value = value;
+
+        this.argumentContainer.appendChild(argElem);
+        this.arguments.push(argument);
+        this.renderArgument(this.arguments.length - 1);
+    }
+
+    dropArgument() {
+        console.log("Drop argument");
+        const arg = this.arguments.pop();
+        if (arg) {
+            arg.destroy();
+            arg.rootElem.remove();
+        }
     }
 
     bindPlayground(instance: PlaygroundInstance) {
@@ -105,7 +128,6 @@ export class GraphAlgEditor {
             || this.functionName) {
             const runButton = document.createElement("button");
             runButton.setAttribute('type', 'button');
-            runButton.setAttribute('name', 'run');
             runButton.setAttribute('class', 'btn');
             runButton.textContent =
                 this.editorMode == GraphAlgEditorMode.TUTORIAL
@@ -120,7 +142,6 @@ export class GraphAlgEditor {
             // No function to run, compile only
             const compileButton = document.createElement("button");
             compileButton.setAttribute('type', 'button');
-            compileButton.setAttribute('name', 'compile');
             compileButton.setAttribute('class', 'btn');
             compileButton.textContent = "Compile";
             compileButton.addEventListener('click', () => {
@@ -136,11 +157,18 @@ export class GraphAlgEditor {
             throw new Error("No program to run");
         }
 
-        const result = inst.run(program, this.functionName!!, this.arguments);
+        const args: GraphAlgMatrix[] = [];
+        for (let arg of this.arguments) {
+            // TODO: Detect unset arguments.
+            args.push(arg.value!!);
+        }
+
+        const result = inst.run(program, this.functionName!!, args);
         let resultElem;
         if (result.result) {
             if (this.resultRenderMode == MatrixRenderMode.VERTEX_PROPERTY) {
-                resultElem = renderVectorAsNodeProperty(result.result, this.arguments[0]);
+                // TODO: Check if we have a suitable first argument
+                resultElem = renderVectorAsNodeProperty(result.result, this.arguments[0].value!!);
             } else {
                 resultElem = renderMatrix(result.result, this.resultRenderMode);
             }
@@ -192,6 +220,50 @@ export class GraphAlgEditor {
         summary.textContent = "Output";
         details.append(summary, resultElem);
         this.outputContainer.replaceChildren(details);
+    }
+
+    renderArgument(argIndex: number) {
+        const arg = this.arguments[argIndex];
+        // Cleanup visualizations etc.
+        arg.destroy();
+
+        const argSummary = document.createElement("summary");
+        if (arg.value) {
+            argSummary.textContent = `Argument ${argIndex} (${arg.value.ring} x ${arg.value.rows} x ${arg.value.cols})`;
+        } else {
+            argSummary.textContent = `Argument ${argIndex}`;
+        }
+
+        // NOTE: Also cleans up previously rendered nodes.
+        arg.rootElem.replaceChildren(argSummary);
+
+        if (this.editorMode == GraphAlgEditorMode.PLAYGROUND) {
+            // Allow uploading a replacement file.
+            const inputFile = document.createElement("input");
+            inputFile.setAttribute("type", "file");
+            arg.rootElem.appendChild(inputFile);
+
+            inputFile.addEventListener("change", async () => {
+                if (inputFile.files?.length != 1) {
+                    return;
+                }
+
+                const file = inputFile.files[0];
+                const content = await file.text();
+                const mat = parseMatrix(content);
+                if (mat instanceof ParseMatrixError) {
+                    window.alert(`Invalid input matrix: ${mat.message}`);
+                } else {
+                    arg.value = mat;
+                    this.renderArgument(argIndex);
+                }
+            });
+        }
+
+        if (arg.value) {
+            console.log(arg.value);
+            arg.rootElem.appendChild(renderMatrix(arg.value, this.renderMode));
+        }
     }
 }
 

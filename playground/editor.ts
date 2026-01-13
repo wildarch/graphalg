@@ -6,6 +6,7 @@ import { PlaygroundInstance } from "./src/PlaygroundInstance"
 import { GraphAlgMatrix, GraphAlgMatrixEntry } from "./src/GraphAlgMatrix"
 import { GraphAlgEditor, GraphAlgEditorMode } from "./src/GraphAlgEditor"
 import { MatrixRenderMode, renderMatrix } from "./src/matrixRendering"
+import { parseMatrix, ParseMatrixError } from "./src/matrixParsing"
 
 // Load and register all webassembly bindings
 let playgroundWasmBindings = loadPlaygroundWasm();
@@ -37,55 +38,6 @@ const GraphAlgLinter = linter(view => {
 
     return diagnostics;
 });
-
-function parseMatrix(input: string): GraphAlgMatrix {
-    const lines = input.split(';');
-    const header = lines[0].split(',');
-    const rows = parseInt(header[0]);
-    const cols = parseInt(header[1]);
-    const ring = header[2].trim();
-
-    let values: GraphAlgMatrixEntry[] = [];
-    for (let line of lines.slice(1)) {
-        if (!line) {
-            // Skip empty lines
-            continue
-        }
-
-        const parts = line.split(',');
-
-        let val: boolean | bigint | number;
-        switch (ring) {
-            case 'i1':
-                val = true;
-                break;
-            case 'i64':
-            case '!graphalg.trop_i64':
-            case '!graphalg.trop_max_i64':
-                val = BigInt(parts[2]);
-                break;
-            case 'f64':
-            case '!graphalg.trop_f64':
-                val = parseFloat(parts[2]);
-                break;
-            default:
-                throw new Error(`invalid ring ${ring}`);
-        }
-
-        values.push({
-            row: parseInt(parts[0]),
-            col: parseInt(parts[1]),
-            val,
-        })
-    }
-
-    return {
-        ring,
-        rows,
-        cols,
-        values,
-    }
-}
 
 // Find code snippets to turn into editors.
 let editors: GraphAlgEditor[] = [];
@@ -123,7 +75,11 @@ for (let elem of Array.from(codeElems)) {
             }
 
             const parsed = parseMatrix(arg);
-            editor.addArgument(parsed);
+            if (parsed instanceof ParseMatrixError) {
+                console.error(parsed);
+            } else {
+                editor.addArgument(parsed);
+            }
         }
 
         const resultRender = elem.getAttribute('data-ga-result-render');
@@ -159,6 +115,10 @@ playgroundWasmBindings.onLoaded((bindings: any) => {
 const graphElems = document.getElementsByClassName("language-graphalg-matrix");
 for (let elem of Array.from(graphElems)) {
     const mat = parseMatrix(elem.textContent.trim());
+    if (mat instanceof ParseMatrixError) {
+        console.error(mat);
+        continue;
+    }
 
     let mode: string | null = null;
     if (elem.parentElement?.tagName == 'PRE') {
