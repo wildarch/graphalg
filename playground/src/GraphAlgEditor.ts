@@ -86,7 +86,7 @@ export class GraphAlgEditor {
             const addButton = document.createElement("button");
             addButton.setAttribute('type', 'button');
             addButton.setAttribute('class', 'btn');
-            addButton.textContent = "Add Argument";
+            addButton.textContent = "Add Arg.";
             addButton.addEventListener('click', () => {
                 this.addArgument();
             });
@@ -96,7 +96,7 @@ export class GraphAlgEditor {
             const removeButton = document.createElement("button");
             removeButton.setAttribute('type', 'button');
             removeButton.setAttribute('class', 'btn');
-            removeButton.textContent = "Remove Argument";
+            removeButton.textContent = "Remove Arg.";
             removeButton.addEventListener('click', () => {
                 this.dropArgument();
             });
@@ -115,7 +115,8 @@ export class GraphAlgEditor {
     }
 
     dropArgument() {
-        console.log("Drop argument");
+        // TODO: If there are no more arguments left, disable the remove
+        // argument button.
         const arg = this.arguments.pop();
         if (arg) {
             arg.destroy();
@@ -124,8 +125,42 @@ export class GraphAlgEditor {
     }
 
     bindPlayground(instance: PlaygroundInstance) {
+        if (this.editorMode == GraphAlgEditorMode.PLAYGROUND) {
+            // Allow changing the name of called function.
+            const funcNameContainer = document.createElement("div");
+            funcNameContainer.style.backgroundColor = '#f7f7f7';
+            funcNameContainer.style.borderRadius = '4px';
+            funcNameContainer.style.padding = '0.3em 1em';
+            funcNameContainer.style.borderWidth = '0';
+            funcNameContainer.style.boxShadow = 'rgba(0, 0, 0, 0.12) 0px 1px 2px 0px, rgba(0, 0, 0, 0.08) 0px 3px 10px 0px';
+            funcNameContainer.style.color = '#7253ed';
+            funcNameContainer.style.lineHeight = '1.5';
+            funcNameContainer.style.display = 'inline-block';
+            funcNameContainer.style.fontWeight = '500';
+            funcNameContainer.textContent = "Function:";
+
+            const funcNameInput = document.createElement("input");
+            funcNameInput.setAttribute('type', 'text');
+            funcNameInput.style.backgroundColor = '#f7f7f7';
+            funcNameInput.style.color = '#7253ed';
+            funcNameInput.style.borderWidth = '0';
+            funcNameContainer.appendChild(funcNameInput);
+
+            if (this.functionName) {
+                funcNameInput.value = this.functionName;
+            }
+
+            funcNameInput.addEventListener('change', () => {
+                console.log(funcNameInput.value);
+                this.functionName = funcNameInput.value;
+            });
+
+            this.toolbar.appendChild(funcNameContainer);
+        }
+
         if (this.editorMode == GraphAlgEditorMode.PLAYGROUND
             || this.functionName) {
+            // Add run button
             const runButton = document.createElement("button");
             runButton.setAttribute('type', 'button');
             runButton.setAttribute('class', 'btn');
