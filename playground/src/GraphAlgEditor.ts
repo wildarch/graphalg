@@ -159,7 +159,6 @@ export class GraphAlgEditor {
             }
 
             funcNameInput.addEventListener('change', () => {
-                console.log(funcNameInput.value);
                 this.functionName = funcNameInput.value;
             });
 
@@ -332,7 +331,6 @@ export class GraphAlgEditor {
         }
 
         if (arg.value) {
-            console.log(arg.value);
             arg.rootElem.appendChild(renderMatrix(arg.value, this.renderMode));
         }
     }
