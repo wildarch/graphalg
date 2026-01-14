@@ -158,7 +158,8 @@ function renderMatrixVisGraph(m: GraphAlgMatrix): HTMLElement {
 
 export function renderVectorAsNodeProperty(
     vector: GraphAlgMatrix,
-    graph: GraphAlgMatrix): HTMLElement {
+    graph: GraphAlgMatrix,
+    height = "300px"): HTMLElement {
     if (vector.rows != graph.rows
         || graph.rows != graph.cols
         || vector.cols != 1) {
@@ -168,7 +169,7 @@ export function renderVectorAsNodeProperty(
 
     const container = document.createElement("div");
     container.style.width = "100%";
-    container.style.height = "300px";
+    container.style.height = height;
     container.style.border = "1px solid black";
 
     interface NodeItem {

@@ -222,9 +222,15 @@ export class GraphAlgEditor {
         const result = inst.run(program!!, this.functionName!!, args);
         let resultElem;
         if (result.result) {
-            if (this.resultRenderMode == MatrixRenderMode.VERTEX_PROPERTY) {
-                // TODO: Check if we have a suitable first argument
-                resultElem = renderVectorAsNodeProperty(result.result, this.arguments[0].value!!);
+            if (this.resultRenderMode == MatrixRenderMode.VERTEX_PROPERTY
+                && this.arguments.length >= 1) {
+                const height = this.editorMode == GraphAlgEditorMode.PLAYGROUND ?
+                    "600px"
+                    : "300px";
+                resultElem = renderVectorAsNodeProperty(
+                    result.result,
+                    this.arguments[0].value!!,
+                    height);
             } else {
                 resultElem = renderMatrix(result.result, this.resultRenderMode);
             }
