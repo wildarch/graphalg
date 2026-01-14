@@ -4,6 +4,8 @@ layout: page
 nav_order: 4
 ---
 
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/default.min.css">
+
 # GraphAlg Playground
 Compile and execute GraphAlg programs in your browser!
 

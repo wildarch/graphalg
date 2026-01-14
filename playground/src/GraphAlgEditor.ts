@@ -8,6 +8,7 @@ import { keymap } from "@codemirror/view"
 import { indentWithTab } from "@codemirror/commands"
 import { GraphAlg } from "codemirror-lang-graphalg"
 import { parseMatrix, ParseMatrixError } from "./matrixParsing"
+import { highlightMLIR } from './highlightMLIR'
 
 export enum GraphAlgEditorMode {
     TUTORIAL,
@@ -231,15 +232,19 @@ export class GraphAlgEditor {
             resultElem = buildDiagnosticsNote(result.diagnostics);
         }
 
+        if (this.editorMode == GraphAlgEditorMode.PLAYGROUND && result.parsedIR) {
+            const details = document.createElement("details");
+            const summary = document.createElement("summary");
+            summary.textContent = "GraphAlg IR";
+            details.append(summary, renderIR(result.parsedIR));
+            outputElems.push(details);
+        }
+
         if (this.editorMode == GraphAlgEditorMode.PLAYGROUND && result.coreIR) {
             const details = document.createElement("details");
             const summary = document.createElement("summary");
             summary.textContent = "Core IR";
-            const pre = document.createElement("pre");
-            const code = document.createElement("code");
-            code.textContent = result.coreIR;
-            pre.appendChild(code);
-            details.append(summary, pre);
+            details.append(summary, renderIR(result.coreIR));
             outputElems.push(details);
         }
 
@@ -325,6 +330,16 @@ export class GraphAlgEditor {
             arg.rootElem.appendChild(renderMatrix(arg.value, this.renderMode));
         }
     }
+}
+
+function renderIR(ir: string): HTMLElement {
+    const pre = document.createElement("pre");
+    const code = document.createElement("code");
+    code.textContent = ir;
+    code.classList.add('language-mlir');
+    highlightMLIR(code);
+    pre.appendChild(code);
+    return pre;
 }
 
 function buildDiagnosticsNote(diagnostics: GraphAlgDiagnostic[]): HTMLQuoteElement {

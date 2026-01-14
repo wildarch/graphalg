@@ -4,7 +4,8 @@ import { GraphAlgMatrix, GraphAlgMatrixEntry } from "./GraphAlgMatrix"
 export interface RunResults {
     result?: GraphAlgMatrix;
     diagnostics: GraphAlgDiagnostic[];
-    coreIR?: string;
+    parsedIR?: string; // IR immediately after parsing
+    coreIR?: string; // IR after desugaring to Core
 }
 
 export class PlaygroundInstance {
@@ -102,6 +103,8 @@ export class PlaygroundInstance {
             };
         }
 
+        const parsedIR = UTF8ToString(ga_print_module(pg));
+
         if (!ga_desugar(pg)) {
             return {
                 diagnostics: this.getDiagnosticsAndFree(pg),
@@ -117,7 +120,8 @@ export class PlaygroundInstance {
         if (!ga_set_dims(pg, func)) {
             return {
                 diagnostics: this.getDiagnosticsAndFree(pg),
-                coreIR: coreIR,
+                parsedIR,
+                coreIR,
             };
         }
 
@@ -143,7 +147,8 @@ export class PlaygroundInstance {
         if (!ga_evaluate(pg)) {
             return {
                 diagnostics: this.getDiagnosticsAndFree(pg),
-                coreIR: coreIR,
+                parsedIR,
+                coreIR,
             };
         }
 
@@ -195,6 +200,7 @@ export class PlaygroundInstance {
                 values: resultVals,
             },
             diagnostics: this.getDiagnosticsAndFree(pg),
+            parsedIR,
             coreIR: coreIR,
         };
     }
