@@ -32,6 +32,7 @@ export class GraphAlgEditor {
     toolbar: Element;
     editorContainer: Element;
     argumentContainer: Element;
+    argumentToolbar: HTMLElement;
     outputContainer: Element;
 
     initialProgram: string;
@@ -58,6 +59,8 @@ export class GraphAlgEditor {
 
         this.argumentContainer = document.createElement("div");
 
+        this.argumentToolbar = document.createElement("div");
+
         // Container for output
         this.outputContainer = document.createElement("div");
 
@@ -65,6 +68,7 @@ export class GraphAlgEditor {
             this.toolbar,
             this.editorContainer,
             this.argumentContainer,
+            this.argumentToolbar,
             this.outputContainer);
     }
 
@@ -82,25 +86,28 @@ export class GraphAlgEditor {
         });
 
         if (this.editorMode == GraphAlgEditorMode.PLAYGROUND) {
+            this.argumentToolbar.style.marginTop = '.5em';
+            this.argumentToolbar.style.marginBottom = '.5em';
+
             // Add argument button
             const addButton = document.createElement("button");
             addButton.setAttribute('type', 'button');
             addButton.setAttribute('class', 'btn');
-            addButton.textContent = "Add Arg.";
+            addButton.textContent = "Add Argument";
             addButton.addEventListener('click', () => {
                 this.addArgument();
             });
-            this.toolbar.appendChild(addButton);
+            this.argumentToolbar.appendChild(addButton);
 
             // Remove argument button
             const removeButton = document.createElement("button");
             removeButton.setAttribute('type', 'button');
             removeButton.setAttribute('class', 'btn');
-            removeButton.textContent = "Remove Arg.";
+            removeButton.textContent = "Remove Argument";
             removeButton.addEventListener('click', () => {
                 this.dropArgument();
             });
-            this.toolbar.appendChild(removeButton);
+            this.argumentToolbar.appendChild(removeButton);
         }
     }
 
@@ -186,19 +193,32 @@ export class GraphAlgEditor {
         }
     }
 
-    run(inst: PlaygroundInstance) {
+    tryRun(inst: PlaygroundInstance): HTMLElement[] {
+        let outputElems: HTMLElement[] = [];
         const program = this.editorView?.state.doc.toString();
         if (!program) {
-            throw new Error("No program to run");
+            outputElems.push(buildErrorNote("No program to run"));
         }
 
         const args: GraphAlgMatrix[] = [];
-        for (let arg of this.arguments) {
-            // TODO: Detect unset arguments.
-            args.push(arg.value!!);
+        this.arguments.forEach((arg, idx) => {
+            if (arg.value) {
+                args.push(arg.value);
+            } else {
+                outputElems.push(buildErrorNote(`Argument ${idx} has no value set`));
+            }
+        });
+
+        if (!this.functionName) {
+            outputElems.push(buildErrorNote("No function name set"));
         }
 
-        const result = inst.run(program, this.functionName!!, args);
+        if (outputElems.length > 0) {
+            // Collected some errors.
+            return outputElems;
+        }
+
+        const result = inst.run(program!!, this.functionName!!, args);
         let resultElem;
         if (result.result) {
             if (this.resultRenderMode == MatrixRenderMode.VERTEX_PROPERTY) {
@@ -208,10 +228,9 @@ export class GraphAlgEditor {
                 resultElem = renderMatrix(result.result, this.resultRenderMode);
             }
         } else {
-            resultElem = buildErrorNote(result.diagnostics);
+            resultElem = buildDiagnosticsNote(result.diagnostics);
         }
 
-        let outputElems: Node[] = [];
         if (this.editorMode == GraphAlgEditorMode.PLAYGROUND && result.coreIR) {
             const details = document.createElement("details");
             const summary = document.createElement("summary");
@@ -231,6 +250,12 @@ export class GraphAlgEditor {
         summary.textContent = "Output";
         details.append(summary, resultElem);
         outputElems.push(details);
+
+        return outputElems;
+    }
+
+    run(inst: PlaygroundInstance) {
+        const outputElems = this.tryRun(inst);
         this.outputContainer.replaceChildren(...outputElems);
     }
 
@@ -243,7 +268,7 @@ export class GraphAlgEditor {
         const diagnostics = inst.compile(program);
         let resultElem;
         if (diagnostics.length > 0) {
-            resultElem = buildErrorNote(diagnostics);
+            resultElem = buildDiagnosticsNote(diagnostics);
         } else {
             resultElem = buildCompileSuccessNote();
         }
@@ -302,7 +327,7 @@ export class GraphAlgEditor {
     }
 }
 
-function buildErrorNote(diagnostics: GraphAlgDiagnostic[]): HTMLQuoteElement {
+function buildDiagnosticsNote(diagnostics: GraphAlgDiagnostic[]): HTMLQuoteElement {
     const quote = document.createElement("blockquote");
     quote.setAttribute('class', 'error-title');
     const title = document.createElement("p");
@@ -317,6 +342,21 @@ function buildErrorNote(diagnostics: GraphAlgDiagnostic[]): HTMLQuoteElement {
 
     return quote;
 }
+
+function buildErrorNote(message: string): HTMLQuoteElement {
+    const quote = document.createElement("blockquote");
+    quote.setAttribute('class', 'error-title');
+    const title = document.createElement("p");
+    title.textContent = "Compiler error";
+    quote.appendChild(title);
+
+    const pelem = document.createElement("p");
+    pelem.textContent = message;
+    quote.appendChild(pelem);
+
+    return quote;
+}
+
 
 function buildCompileSuccessNote(): HTMLQuoteElement {
     const quote = document.createElement("blockquote");
