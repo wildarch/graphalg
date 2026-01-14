@@ -50,6 +50,7 @@ if(ENABLE_WASM)
         _ga_diag_col_end
         _ga_diag_msg
         _ga_desugar
+        _ga_print_module
         _ga_add_arg
         _ga_set_dims
         _ga_set_arg_bool
