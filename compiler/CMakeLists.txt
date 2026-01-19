@@ -66,6 +66,7 @@ endif ()
 
 # Directories with MLIR dialects
 add_subdirectory(include/graphalg)
+add_subdirectory(include/garel)
 
 add_subdirectory(src)
 add_subdirectory(test)

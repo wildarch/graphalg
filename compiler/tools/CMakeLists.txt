@@ -11,6 +11,7 @@ target_link_libraries(graphalg-opt PRIVATE
     ${llvm_libs}
     GraphAlgIR
     GraphAlgPasses
+    GARelIR
     MLIROptLib
 )
 
@@ -18,6 +19,7 @@ add_executable(graphalg-lsp-server graphalg-lsp-server.cpp)
 target_link_libraries(graphalg-lsp-server PRIVATE
     ${llvm_libs}
     GraphAlgIR
+    GARelIR
     MLIRLspServerLib
 )
 
