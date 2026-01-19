@@ -24,8 +24,19 @@ def ColumnAttr : GARel_Attr<"Column", "column"> {
     }];
 }
 
+def ColumnList : OptionalArrayRefParameter<"ColumnAttr">;
+
+/*
 def ColumnSetAttr : GARel_Attr<"ColumnSet", "column_set"> {
     let summary = "The set of columns in a relation";
+
+    let description = [{
+        An ordered set of columns.
+
+        Order is significant: `<a, b>` is a different set than `<b, a>`.
+
+        A column may only appear once in the set: `<a, a>` is invalid.
+    }];
 
     let parameters = (ins
         OptionalArrayRefParameter<"ColumnAttr">:$columns);
@@ -33,6 +44,9 @@ def ColumnSetAttr : GARel_Attr<"ColumnSet", "column_set"> {
     let assemblyFormat = [{
         `<` (`>`) : (`` $columns^ `>`)?
     }];
+
+    let genVerifyDecl = 1;
 }
+*/
 
 #endif // GAREL_ATTR
