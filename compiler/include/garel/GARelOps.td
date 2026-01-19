@@ -20,7 +20,7 @@ def ProjectOp : GARel_Op<"project", [Pure]> {
         $input `:` type($input) `->` type($result) $projections attr-dict
     }];
 
-    // let hasRegionVerifier = 1;
+    let hasRegionVerifier = 1;
 }
 
 def ProjectReturnOp : GARel_Op<"project.return", [
