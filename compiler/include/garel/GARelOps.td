@@ -1,13 +1,21 @@
 #ifndef GAREL_OPS
 #define GAREL_OPS
 
+/**
+ * Relation-level ops in the GARel dialect.
+ *
+ * See ./GARelTupleOps.td for the tuple-level ops.
+ */
+
 include "mlir/Interfaces/InferTypeOpInterface.td"
-include "mlir/Interfaces/SideEffectInterfaces.td"
 
 include "GARelDialect.td"
 include "GARelTypes.td"
 
-def ProjectOp : GARel_Op<"project", [Pure]> {
+// Per-tuple ops kept in a separate file.
+include "GARelTupleOps.td"
+
+def ProjectOp : GARel_Op<"project", [IsolatedFromAbove]> {
     let summary = "Remaps, reorders, drops and computes columns";
 
     let arguments = (ins Relation:$input);
@@ -21,10 +29,13 @@ def ProjectOp : GARel_Op<"project", [Pure]> {
     }];
 
     let hasRegionVerifier = 1;
+
+    let extraClassDeclaration = [{
+        ProjectReturnOp getTerminator();
+    }];
 }
 
 def ProjectReturnOp : GARel_Op<"project.return", [
-        Pure,
         Terminator,
         HasParent<"ProjectOp">]> {
     let summary = "The output projections";
@@ -38,18 +49,66 @@ def ProjectReturnOp : GARel_Op<"project.return", [
     // NOTE: verification performed by ProjectOp
 }
 
-def ExtractOp : GARel_Op<"extract", [Pure, InferTypeOpAdaptor]> {
-    let summary = "Extract the value of one column from a tuple";
+def SelectOp : GARel_Op<"select", [
+        SameOperandsAndResultType,
+        IsolatedFromAbove]> {
+    let summary = "AlgebraSelection";
 
-    let arguments = (ins ColumnAttr:$column, Tuple:$tuple);
+    let arguments = (ins Relation:$input);
+    let regions = (region SizedRegion<1>:$predicates);
 
-    let results = (outs ColumnType:$result);
+    let builders = [OpBuilder<(ins "mlir::Value":$child)>];
+    let skipDefaultBuilders = 1;
+
+    let results = (outs Relation:$result);
 
     let assemblyFormat = [{
-        $column $tuple `:` type($tuple) attr-dict
+        $input `:` type($input) $predicates attr-dict
+    }];
+
+    let hasRegionVerifier = 1;
+
+    let extraClassDeclaration = [{
+        SelectReturnOp getTerminator();
+    }];
+}
+
+def SelectReturnOp : GARel_Op<"select.return", [
+        Terminator,
+        HasParent<"SelectOp">]> {
+    let summary = "Return the select predicates";
+
+    let arguments = (ins Variadic<I1>:$predicates);
+
+    let assemblyFormat = [{
+        $predicates attr-dict
+    }];
+}
+
+def JoinOp : GARel_Op<"join", [
+        Pure,
+        InferTypeOpAdaptor]> {
+    let summary = "AlgebraJoin";
+
+    let arguments = (ins
+        // NOTE: All inputs must have distinct columns
+        Variadic<Relation>:$inputs,
+        // NOTE: Equality predicates only
+        JoinPredicates:$predicates);
+
+    let results = (outs Relation:$result);
+
+    let assemblyFormat = [{
+        $inputs `:` type($inputs)
+        $predicates
+        attr-dict
     }];
 
     let hasVerifier = 1;
 }
+
+// TODO: Aggregate (with sum, min, max, or, and argmin)
+
+// TODO: Loop Operator
 
 #endif // GAREL_OPS

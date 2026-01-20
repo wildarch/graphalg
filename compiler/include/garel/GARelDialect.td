@@ -1,8 +1,9 @@
 #ifndef GAREL_DIALECT
 #define GAREL_DIALECT
 
-include "mlir/IR/OpBase.td"
+include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/IR/EnumAttr.td"
+include "mlir/IR/OpBase.td"
 
 def GARel_Dialect : Dialect {
     let name = "garel";
@@ -19,7 +20,8 @@ def GARel_Dialect : Dialect {
     let useDefaultTypePrinterParser = 1;
 }
 
+// NOTE: GARel ops are always 'Pure'
 class GARel_Op<string mnemonic, list<Trait> traits = []> :
-        Op<GARel_Dialect, mnemonic, traits>;
+        Op<GARel_Dialect, mnemonic, !listconcat(traits, [Pure])>;
 
 #endif // GAREL_DIALECT

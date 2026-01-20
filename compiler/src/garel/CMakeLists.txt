@@ -2,6 +2,7 @@ add_library(GARelIR
     GARelAttr.cpp
     GARelDialect.cpp
     GARelOps.cpp
+    GARelTupleOps.cpp
     GARelTypes.cpp
 )
 target_include_directories(GARelIR PUBLIC ../../include)

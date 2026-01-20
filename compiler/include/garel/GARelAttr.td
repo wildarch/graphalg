@@ -26,6 +26,22 @@ def ColumnAttr : GARel_Attr<"Column", "column"> {
 
 def ColumnList : OptionalArrayRefParameter<"ColumnAttr">;
 
+def JoinPredicate : GARel_Attr<"JoinPredicate", "join_pred"> {
+    let summary = "A binary equality join predicate";
+
+    let parameters = (ins "ColumnAttr":$lhs, "ColumnAttr":$rhs);
+
+    let assemblyFormat = [{
+        `<` $lhs `=` $rhs `>`
+    }];
+}
+
+def JoinPredicates : ArrayOfAttr<
+        GARel_Dialect,
+        "JoinPredicates",
+        "join_preds",
+        "JoinPredicateAttr">;
+
 /*
 def ColumnSetAttr : GARel_Attr<"ColumnSet", "column_set"> {
     let summary = "The set of columns in a relation";
