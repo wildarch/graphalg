@@ -29,7 +29,7 @@ mlir::Type AggregatorAttr::getResultType(mlir::Type inputRel) {
 
 mlir::LogicalResult
 AggregatorAttr::verify(llvm::function_ref<mlir::InFlightDiagnostic()> emitError,
-                       AggregateFunc func, llvm::ArrayRef<unsigned> inputs) {
+                       AggregateFunc func, llvm::ArrayRef<ColumnIdx> inputs) {
   if (func == AggregateFunc::ARGMIN) {
     if (inputs.size() != 2) {
       return emitError() << stringifyAggregateFunc(func)

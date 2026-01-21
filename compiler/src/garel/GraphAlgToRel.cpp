@@ -234,7 +234,7 @@ mlir::LogicalResult OpConversion<graphalg::TransposeOp>::matchAndRewrite(
   auto &body = projectOp.createProjectionsBlock();
   rewriter.setInsertionPointToStart(&body);
 
-  llvm::SmallVector<unsigned, 3> columns(input.columns().size());
+  llvm::SmallVector<ColumnIdx, 3> columns(input.columns().size());
   std::iota(columns.begin(), columns.end(), 0);
   assert(columns.size() <= 3);
   // Transpose is a no-op if there are fewer than 3 columns.

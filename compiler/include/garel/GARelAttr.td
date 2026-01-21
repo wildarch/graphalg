@@ -15,9 +15,9 @@ def JoinPredicate : GARel_Attr<"JoinPredicate", "join_pred"> {
 
     let parameters = (ins
         "unsigned":$lhsRelIdx,
-        "unsigned":$lhsColIdx,
+        "ColumnIdx":$lhsColIdx,
         "unsigned":$rhsRelIdx,
-        "unsigned":$rhsColIdx);
+        "ColumnIdx":$rhsColIdx);
 
     let assemblyFormat = [{
         `<` $lhsRelIdx `[` $lhsColIdx `]` `=` $rhsRelIdx `[` $rhsColIdx `]` `>`
@@ -49,7 +49,7 @@ def Aggregator : GARel_Attr<"Aggregator", "aggregator"> {
 
     let parameters = (ins
         "AggregateFunc":$func,
-        ArrayRefParameter<"unsigned">:$inputs);
+        ArrayRefParameter<"ColumnIdx">:$inputs);
 
     let assemblyFormat = [{
         `<` $func $inputs `>`
