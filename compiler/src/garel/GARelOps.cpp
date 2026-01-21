@@ -1,6 +1,7 @@
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/Support/Casting.h>
+#include <mlir/IR/BuiltinAttributes.h>
 
 #include "garel/GARelAttr.h"
 #include "garel/GARelDialect.h"
@@ -102,7 +103,7 @@ mlir::LogicalResult JoinOp::verify() {
   // TODO: Inputs must use distinct columns.
   // TODO: Predicates must refer to columns in distinct inputs (and to columns
   // present in the input).
-  return emitOpError("TODO: verify JoinOp");
+  return mlir::success();
 }
 
 mlir::LogicalResult JoinOp::inferReturnTypes(
@@ -115,6 +116,85 @@ mlir::LogicalResult JoinOp::inferReturnTypes(
   }
 
   inferredReturnTypes.push_back(RelationType::get(ctx, outputColumns));
+  return mlir::success();
+}
+
+// === AggregateOp ===
+mlir::LogicalResult AggregateOp::inferReturnTypes(
+    mlir::MLIRContext *ctx, std::optional<mlir::Location> location,
+    Adaptor adaptor, llvm::SmallVectorImpl<mlir::Type> &inferredReturnTypes) {
+  llvm::SmallVector<ColumnAttr> outputColumns;
+
+  // Key columns
+  auto keyColumns = adaptor.getGroupBy().getColumns();
+  outputColumns.append(keyColumns.begin(), keyColumns.end());
+
+  // Aggregator outputs
+  for (auto agg : adaptor.getAggregators()) {
+    outputColumns.push_back(ColumnAttr::newOfType(agg.getResultType()));
+  }
+
+  inferredReturnTypes.push_back(RelationType::get(ctx, outputColumns));
+  return mlir::success();
+}
+
+// === ForOp ===
+static mlir::LogicalResult
+verifyResultIdx(llvm::function_ref<mlir::InFlightDiagnostic()> emitError,
+                mlir::ValueRange initArgs, std::uint64_t resultIdx) {
+  // resultIdx is within bounds of init args.
+  if (initArgs.size() <= resultIdx) {
+    return emitError() << "has result_idx=" << resultIdx
+                       << ", but there are only " << initArgs.size()
+                       << " init args";
+  }
+
+  return mlir::success();
+}
+
+mlir::LogicalResult ForOp::inferReturnTypes(
+    mlir::MLIRContext *ctx, std::optional<mlir::Location> location,
+    Adaptor adaptor, llvm::SmallVectorImpl<mlir::Type> &inferredReturnTypes) {
+  auto loc = location ? *location : mlir::UnknownLoc::get(ctx);
+  if (mlir::failed(verifyResultIdx(
+          [&]() {
+            return mlir::emitError(loc)
+                   << ForOp::getOperationName() << " to build with init args "
+                   << adaptor.getInit() << " ";
+          },
+          adaptor.getInit(), adaptor.getResultIdx()))) {
+    return mlir::failure();
+  }
+
+  auto resultType = adaptor.getInit()[adaptor.getResultIdx()].getType();
+  inferredReturnTypes.emplace_back(resultType);
+  return mlir::success();
+}
+
+mlir::LogicalResult ForOp::verify() {
+  return verifyResultIdx([this]() { return emitOpError(); }, getInit(),
+                         getResultIdx());
+}
+
+mlir::LogicalResult ForOp::verifyRegions() {
+  auto initTypes = getInit().getTypes();
+
+  // Body arg types match init args
+  auto argTypes = getBody().front().getArgumentTypes();
+  if (initTypes != argTypes) {
+    return emitOpError("body arg types do not match the initial value types");
+  }
+
+  // Body result types match init args
+  auto yieldOp = llvm::cast<ForYieldOp>(getBody().front().getTerminator());
+  auto resTypes = yieldOp.getInputs().getTypes();
+  if (initTypes != resTypes) {
+    auto diag =
+        emitOpError("body result types do not match the initial value types");
+    diag.attachNote(yieldOp.getLoc()) << "body result is here";
+    return diag;
+  }
+
   return mlir::success();
 }
 

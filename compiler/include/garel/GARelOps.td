@@ -52,7 +52,7 @@ def ProjectReturnOp : GARel_Op<"project.return", [
 def SelectOp : GARel_Op<"select", [
         SameOperandsAndResultType,
         IsolatedFromAbove]> {
-    let summary = "AlgebraSelection";
+    let summary = "Removes tuples that fail (one of) the predicates";
 
     let arguments = (ins Relation:$input);
     let regions = (region SizedRegion<1>:$predicates);
@@ -85,10 +85,8 @@ def SelectReturnOp : GARel_Op<"select.return", [
     }];
 }
 
-def JoinOp : GARel_Op<"join", [
-        Pure,
-        InferTypeOpAdaptor]> {
-    let summary = "AlgebraJoin";
+def JoinOp : GARel_Op<"join", [InferTypeOpAdaptor]> {
+    let summary = "Natural (equi)join of relations";
 
     let arguments = (ins
         // NOTE: All inputs must have distinct columns
@@ -107,8 +105,73 @@ def JoinOp : GARel_Op<"join", [
     let hasVerifier = 1;
 }
 
-// TODO: Aggregate (with sum, min, max, or, and argmin)
+def UnionOp : GARel_Op<"union", [SameOperandsAndResultType]> {
+    let summary = "Union of relations";
 
-// TODO: Loop Operator
+    let arguments = (ins Variadic<Relation>:$inputs);
+
+    let results = (outs Relation:$result);
+
+    let assemblyFormat = [{
+        $inputs `:` type($inputs)
+        attr-dict
+    }];
+}
+
+def AggregateOp : GARel_Op<"aggregate", [InferTypeOpAdaptor]> {
+    let summary = "Groups tuples by key columns, aggregating values of other columns";
+
+    let arguments = (ins
+        Relation:$input,
+        ColumnList:$groupBy,
+        Aggregators:$aggregators);
+
+    let results = (outs Relation:$result);
+
+    let assemblyFormat = [{
+        $input `:` type($input)
+        `group_by` `` `=` `` $groupBy
+        `aggregators` `` `=` `` $aggregators
+        attr-dict
+    }];
+}
+
+def ForOp : GARel_Op<"for", [InferTypeOpAdaptor]> {
+    let summary = "Bounded iteration";
+
+    let arguments = (ins
+        Variadic<Relation>:$init,
+        I64Attr:$iters,
+        I64Attr:$resultIdx);
+
+    let regions = (region SizedRegion<1>:$body);
+
+    let results = (outs Relation:$result);
+
+    let assemblyFormat = [{
+        $init `:` type($init)
+        `iters` `` `=` `` $iters
+        `result_idx` `` `=` `` $resultIdx
+        $body
+        attr-dict
+    }];
+
+    let hasVerifier = 1;
+    let hasRegionVerifier = 1;
+}
+
+def ForYieldOp : GARel_Op<"for.yield", [
+        Terminator,
+        HasParent<"ForOp">]> {
+    let summary = "Produces the iter args for the next iteration";
+
+    let arguments = (ins Variadic<Relation>:$inputs);
+
+    let assemblyFormat = [{
+        $inputs `:` type($inputs) attr-dict
+    }];
+
+    // Note: verification performed by parent ForOp.
+}
 
 #endif // GAREL_OPS

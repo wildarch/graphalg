@@ -22,9 +22,13 @@ def ColumnAttr : GARel_Attr<"Column", "column"> {
     let assemblyFormat = [{
         `<` $id `` `:` `` $type `>`
     }];
+
+    let extraClassDeclaration = [{
+        static ColumnAttr newOfType(mlir::Type type);
+    }];
 }
 
-def ColumnList : OptionalArrayRefParameter<"ColumnAttr">;
+def ColumnListParameter : OptionalArrayRefParameter<"ColumnAttr">;
 
 def JoinPredicate : GARel_Attr<"JoinPredicate", "join_pred"> {
     let summary = "A binary equality join predicate";
@@ -42,27 +46,54 @@ def JoinPredicates : ArrayOfAttr<
         "join_preds",
         "JoinPredicateAttr">;
 
-/*
-def ColumnSetAttr : GARel_Attr<"ColumnSet", "column_set"> {
-    let summary = "The set of columns in a relation";
-
-    let description = [{
-        An ordered set of columns.
-
-        Order is significant: `<a, b>` is a different set than `<b, a>`.
-
-        A column may only appear once in the set: `<a, a>` is invalid.
-    }];
+def ColumnList : GARel_Attr<"ColumnList", "columns"> {
+    let summary = "Array of columns";
 
     let parameters = (ins
-        OptionalArrayRefParameter<"ColumnAttr">:$columns);
+        ColumnListParameter:$columns);
 
     let assemblyFormat = [{
         `<` (`>`) : (`` $columns^ `>`)?
     }];
+}
+
+def AggregateFunc : I64EnumAttr<
+    "AggregateFunc", "",
+    [
+        I64EnumAttrCase<"SUM", 0>,
+        I64EnumAttrCase<"MIN", 1>,
+        I64EnumAttrCase<"MAX", 2>,
+        I64EnumAttrCase<"LOR", 3>, /* Logical OR (over i1) */
+        I64EnumAttrCase<"ARGMIN", 4>,
+    ]
+> {
+    let cppNamespace = "::garel";
+}
+
+// NOTE: assumes an aggregator produces exactly one output column.
+def Aggregator : GARel_Attr<"Aggregator", "aggregator"> {
+    let summary = "Aggregate function with bound input columns";
+
+    let parameters = (ins
+        "AggregateFunc":$func,
+        ColumnListParameter:$inputs);
+
+    let assemblyFormat = [{
+        `<` $func $inputs `>`
+    }];
 
     let genVerifyDecl = 1;
+
+    let extraClassDeclaration = [{
+        /** Type for values in the output column. */
+        mlir::Type getResultType();
+    }];
 }
-*/
+
+def Aggregators : ArrayOfAttr<
+        GARel_Dialect,
+        "Aggregators",
+        "aggregators",
+        "AggregatorAttr">;
 
 #endif // GAREL_ATTR

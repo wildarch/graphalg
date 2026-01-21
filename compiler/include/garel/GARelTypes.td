@@ -15,7 +15,7 @@ class GARel_Type<string name, string typeMnemonic, list<Trait> traits = []>
 def Relation : GARel_Type<"Relation", "rel"> {
     let summary = "A set of tuples";
 
-    let parameters = (ins ColumnList:$columns);
+    let parameters = (ins ColumnListParameter:$columns);
 
     let assemblyFormat = [{
         `<` $columns `>`
@@ -27,7 +27,7 @@ def Relation : GARel_Type<"Relation", "rel"> {
 def Tuple : GARel_Type<"Tuple", "tuple"> {
     let summary = "A single tuple";
 
-    let parameters = (ins ColumnList:$columns);
+    let parameters = (ins ColumnListParameter:$columns);
 
     let assemblyFormat = [{
         `<` $columns `>`
