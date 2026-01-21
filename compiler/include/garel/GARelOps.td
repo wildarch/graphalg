@@ -124,7 +124,7 @@ def AggregateOp : GARel_Op<"aggregate", [InferTypeOpAdaptor]> {
 
     let arguments = (ins
         Relation:$input,
-        ColumnList:$groupBy,
+        DenseI32ArrayAttr:$groupBy,
         Aggregators:$aggregators);
 
     let results = (outs Relation:$result);

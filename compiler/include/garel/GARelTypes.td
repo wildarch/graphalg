@@ -15,25 +15,21 @@ class GARel_Type<string name, string typeMnemonic, list<Trait> traits = []>
 def Relation : GARel_Type<"Relation", "rel"> {
     let summary = "A set of tuples";
 
-    let parameters = (ins ColumnListParameter:$columns);
+    let parameters = (ins OptionalArrayRefParameter<"mlir::Type">:$columns);
 
     let assemblyFormat = [{
         `<` $columns `>`
     }];
-
-    let genVerifyDecl = 1;
 }
 
 def Tuple : GARel_Type<"Tuple", "tuple"> {
     let summary = "A single tuple";
 
-    let parameters = (ins ColumnListParameter:$columns);
+    let parameters = (ins OptionalArrayRefParameter<"mlir::Type">:$columns);
 
     let assemblyFormat = [{
         `<` $columns `>`
     }];
-
-    let genVerifyDecl = 1;
 }
 
 def ColumnType : Type<CPred<"::garel::isColumnType($_self)">, "column type">;

@@ -9,33 +9,40 @@
 #include "garel/GARelDialect.h"
 
 #include "garel/GARelEnumAttr.cpp.inc"
+#include "garel/GARelTypes.h"
 #define GET_ATTRDEF_CLASSES
 #include "garel/GARelAttr.cpp.inc"
 
 namespace garel {
 
-ColumnAttr ColumnAttr::newOfType(mlir::Type type) {
-  auto *ctx = type.getContext();
-  auto colId = mlir::DistinctAttr::create(mlir::UnitAttr::get(ctx));
-  return ColumnAttr::get(ctx, colId, type);
-}
-
-mlir::Type AggregatorAttr::getResultType() {
+mlir::Type AggregatorAttr::getResultType(mlir::Type inputRel) {
   switch (getFunc()) {
   case AggregateFunc::SUM:
   case AggregateFunc::MIN:
   case AggregateFunc::MAX:
   case AggregateFunc::LOR:
   case AggregateFunc::ARGMIN:
-    // NOTE: argmin(arg, val) also uses first input as output type.
-    return getInputs()[0].getType();
+    // NOTE: argmin(arg, val) also uses first input column as output type.
+    return llvm::cast<RelationType>(inputRel).getColumns()[getInputs()[0]];
   }
 }
 
 mlir::LogicalResult
 AggregatorAttr::verify(llvm::function_ref<mlir::InFlightDiagnostic()> emitError,
-                       AggregateFunc func, llvm::ArrayRef<ColumnAttr> inputs) {
-  // TODO: Verify input column count and type(s)
+                       AggregateFunc func, llvm::ArrayRef<unsigned> inputs) {
+  if (func == AggregateFunc::ARGMIN) {
+    if (inputs.size() != 2) {
+      return emitError() << stringifyAggregateFunc(func)
+                         << " expects exactly two inputs (arg, val), got "
+                         << inputs.size();
+    }
+  } else {
+    if (inputs.size() != 1) {
+      return emitError() << stringifyAggregateFunc(func)
+                         << " expects exactly one input, got " << inputs.size();
+    }
+  }
+
   return mlir::success();
 }
 

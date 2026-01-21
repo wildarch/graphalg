@@ -1,3 +1,5 @@
+#include <numeric>
+
 #include <mlir/Dialect/Arith/IR/Arith.h>
 #include <mlir/Dialect/Func/IR/FuncOps.h>
 #include <mlir/IR/BuiltinOps.h>
@@ -87,36 +89,7 @@ public:
     return _relation;
   }
 
-  llvm::ArrayRef<ColumnAttr> columns() { return _relType.getColumns(); }
-
-  ColumnAttr row() {
-    if (_matrix.getType().getRows().isOne()) {
-      return {};
-    }
-
-    return columns().front();
-  }
-
-  ColumnAttr col() {
-    if (_matrix.getType().getCols().isOne()) {
-      return {};
-    }
-
-    return columns().drop_back().back();
-  }
-
-  /**
-   * The row or column column, depending on which one is present.
-   *
-   * NOTE: Vector relations have a row or a column slot, but not both. Row and
-   * column vectors have identical relational representation of (idx, val).
-   */
-  ColumnAttr vectorIdxColumn() {
-    assert(columns().size() == 2 && "Not a vector");
-    return columns().front();
-  }
-
-  ColumnAttr valSlot() { return columns().back(); }
+  auto columns() { return _relType.getColumns(); }
 
   bool isScalar() { return _matrix.getType().isScalar(); }
 
@@ -182,15 +155,14 @@ MatrixTypeConverter::convertFunctionType(mlir::FunctionType type) const {
 
 RelationType
 MatrixTypeConverter::convertMatrixType(graphalg::MatrixType type) const {
-  llvm::SmallVector<ColumnAttr> columns;
+  llvm::SmallVector<mlir::Type> columns;
   auto *ctx = type.getContext();
-  auto indexType = mlir::IndexType::get(ctx);
   if (!type.getRows().isOne()) {
-    columns.push_back(ColumnAttr::newOfType(indexType));
+    columns.push_back(mlir::IndexType::get(ctx));
   }
 
   if (!type.getCols().isOne()) {
-    columns.push_back(ColumnAttr::newOfType(indexType));
+    columns.push_back(mlir::IndexType::get(ctx));
   }
 
   auto valueType = _semiringConverter.convertType(type.getSemiring());
@@ -198,7 +170,7 @@ MatrixTypeConverter::convertMatrixType(graphalg::MatrixType type) const {
     return {};
   }
 
-  columns.push_back(ColumnAttr::newOfType(valueType));
+  columns.push_back(valueType);
   return RelationType::get(ctx, columns);
 }
 
@@ -216,10 +188,6 @@ template <>
 mlir::LogicalResult OpConversion<mlir::func::FuncOp>::matchAndRewrite(
     mlir::func::FuncOp op, OpAdaptor adaptor,
     mlir::ConversionPatternRewriter &rewriter) const {
-  // TODO: type caching means that if two function arguments have the same
-  // matrix type, they will also be assigned the same relation type, and
-  // therefore have the same set of slots. Consider doing our own conversion
-  // here to avoid that.
   auto funcType = llvm::cast_if_present<mlir::FunctionType>(
       typeConverter->convertType(op.getFunctionType()));
   if (!funcType) {
@@ -266,7 +234,8 @@ mlir::LogicalResult OpConversion<graphalg::TransposeOp>::matchAndRewrite(
   auto &body = projectOp.createProjectionsBlock();
   rewriter.setInsertionPointToStart(&body);
 
-  llvm::SmallVector<ColumnAttr, 3> columns(input.columns());
+  llvm::SmallVector<unsigned, 3> columns(input.columns().size());
+  std::iota(columns.begin(), columns.end(), 0);
   assert(columns.size() <= 3);
   // Transpose is a no-op if there are fewer than 3 columns.
   if (columns.size() == 3) {

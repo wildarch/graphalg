@@ -10,33 +10,17 @@ class GARel_Attr<string name, string attrMnemonic, list<Trait> traits = []>
     let mnemonic = attrMnemonic;
 }
 
-// Also often referred to as 'attribute' in the literature, but that conflicts
-// with MLIRs use of the term 'attribute', so name this Column instead.
-def ColumnAttr : GARel_Attr<"Column", "column"> {
-    let summary = "A column (also referred to as 'attribute') of a relation";
-
-    let parameters = (ins
-        "::mlir::DistinctAttr":$id,
-        TypeParameter<"::mlir::Type", "Type of this column">:$type);
-
-    let assemblyFormat = [{
-        `<` $id `` `:` `` $type `>`
-    }];
-
-    let extraClassDeclaration = [{
-        static ColumnAttr newOfType(mlir::Type type);
-    }];
-}
-
-def ColumnListParameter : OptionalArrayRefParameter<"ColumnAttr">;
-
 def JoinPredicate : GARel_Attr<"JoinPredicate", "join_pred"> {
     let summary = "A binary equality join predicate";
 
-    let parameters = (ins "ColumnAttr":$lhs, "ColumnAttr":$rhs);
+    let parameters = (ins
+        "unsigned":$lhsRelIdx,
+        "unsigned":$lhsColIdx,
+        "unsigned":$rhsRelIdx,
+        "unsigned":$rhsColIdx);
 
     let assemblyFormat = [{
-        `<` $lhs `=` $rhs `>`
+        `<` $lhsRelIdx `[` $lhsColIdx `]` `=` $rhsRelIdx `[` $rhsColIdx `]` `>`
     }];
 }
 
@@ -45,17 +29,6 @@ def JoinPredicates : ArrayOfAttr<
         "JoinPredicates",
         "join_preds",
         "JoinPredicateAttr">;
-
-def ColumnList : GARel_Attr<"ColumnList", "columns"> {
-    let summary = "Array of columns";
-
-    let parameters = (ins
-        ColumnListParameter:$columns);
-
-    let assemblyFormat = [{
-        `<` (`>`) : (`` $columns^ `>`)?
-    }];
-}
 
 def AggregateFunc : I64EnumAttr<
     "AggregateFunc", "",
@@ -76,7 +49,7 @@ def Aggregator : GARel_Attr<"Aggregator", "aggregator"> {
 
     let parameters = (ins
         "AggregateFunc":$func,
-        ColumnListParameter:$inputs);
+        ArrayRefParameter<"unsigned">:$inputs);
 
     let assemblyFormat = [{
         `<` $func $inputs `>`
@@ -86,7 +59,7 @@ def Aggregator : GARel_Attr<"Aggregator", "aggregator"> {
 
     let extraClassDeclaration = [{
         /** Type for values in the output column. */
-        mlir::Type getResultType();
+        mlir::Type getResultType(::mlir::Type relType);
     }];
 }
 

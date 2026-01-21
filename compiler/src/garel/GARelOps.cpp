@@ -47,7 +47,7 @@ mlir::LogicalResult ProjectOp::verifyRegions() {
 
   for (const auto &[val, col] :
        llvm::zip_equal(returnOp.getProjections(), getType().getColumns())) {
-    if (val.getType() != col.getType()) {
+    if (val.getType() != col) {
       return emitOpError("projections block return types do not match the "
                          "projection output column types");
     }
@@ -120,7 +120,7 @@ mlir::LogicalResult JoinOp::verify() {
 mlir::LogicalResult JoinOp::inferReturnTypes(
     mlir::MLIRContext *ctx, std::optional<mlir::Location> location,
     Adaptor adaptor, llvm::SmallVectorImpl<mlir::Type> &inferredReturnTypes) {
-  llvm::SmallVector<ColumnAttr> outputColumns;
+  llvm::SmallVector<mlir::Type> outputColumns;
   for (auto input : adaptor.getInputs()) {
     auto inputColumns = llvm::cast<RelationType>(input.getType()).getColumns();
     outputColumns.append(inputColumns.begin(), inputColumns.end());
@@ -134,15 +134,19 @@ mlir::LogicalResult JoinOp::inferReturnTypes(
 mlir::LogicalResult AggregateOp::inferReturnTypes(
     mlir::MLIRContext *ctx, std::optional<mlir::Location> location,
     Adaptor adaptor, llvm::SmallVectorImpl<mlir::Type> &inferredReturnTypes) {
-  llvm::SmallVector<ColumnAttr> outputColumns;
+  llvm::SmallVector<mlir::Type> outputColumns;
+
+  auto inputType = llvm::cast<RelationType>(adaptor.getInput().getType());
+  auto inputColumns = inputType.getColumns();
 
   // Key columns
-  auto keyColumns = adaptor.getGroupBy().getColumns();
-  outputColumns.append(keyColumns.begin(), keyColumns.end());
+  for (auto key : adaptor.getGroupBy()) {
+    outputColumns.push_back(inputColumns[key]);
+  }
 
   // Aggregator outputs
   for (auto agg : adaptor.getAggregators()) {
-    outputColumns.push_back(ColumnAttr::newOfType(agg.getResultType()));
+    outputColumns.push_back(agg.getResultType(inputType));
   }
 
   inferredReturnTypes.push_back(RelationType::get(ctx, outputColumns));

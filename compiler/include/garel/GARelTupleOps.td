@@ -14,7 +14,7 @@ include "GARelTypes.td"
 def ExtractOp : GARel_Op<"extract", [InferTypeOpAdaptor]> {
     let summary = "Extract the value of one column from a tuple";
 
-    let arguments = (ins ColumnAttr:$column, Tuple:$tuple);
+    let arguments = (ins I32Attr:$column, Tuple:$tuple);
 
     let results = (outs ColumnType:$result);
 
