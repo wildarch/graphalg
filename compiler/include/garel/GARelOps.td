@@ -31,6 +31,7 @@ def ProjectOp : GARel_Op<"project", [IsolatedFromAbove]> {
     let hasRegionVerifier = 1;
 
     let extraClassDeclaration = [{
+        mlir::Block& createProjectionsBlock();
         ProjectReturnOp getTerminator();
     }];
 }

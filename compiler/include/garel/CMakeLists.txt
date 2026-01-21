@@ -9,3 +9,7 @@ mlir_tablegen(GARelAttr.cpp.inc -gen-attrdef-defs)
 
 set(LLVM_TARGET_DEFINITIONS GARelOps.td)
 add_mlir_dialect(GARelOps garel)
+
+set(LLVM_TARGET_DEFINITIONS GARelPasses.td)
+mlir_tablegen(GARelPasses.h.inc --gen-pass-decls)
+add_public_tablegen_target(MLIRGARelPassesIncGen)

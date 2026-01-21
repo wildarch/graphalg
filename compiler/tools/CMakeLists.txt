@@ -12,6 +12,7 @@ target_link_libraries(graphalg-opt PRIVATE
     GraphAlgIR
     GraphAlgPasses
     GARelIR
+    GraphAlgToRel
     MLIROptLib
 )
 

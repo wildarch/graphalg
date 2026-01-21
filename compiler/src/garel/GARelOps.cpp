@@ -1,6 +1,7 @@
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/Support/Casting.h>
+#include <mlir/IR/Block.h>
 #include <mlir/IR/BuiltinAttributes.h>
 
 #include "garel/GARelAttr.h"
@@ -53,6 +54,16 @@ mlir::LogicalResult ProjectOp::verifyRegions() {
   }
 
   return mlir::success();
+}
+
+mlir::Block &ProjectOp::createProjectionsBlock() {
+  assert(getProjections().empty() && "Already have a projections block");
+  auto &block = getProjections().emplaceBlock();
+  // Same columns as the input, but as a tuple.
+  block.addArgument(
+      TupleType::get(getContext(), getInput().getType().getColumns()),
+      getInput().getLoc());
+  return block;
 }
 
 ProjectReturnOp ProjectOp::getTerminator() {

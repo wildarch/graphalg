@@ -9,6 +9,7 @@ target_include_directories(GARelIR PUBLIC ../../include)
 target_include_directories(GARelIR SYSTEM PUBLIC ${PROJECT_BINARY_DIR}/include)
 add_dependencies(GARelIR
     MLIRGARelOpsIncGen
+    MLIRGARelPassesIncGen
 )
 # Suppress -Wdangling-assignment-gsl for generated code from MLIR tablegen
 # The warning is triggered by template instantiations in GARelOps.cpp.inc
@@ -22,4 +23,15 @@ target_link_libraries(
     MLIRInferTypeOpInterface
     MLIRIR
     MLIRSupport
+)
+
+add_library(GraphAlgToRel
+    GraphAlgToRel.cpp
+)
+target_link_libraries(
+    GraphAlgToRel
+    PRIVATE
+    GraphAlgIR
+    GARelIR
+    MLIRPass
 )

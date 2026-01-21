@@ -7,6 +7,7 @@
 #include <mlir/Transforms/Passes.h>
 
 #include "garel/GARelDialect.h"
+#include "garel/GARelPasses.h"
 #include "graphalg/GraphAlgDialect.h"
 #include "graphalg/GraphAlgPasses.h"
 
@@ -18,6 +19,7 @@ int main(int argc, char **argv) {
 
   graphalg::registerPasses();
   graphalg::registerGraphAlgToCorePipeline();
+  garel::registerPasses();
   mlir::registerCanonicalizerPass();
   mlir::registerInlinerPass();
   mlir::registerCSEPass();
