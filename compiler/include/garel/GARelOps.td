@@ -175,4 +175,16 @@ def ForYieldOp : GARel_Op<"for.yield", [
     // Note: verification performed by parent ForOp.
 }
 
+def RangeOp : GARel_Op<"range", [InferTypeOpAdaptor]> {
+    let summary = "generates a range of `index` values from `[0, size)`";
+
+    let arguments = (ins I64Attr:$size);
+
+    let results = (outs Relation:$result);
+
+    let assemblyFormat = [{
+        $size attr-dict
+    }];
+}
+
 #endif // GAREL_OPS

@@ -1,10 +1,14 @@
 #include <numeric>
 
+#include <llvm/ADT/ArrayRef.h>
+#include <llvm/ADT/SmallVector.h>
 #include <mlir/Dialect/Arith/IR/Arith.h>
 #include <mlir/Dialect/Func/IR/FuncOps.h>
+#include <mlir/IR/BuiltinAttributes.h>
 #include <mlir/IR/BuiltinOps.h>
 #include <mlir/IR/BuiltinTypeInterfaces.h>
 #include <mlir/IR/BuiltinTypes.h>
+#include <mlir/IR/MLIRContext.h>
 #include <mlir/Pass/Pass.h>
 #include <mlir/Transforms/DialectConversion.h>
 
@@ -12,6 +16,7 @@
 #include "garel/GARelDialect.h"
 #include "garel/GARelOps.h"
 #include "garel/GARelTypes.h"
+#include "graphalg/GraphAlgAttr.h"
 #include "graphalg/GraphAlgDialect.h"
 #include "graphalg/GraphAlgOps.h"
 #include "graphalg/GraphAlgTypes.h"
@@ -70,9 +75,9 @@ private:
 
 public:
   // For output matrices, where we only have the desired output type.
-  MatrixAdaptor(mlir::Value matrix, mlir::Type streamType)
+  MatrixAdaptor(mlir::Value matrix, mlir::Type relType)
       : _matrix(llvm::cast<mlir::TypedValue<graphalg::MatrixType>>(matrix)),
-        _relType(llvm::cast<RelationType>(streamType)) {}
+        _relType(llvm::cast<RelationType>(relType)) {}
 
   // For input matrices, where the OpAdaptor provides the relation value.
   MatrixAdaptor(mlir::Value matrix, mlir::Value relation)
@@ -89,9 +94,29 @@ public:
     return _relation;
   }
 
-  auto columns() { return _relType.getColumns(); }
+  auto columns() const { return _relType.getColumns(); }
 
-  bool isScalar() { return _matrix.getType().isScalar(); }
+  bool isScalar() const { return _matrix.getType().isScalar(); }
+
+  bool hasRowColumn() const { return !_matrix.getType().getRows().isOne(); }
+
+  bool hasColColumn() const { return !_matrix.getType().getCols().isOne(); }
+
+  ColumnIdx rowColumn() const {
+    assert(hasRowColumn());
+    return 0;
+  }
+
+  ColumnIdx colColumn() const {
+    assert(hasColColumn());
+    // Follow row column, if there is one.
+    return hasRowColumn() ? 1 : 0;
+  }
+
+  ColumnIdx valColumn() const {
+    // Last column in the relation.
+    return columns().size() - 1;
+  }
 
   graphalg::SemiringTypeInterface semiring() {
     return llvm::cast<graphalg::SemiringTypeInterface>(
@@ -106,6 +131,28 @@ template <typename T> class OpConversion : public mlir::OpConversionPattern<T> {
   matchAndRewrite(T op,
                   typename mlir::OpConversionPattern<T>::OpAdaptor adaptor,
                   mlir::ConversionPatternRewriter &rewriter) const override;
+};
+
+class ApplyOpConversion : public mlir::OpConversionPattern<graphalg::ApplyOp> {
+private:
+  const SemiringTypeConverter &_bodyArgConverter;
+
+  mlir::LogicalResult
+  matchAndRewrite(graphalg::ApplyOp op, OpAdaptor adaptor,
+                  mlir::ConversionPatternRewriter &rewriter) const override;
+
+public:
+  ApplyOpConversion(const SemiringTypeConverter &bodyArgConverter,
+                    const MatrixTypeConverter &typeConverter,
+                    mlir::MLIRContext *ctx)
+      : mlir::OpConversionPattern<graphalg::ApplyOp>(typeConverter, ctx),
+        _bodyArgConverter(bodyArgConverter) {}
+};
+
+struct InputColumnRef {
+  unsigned relIdx;
+  ColumnIdx colIdx;
+  ColumnIdx outIdx;
 };
 
 } // namespace
@@ -255,6 +302,178 @@ mlir::LogicalResult OpConversion<graphalg::TransposeOp>::matchAndRewrite(
   return mlir::success();
 }
 
+/**
+ * Create a relation with all indices for a matrix dimension.
+ *
+ * Used to broadcast scalar values to a larger matrix.
+ */
+static RangeOp createDimRead(mlir::Location loc, graphalg::DimAttr dim,
+                             mlir::OpBuilder &builder) {
+  return builder.create<RangeOp>(loc, dim.getConcreteDim());
+}
+
+static void
+buildApplyJoinPredicates(mlir::MLIRContext *ctx,
+                         llvm::SmallVectorImpl<JoinPredicateAttr> &predicates,
+                         llvm::ArrayRef<InputColumnRef> columnsToJoin) {
+  if (columnsToJoin.size() < 2) {
+    return;
+  }
+
+  auto first = columnsToJoin.front();
+  for (auto other : columnsToJoin.drop_front()) {
+    predicates.push_back(JoinPredicateAttr::get(ctx, first.relIdx, first.colIdx,
+                                                other.relIdx, other.colIdx));
+  }
+}
+
+static constexpr llvm::StringLiteral APPLY_ROW_IDX_ATTR_KEY =
+    "garel.apply.row_idx";
+static constexpr llvm::StringLiteral APPLY_COL_IDX_ATTR_KEY =
+    "garel.apply.col_idx";
+
+mlir::LogicalResult ApplyOpConversion::matchAndRewrite(
+    graphalg::ApplyOp op, OpAdaptor adaptor,
+    mlir::ConversionPatternRewriter &rewriter) const {
+  llvm::SmallVector<MatrixAdaptor> inputs;
+  for (auto [matrix, relation] :
+       llvm::zip_equal(op.getInputs(), adaptor.getInputs())) {
+    auto &input = inputs.emplace_back(matrix, relation);
+  }
+
+  llvm::SmallVector<mlir::Value> joinChildren;
+  llvm::SmallVector<InputColumnRef> rowColumns;
+  llvm::SmallVector<InputColumnRef> colColumns;
+  llvm::SmallVector<ColumnIdx> valColumns;
+  ColumnIdx nextColumnIdx = 0;
+  for (const auto &[idx, input] : llvm::enumerate(inputs)) {
+    joinChildren.emplace_back(input.relation());
+
+    if (input.hasRowColumn()) {
+      rowColumns.push_back(InputColumnRef{
+          .relIdx = static_cast<unsigned int>(idx),
+          .colIdx = input.rowColumn(),
+          .outIdx = nextColumnIdx + input.rowColumn(),
+      });
+    }
+
+    if (input.hasColColumn()) {
+      colColumns.push_back(InputColumnRef{
+          .relIdx = static_cast<unsigned int>(idx),
+          .colIdx = input.colColumn(),
+          .outIdx = nextColumnIdx + input.colColumn(),
+      });
+    }
+
+    valColumns.push_back(nextColumnIdx + input.valColumn());
+    nextColumnIdx += input.columns().size();
+  }
+
+  auto outputType = typeConverter->convertType(op.getType());
+  MatrixAdaptor output(op.getResult(), outputType);
+  if (rowColumns.empty() && output.hasRowColumn()) {
+    // None of the inputs have a row column, but we need it in the output.
+    // Broadcast to all rows.
+    auto rowsOp =
+        createDimRead(op.getLoc(), output.matrixType().getRows(), rewriter);
+    joinChildren.emplace_back(rowsOp);
+    rowColumns.push_back(InputColumnRef{
+        .relIdx = static_cast<unsigned int>(joinChildren.size() - 1),
+        .colIdx = 0,
+        .outIdx = nextColumnIdx++,
+    });
+  }
+
+  if (colColumns.empty() && output.hasColColumn()) {
+    // None of the inputs have a col column, but we need it in the output.
+    // Broadcast to all columns.
+    auto colsOp =
+        createDimRead(op.getLoc(), output.matrixType().getCols(), rewriter);
+    joinChildren.emplace_back(colsOp);
+    colColumns.push_back(InputColumnRef{
+        .relIdx = static_cast<unsigned int>(joinChildren.size() - 1),
+        .colIdx = 0,
+        .outIdx = nextColumnIdx++,
+    });
+  }
+
+  mlir::Value joined;
+  if (joinChildren.size() == 1) {
+    joined = joinChildren.front();
+  } else {
+    llvm::SmallVector<JoinPredicateAttr> predicates;
+    buildApplyJoinPredicates(rewriter.getContext(), predicates, rowColumns);
+    buildApplyJoinPredicates(rewriter.getContext(), predicates, colColumns);
+    joined = rewriter.create<JoinOp>(op.getLoc(), joinChildren);
+  }
+
+  auto projectOp = rewriter.create<ProjectOp>(op->getLoc(), outputType, joined);
+
+  // Convert old body
+  if (mlir::failed(
+          rewriter.convertRegionTypes(&op.getBody(), _bodyArgConverter))) {
+    return op->emitOpError("failed to convert body argument types");
+  }
+
+  // Read value columns, to be used as arg replacements for the old body.
+  mlir::OpBuilder::InsertionGuard guard(rewriter);
+  auto &body = projectOp.createProjectionsBlock();
+  rewriter.setInsertionPointToStart(&body);
+
+  llvm::SmallVector<mlir::Value> slotReads;
+  for (auto col : valColumns) {
+    slotReads.emplace_back(
+        rewriter.create<ExtractOp>(op->getLoc(), col, body.getArgument(0)));
+  }
+
+  // Inline into new body
+  rewriter.inlineBlockBefore(&op.getBody().front(), &body, body.end(),
+                             slotReads);
+
+  rewriter.replaceOp(op, projectOp);
+
+  // Attach the row and column slot to the return op.
+  auto returnOp = llvm::cast<graphalg::ApplyReturnOp>(body.getTerminator());
+  if (!rowColumns.empty()) {
+    returnOp->setAttr(APPLY_ROW_IDX_ATTR_KEY,
+                      rewriter.getUI32IntegerAttr(rowColumns[0].outIdx));
+  }
+
+  if (!colColumns.empty()) {
+    returnOp->setAttr(APPLY_COL_IDX_ATTR_KEY,
+                      rewriter.getUI32IntegerAttr(colColumns[0].outIdx));
+  }
+
+  return mlir::success();
+}
+
+template <>
+mlir::LogicalResult OpConversion<graphalg::ApplyReturnOp>::matchAndRewrite(
+    graphalg::ApplyReturnOp op, OpAdaptor adaptor,
+    mlir::ConversionPatternRewriter &rewriter) const {
+  llvm::SmallVector<mlir::Value> results;
+
+  // Note: conversion is done top-down, so the ApplyOp is converted to
+  // ProjectOp before we reach this op in its body.
+  auto inputTuple = op->getBlock()->getArgument(0);
+
+  if (auto idx = op->getAttrOfType<mlir::IntegerAttr>(APPLY_ROW_IDX_ATTR_KEY)) {
+    results.emplace_back(
+        rewriter.create<ExtractOp>(op->getLoc(), idx, inputTuple));
+  }
+
+  if (auto idx = op->getAttrOfType<mlir::IntegerAttr>(APPLY_COL_IDX_ATTR_KEY)) {
+    results.emplace_back(
+        rewriter.create<ExtractOp>(op->getLoc(), idx, inputTuple));
+  }
+
+  // The value slot
+  results.emplace_back(adaptor.getValue());
+
+  rewriter.replaceOpWithNewOp<ProjectReturnOp>(op, results);
+  return mlir::success();
+}
+
 static bool hasRelationSignature(mlir::func::FuncOp op) {
   // All inputs should be relations
   auto funcType = op.getFunctionType();
@@ -295,8 +514,13 @@ void GraphAlgToRel::runOnOperation() {
       .add<OpConversion<mlir::func::FuncOp>, OpConversion<mlir::func::ReturnOp>,
            OpConversion<graphalg::TransposeOp>>(matrixTypeConverter,
                                                 &getContext());
+  patterns.add<ApplyOpConversion>(semiringTypeConverter, matrixTypeConverter,
+                                  &getContext());
 
   // Scalar patterns.
+  // patterns.add(convertArithConstant);
+  patterns.add<OpConversion<graphalg::ApplyReturnOp>>(semiringTypeConverter,
+                                                      &getContext());
 
   if (mlir::failed(mlir::applyFullConversion(getOperation(), target,
                                              std::move(patterns)))) {

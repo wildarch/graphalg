@@ -3,6 +3,7 @@
 #include <llvm/Support/Casting.h>
 #include <mlir/IR/Block.h>
 #include <mlir/IR/BuiltinAttributes.h>
+#include <mlir/IR/BuiltinTypes.h>
 
 #include "garel/GARelAttr.h"
 #include "garel/GARelDialect.h"
@@ -211,6 +212,14 @@ mlir::LogicalResult ForOp::verifyRegions() {
   }
 
   return mlir::success();
+}
+
+// === RangeOp ===
+mlir::LogicalResult RangeOp::inferReturnTypes(
+    mlir::MLIRContext *ctx, std::optional<mlir::Location> location,
+    Adaptor adaptor, llvm::SmallVectorImpl<mlir::Type> &inferredReturnTypes) {
+  inferredReturnTypes.push_back(
+      RelationType::get(ctx, {mlir::IndexType::get(ctx)}));
 }
 
 } // namespace garel
