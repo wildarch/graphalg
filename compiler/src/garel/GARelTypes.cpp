@@ -13,8 +13,8 @@
 namespace garel {
 
 bool isColumnType(mlir::Type t) {
-  // Allow i1, si64, f64, index
-  return t.isSignlessInteger(1) || t.isSignedInteger(64) || t.isF64() ||
+  // Allow i1, i64, f64, index
+  return t.isSignlessInteger(1) || t.isSignlessInteger(64) || t.isF64() ||
          t.isIndex();
 }
 

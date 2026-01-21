@@ -4,6 +4,7 @@
 #include <mlir/IR/Block.h>
 #include <mlir/IR/BuiltinAttributes.h>
 #include <mlir/IR/BuiltinTypes.h>
+#include <mlir/Support/LLVM.h>
 
 #include "garel/GARelAttr.h"
 #include "garel/GARelDialect.h"
@@ -220,6 +221,7 @@ mlir::LogicalResult RangeOp::inferReturnTypes(
     Adaptor adaptor, llvm::SmallVectorImpl<mlir::Type> &inferredReturnTypes) {
   inferredReturnTypes.push_back(
       RelationType::get(ctx, {mlir::IndexType::get(ctx)}));
+  return mlir::success();
 }
 
 } // namespace garel

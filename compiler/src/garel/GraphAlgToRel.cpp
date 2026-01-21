@@ -4,6 +4,7 @@
 #include <llvm/ADT/SmallVector.h>
 #include <mlir/Dialect/Arith/IR/Arith.h>
 #include <mlir/Dialect/Func/IR/FuncOps.h>
+#include <mlir/IR/BuiltinAttributeInterfaces.h>
 #include <mlir/IR/BuiltinAttributes.h>
 #include <mlir/IR/BuiltinOps.h>
 #include <mlir/IR/BuiltinTypeInterfaces.h>
@@ -157,6 +158,10 @@ struct InputColumnRef {
 
 } // namespace
 
+// =============================================================================
+// =============================== Class Methods ===============================
+// =============================================================================
+
 mlir::Type
 SemiringTypeConverter::convertSemiringType(graphalg::SemiringTypeInterface t) {
   auto *ctx = t.getContext();
@@ -169,7 +174,7 @@ SemiringTypeConverter::convertSemiringType(graphalg::SemiringTypeInterface t) {
   if (t == graphalg::SemiringTypes::forInt(ctx) ||
       t == graphalg::SemiringTypes::forTropInt(ctx) ||
       t == graphalg::SemiringTypes::forTropMaxInt(ctx)) {
-    return mlir::IntegerType::get(ctx, 64, mlir::IntegerType::Signed);
+    return mlir::IntegerType::get(ctx, 64);
   }
 
   // To f64
@@ -230,6 +235,91 @@ MatrixTypeConverter::MatrixTypeConverter(
   addConversion(
       [this](graphalg::MatrixType t) { return convertMatrixType(t); });
 }
+
+// =============================================================================
+// ============================== Helper Methods ===============================
+// =============================================================================
+
+/**
+ * Create a relation with all indices for a matrix dimension.
+ *
+ * Used to broadcast scalar values to a larger matrix.
+ */
+static RangeOp createDimRead(mlir::Location loc, graphalg::DimAttr dim,
+                             mlir::OpBuilder &builder) {
+  return builder.create<RangeOp>(loc, dim.getConcreteDim());
+}
+
+static void
+buildApplyJoinPredicates(mlir::MLIRContext *ctx,
+                         llvm::SmallVectorImpl<JoinPredicateAttr> &predicates,
+                         llvm::ArrayRef<InputColumnRef> columnsToJoin) {
+  if (columnsToJoin.size() < 2) {
+    return;
+  }
+
+  auto first = columnsToJoin.front();
+  for (auto other : columnsToJoin.drop_front()) {
+    predicates.push_back(JoinPredicateAttr::get(ctx, first.relIdx, first.colIdx,
+                                                other.relIdx, other.colIdx));
+  }
+}
+
+static mlir::FailureOr<mlir::TypedAttr> convertConstant(mlir::Operation *op,
+                                                        mlir::TypedAttr attr) {
+  auto *ctx = attr.getContext();
+  auto type = attr.getType();
+  if (type == graphalg::SemiringTypes::forBool(ctx)) {
+    return attr;
+  } else if (type == graphalg::SemiringTypes::forInt(ctx)) {
+    // TODO: Need to convert to signed?
+    return attr;
+  } else if (type == graphalg::SemiringTypes::forReal(ctx)) {
+    return attr;
+  } else if (type == graphalg::SemiringTypes::forTropInt(ctx)) {
+    std::int64_t value;
+    if (llvm::isa<graphalg::TropInfAttr>(attr)) {
+      // Positive infinity, kind of.
+      value = std::numeric_limits<std::int64_t>::max();
+    } else {
+      auto intAttr = llvm::cast<graphalg::TropIntAttr>(attr);
+      value = intAttr.getValue().getValue().getSExtValue();
+    }
+
+    return mlir::TypedAttr(
+        mlir::IntegerAttr::get(mlir::IntegerType::get(ctx, 64), value));
+  } else if (type == graphalg::SemiringTypes::forTropReal(ctx)) {
+    double value;
+    if (llvm::isa<graphalg::TropInfAttr>(attr)) {
+      // Has a proper positive infinity value
+      value = std::numeric_limits<double>::infinity();
+    } else {
+      auto floatAttr = llvm::cast<graphalg::TropFloatAttr>(attr);
+      value = floatAttr.getValue().getValueAsDouble();
+    }
+
+    return mlir::TypedAttr(
+        mlir::FloatAttr::get(mlir::Float64Type::get(ctx), value));
+  } else if (type == graphalg::SemiringTypes::forTropMaxInt(ctx)) {
+    std::int64_t value;
+    if (llvm::isa<graphalg::TropInfAttr>(attr)) {
+      // Negative infinity, kind of.
+      value = std::numeric_limits<std::int64_t>::min();
+    } else {
+      auto intAttr = llvm::cast<graphalg::TropIntAttr>(attr);
+      value = intAttr.getValue().getValue().getSExtValue();
+    }
+
+    return mlir::TypedAttr(
+        mlir::FloatAttr::get(mlir::Float64Type::get(ctx), value));
+  }
+
+  return op->emitOpError("cannot convert constant ") << attr;
+}
+
+// =============================================================================
+// =============================== Op Conversion ===============================
+// =============================================================================
 
 template <>
 mlir::LogicalResult OpConversion<mlir::func::FuncOp>::matchAndRewrite(
@@ -300,31 +390,6 @@ mlir::LogicalResult OpConversion<graphalg::TransposeOp>::matchAndRewrite(
   rewriter.create<ProjectReturnOp>(op.getLoc(), results);
 
   return mlir::success();
-}
-
-/**
- * Create a relation with all indices for a matrix dimension.
- *
- * Used to broadcast scalar values to a larger matrix.
- */
-static RangeOp createDimRead(mlir::Location loc, graphalg::DimAttr dim,
-                             mlir::OpBuilder &builder) {
-  return builder.create<RangeOp>(loc, dim.getConcreteDim());
-}
-
-static void
-buildApplyJoinPredicates(mlir::MLIRContext *ctx,
-                         llvm::SmallVectorImpl<JoinPredicateAttr> &predicates,
-                         llvm::ArrayRef<InputColumnRef> columnsToJoin) {
-  if (columnsToJoin.size() < 2) {
-    return;
-  }
-
-  auto first = columnsToJoin.front();
-  for (auto other : columnsToJoin.drop_front()) {
-    predicates.push_back(JoinPredicateAttr::get(ctx, first.relIdx, first.colIdx,
-                                                other.relIdx, other.colIdx));
-  }
 }
 
 static constexpr llvm::StringLiteral APPLY_ROW_IDX_ATTR_KEY =
@@ -404,7 +469,7 @@ mlir::LogicalResult ApplyOpConversion::matchAndRewrite(
     llvm::SmallVector<JoinPredicateAttr> predicates;
     buildApplyJoinPredicates(rewriter.getContext(), predicates, rowColumns);
     buildApplyJoinPredicates(rewriter.getContext(), predicates, colColumns);
-    joined = rewriter.create<JoinOp>(op.getLoc(), joinChildren);
+    joined = rewriter.create<JoinOp>(op.getLoc(), joinChildren, predicates);
   }
 
   auto projectOp = rewriter.create<ProjectOp>(op->getLoc(), outputType, joined);
@@ -436,12 +501,12 @@ mlir::LogicalResult ApplyOpConversion::matchAndRewrite(
   auto returnOp = llvm::cast<graphalg::ApplyReturnOp>(body.getTerminator());
   if (!rowColumns.empty()) {
     returnOp->setAttr(APPLY_ROW_IDX_ATTR_KEY,
-                      rewriter.getUI32IntegerAttr(rowColumns[0].outIdx));
+                      rewriter.getI32IntegerAttr(rowColumns[0].outIdx));
   }
 
   if (!colColumns.empty()) {
     returnOp->setAttr(APPLY_COL_IDX_ATTR_KEY,
-                      rewriter.getUI32IntegerAttr(colColumns[0].outIdx));
+                      rewriter.getI32IntegerAttr(colColumns[0].outIdx));
   }
 
   return mlir::success();
@@ -474,6 +539,54 @@ mlir::LogicalResult OpConversion<graphalg::ApplyReturnOp>::matchAndRewrite(
   return mlir::success();
 }
 
+// =============================================================================
+// ============================ Tuple Op Conversion ============================
+// =============================================================================
+
+template <>
+mlir::LogicalResult OpConversion<graphalg::ConstantOp>::matchAndRewrite(
+    graphalg::ConstantOp op, OpAdaptor adaptor,
+    mlir::ConversionPatternRewriter &rewriter) const {
+  auto value = convertConstant(op, op.getValue());
+  if (mlir::failed(value)) {
+    return mlir::failure();
+  }
+
+  rewriter.replaceOpWithNewOp<mlir::arith::ConstantOp>(op, *value);
+  return mlir::success();
+}
+
+template <>
+mlir::LogicalResult OpConversion<graphalg::AddOp>::matchAndRewrite(
+    graphalg::AddOp op, OpAdaptor adaptor,
+    mlir::ConversionPatternRewriter &rewriter) const {
+  auto sring = op.getType();
+  auto *ctx = rewriter.getContext();
+  if (sring == graphalg::SemiringTypes::forBool(ctx)) {
+    rewriter.replaceOpWithNewOp<mlir::arith::OrIOp>(op, adaptor.getLhs(),
+                                                    adaptor.getRhs());
+  } else if (sring == graphalg::SemiringTypes::forInt(ctx)) {
+    rewriter.replaceOpWithNewOp<mlir::arith::AddIOp>(op, adaptor.getLhs(),
+                                                     adaptor.getRhs());
+  } else if (sring == graphalg::SemiringTypes::forReal(ctx)) {
+    rewriter.replaceOpWithNewOp<mlir::arith::AddFOp>(op, adaptor.getLhs(),
+                                                     adaptor.getRhs());
+  } else if (sring == graphalg::SemiringTypes::forTropInt(ctx)) {
+    rewriter.replaceOpWithNewOp<mlir::arith::MinSIOp>(op, adaptor.getLhs(),
+                                                      adaptor.getRhs());
+  } else if (sring == graphalg::SemiringTypes::forTropReal(ctx)) {
+    rewriter.replaceOpWithNewOp<mlir::arith::MinimumFOp>(op, adaptor.getLhs(),
+                                                         adaptor.getRhs());
+  } else if (sring == graphalg::SemiringTypes::forTropMaxInt(ctx)) {
+    rewriter.replaceOpWithNewOp<mlir::arith::MaxSIOp>(op, adaptor.getLhs(),
+                                                      adaptor.getRhs());
+  } else {
+    return op->emitOpError("conversion not supported for semiring ") << sring;
+  }
+
+  return mlir::success();
+}
+
 static bool hasRelationSignature(mlir::func::FuncOp op) {
   // All inputs should be relations
   auto funcType = op.getFunctionType();
@@ -495,11 +608,12 @@ static bool hasRelationOperands(mlir::Operation *op) {
 
 void GraphAlgToRel::runOnOperation() {
   mlir::ConversionTarget target(getContext());
-  // Eliminate all graphalg ops (and the few ops we use from arith) ...
+  // Eliminate all graphalg ops
   target.addIllegalDialect<graphalg::GraphAlgDialect>();
-  target.addIllegalDialect<mlir::arith::ArithDialect>();
-  // And turn them into relational ops.
+  // Turn them into relational ops.
   target.addLegalDialect<GARelDialect>();
+  // and arith ops for the scalar operations.
+  target.addLegalDialect<mlir::arith::ArithDialect>();
   // Keep container module.
   target.addLegalOp<mlir::ModuleOp>();
   // Keep functions, but change their signature.
@@ -519,8 +633,10 @@ void GraphAlgToRel::runOnOperation() {
 
   // Scalar patterns.
   // patterns.add(convertArithConstant);
-  patterns.add<OpConversion<graphalg::ApplyReturnOp>>(semiringTypeConverter,
-                                                      &getContext());
+  patterns
+      .add<OpConversion<graphalg::ApplyReturnOp>,
+           OpConversion<graphalg::ConstantOp>, OpConversion<graphalg::AddOp>>(
+          semiringTypeConverter, &getContext());
 
   if (mlir::failed(mlir::applyFullConversion(getOperation(), target,
                                              std::move(patterns)))) {
