@@ -10,6 +10,7 @@
 #include "garel/GARelDialect.h"
 #include "garel/GARelOps.h"
 #include "garel/GARelTypes.h"
+#include "llvm/ADT/ArrayRef.h"
 
 #define GET_OP_CLASSES
 #include "garel/GARelOps.cpp.inc"
@@ -222,6 +223,53 @@ mlir::LogicalResult RangeOp::inferReturnTypes(
   inferredReturnTypes.push_back(
       RelationType::get(ctx, {mlir::IndexType::get(ctx)}));
   return mlir::success();
+}
+
+// === RemapOp ===
+mlir::LogicalResult RemapOp::inferReturnTypes(
+    mlir::MLIRContext *ctx, std::optional<mlir::Location> location,
+    Adaptor adaptor, llvm::SmallVectorImpl<mlir::Type> &inferredReturnTypes) {
+  llvm::SmallVector<mlir::Type> outputColumns;
+  auto inputType = llvm::cast<RelationType>(adaptor.getInput().getType());
+  for (auto inputCol : adaptor.getRemap()) {
+    outputColumns.push_back(inputType.getColumns()[inputCol]);
+  }
+
+  inferredReturnTypes.push_back(RelationType::get(ctx, outputColumns));
+  return mlir::success();
+}
+
+mlir::LogicalResult RemapOp::verify() {
+  auto inputColumns = getInput().getType().getColumns();
+  for (auto inputCol : getRemap()) {
+    if (inputCol >= inputColumns.size()) {
+      return emitOpError("remap refers to input column ")
+             << inputCol << ", but input only has " << inputColumns.size()
+             << " columns";
+    }
+  }
+
+  return mlir::success();
+}
+
+// Checks for mapping [0, 1, 2, ...]
+static bool isIdentityRemap(llvm::ArrayRef<ColumnIdx> indexes) {
+  for (auto [i, idx] : llvm::enumerate(indexes)) {
+    if (i != idx) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+mlir::OpFoldResult RemapOp::fold(FoldAdaptor adaptor) {
+  if (isIdentityRemap(getRemap())) {
+    assert(getInput().getType() == getType());
+    return getInput();
+  }
+
+  return nullptr;
 }
 
 } // namespace garel

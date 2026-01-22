@@ -187,4 +187,21 @@ def RangeOp : GARel_Op<"range", [InferTypeOpAdaptor]> {
     }];
 }
 
+def RemapOp : GARel_Op<"remap", [InferTypeOpAdaptor]> {
+    let summary = "reorders or drop columns";
+
+    let arguments = (ins Relation:$input, DenseI32ArrayAttr:$remap);
+
+    let results = (outs Relation:$result);
+
+    let assemblyFormat = [{
+        $input `:` type($input)
+        $remap
+        attr-dict
+    }];
+
+    let hasVerifier = 1;
+    let hasFolder = 1;
+}
+
 #endif // GAREL_OPS

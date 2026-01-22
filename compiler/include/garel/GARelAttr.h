@@ -8,7 +8,7 @@
 namespace garel {
 
 /** Reference to a column inside of \c RelationType or \c TupleType. */
-using ColumnIdx = unsigned;
+using ColumnIdx = std::int32_t;
 
 } // namespace garel
 

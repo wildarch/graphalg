@@ -22,6 +22,7 @@
 #include "graphalg/GraphAlgOps.h"
 #include "graphalg/GraphAlgTypes.h"
 #include "graphalg/SemiringTypes.h"
+#include "mlir/IR/Builders.h"
 
 namespace garel {
 
@@ -151,7 +152,7 @@ public:
 };
 
 struct InputColumnRef {
-  unsigned relIdx;
+  std::size_t relIdx;
   ColumnIdx colIdx;
   ColumnIdx outIdx;
 };
@@ -416,7 +417,7 @@ mlir::LogicalResult ApplyOpConversion::matchAndRewrite(
 
     if (input.hasRowColumn()) {
       rowColumns.push_back(InputColumnRef{
-          .relIdx = static_cast<unsigned int>(idx),
+          .relIdx = idx,
           .colIdx = input.rowColumn(),
           .outIdx = nextColumnIdx + input.rowColumn(),
       });
@@ -424,7 +425,7 @@ mlir::LogicalResult ApplyOpConversion::matchAndRewrite(
 
     if (input.hasColColumn()) {
       colColumns.push_back(InputColumnRef{
-          .relIdx = static_cast<unsigned int>(idx),
+          .relIdx = idx,
           .colIdx = input.colColumn(),
           .outIdx = nextColumnIdx + input.colColumn(),
       });
@@ -443,7 +444,7 @@ mlir::LogicalResult ApplyOpConversion::matchAndRewrite(
         createDimRead(op.getLoc(), output.matrixType().getRows(), rewriter);
     joinChildren.emplace_back(rowsOp);
     rowColumns.push_back(InputColumnRef{
-        .relIdx = static_cast<unsigned int>(joinChildren.size() - 1),
+        .relIdx = joinChildren.size() - 1,
         .colIdx = 0,
         .outIdx = nextColumnIdx++,
     });
@@ -456,7 +457,7 @@ mlir::LogicalResult ApplyOpConversion::matchAndRewrite(
         createDimRead(op.getLoc(), output.matrixType().getCols(), rewriter);
     joinChildren.emplace_back(colsOp);
     colColumns.push_back(InputColumnRef{
-        .relIdx = static_cast<unsigned int>(joinChildren.size() - 1),
+        .relIdx = joinChildren.size() - 1,
         .colIdx = 0,
         .outIdx = nextColumnIdx++,
     });
@@ -547,79 +548,56 @@ mlir::LogicalResult OpConversion<graphalg::BroadcastOp>::matchAndRewrite(
   MatrixAdaptor output(op, typeConverter->convertType(op.getType()));
 
   llvm::SmallVector<mlir::Value> joinChildren;
+  ColumnIdx currentColIdx = 0;
+
+  std::optional<ColumnIdx> rowColumnIdx;
+  std::optional<ColumnIdx> colColumnIdx;
+
   if (input.hasRowColumn()) {
     // Already have a row column.
-    // TODO: record row column.
+    rowColumnIdx = input.rowColumn();
   } else if (output.hasRowColumn()) {
     // Broadcast over all rows.
     joinChildren.push_back(
         createDimRead(op.getLoc(), output.matrixType().getRows(), rewriter));
-    // TODO: record row column.
+    rowColumnIdx = currentColIdx++;
   }
 
   if (input.hasColColumn()) {
     // Already have a col column.
-    // TODO: record col column.
+    colColumnIdx = input.colColumn();
   } else if (output.hasColColumn()) {
     // Broadcast over all columns.
     joinChildren.push_back(
         createDimRead(op.getLoc(), output.matrixType().getCols(), rewriter));
-    // TODO: record col column.
+    colColumnIdx = currentColIdx++;
   }
 
   joinChildren.push_back(input.relation());
-  // TODO: record val column.
+  auto valColumnIdx = currentColIdx + input.valColumn();
 
-  /*
-  // Join with a dim read for row/col slots that we want in the output, but do
-  // not have on the input.
-  llvm::SmallVector<ipr::SlotOffset> renameSlots;
-  llvm::SmallVector<mlir::Value> joinChildren;
-  if (auto rowSlot = input.rowSlot()) {
-      // Already have a row slot.
-      renameSlots.emplace_back(rowSlot.getSlot());
-  } else if (auto rowSlot = output.rowSlot()) {
-      // Broadcast over all rows.
-      joinChildren.emplace_back(
-              createDimRead(op.getLoc(), rowSlot, rewriter));
-      renameSlots.emplace_back(rowSlot.getSlot());
+  auto joinOp =
+      rewriter.create<JoinOp>(op.getLoc(), joinChildren,
+                              // on join predicates (cartesian product)
+                              llvm::ArrayRef<JoinPredicateAttr>{});
+
+  // Remap to correctly order as (row, col, val).
+  // TODO: Skip this if it is unnecessary.
+  llvm::SmallVector<ColumnIdx, 3> outputColumns;
+  if (rowColumnIdx) {
+    outputColumns.push_back(*rowColumnIdx);
   }
 
-  if (auto colSlot = input.colSlot()) {
-      // Already have a col slot.
-      renameSlots.emplace_back(colSlot.getSlot());
-  } else if (auto colSlot = output.colSlot()) {
-      // Broadcast over all columns.
-      joinChildren.emplace_back(
-              createDimRead(op.getLoc(), colSlot, rewriter));
-      renameSlots.emplace_back(colSlot.getSlot());
+  if (colColumnIdx) {
+    outputColumns.push_back(*colColumnIdx);
   }
 
-  joinChildren.emplace_back(input.stream());
-  renameSlots.emplace_back(input.valSlot().getSlot());
+  outputColumns.push_back(valColumnIdx);
 
-  auto joinOp = rewriter.create<ipr::JoinOp>(
-          op.getLoc(),
-          joinChildren);
-  {
-      mlir::OpBuilder::InsertionGuard guard(rewriter);
-      auto& body = joinOp.getPredicates().front();
-      rewriter.setInsertionPointToStart(&body);
-      // No predicates
-      rewriter.create<ipr::JoinReturnOp>(op.getLoc(), std::nullopt);
-  }
-
-  // Rename to the desired output slots. This also handles reordering slots.
-  // We want (row, col, val) order, but the join output could be e.g.
-  // (col, row, val) if the input does not have a col slot.
-  rewriter.replaceOpWithNewOp<ipr::RenameOp>(
-          op,
-          output.streamType(),
-          joinOp,
-          rewriter.getAttr<ipr::ArrayOfSlotOffsetAttr>(renameSlots));
+  auto remapped =
+      rewriter.createOrFold<RemapOp>(op.getLoc(), joinOp, outputColumns);
+  rewriter.replaceOp(op, remapped);
   return mlir::success();
-  */
-  return mlir::failure();
 }
 
 // =============================================================================
@@ -707,10 +685,10 @@ void GraphAlgToRel::runOnOperation() {
   MatrixTypeConverter matrixTypeConverter(&getContext(), semiringTypeConverter);
 
   mlir::RewritePatternSet patterns(&getContext());
-  patterns
-      .add<OpConversion<mlir::func::FuncOp>, OpConversion<mlir::func::ReturnOp>,
-           OpConversion<graphalg::TransposeOp>>(matrixTypeConverter,
-                                                &getContext());
+  patterns.add<
+      OpConversion<mlir::func::FuncOp>, OpConversion<mlir::func::ReturnOp>,
+      OpConversion<graphalg::TransposeOp>, OpConversion<graphalg::BroadcastOp>>(
+      matrixTypeConverter, &getContext());
   patterns.add<ApplyOpConversion>(semiringTypeConverter, matrixTypeConverter,
                                   &getContext());
 

@@ -66,6 +66,17 @@ func.func @AddBool(%arg0: !graphalg.mat<1 x 1 x i1>, %arg1: !graphalg.mat<1 x 1 
 }
 ```
 
+### Prefer numeric substitution blocks when possible
+**GOOD**:
+```mlir
+// CHECK: %[[#RNG:]] = garel.range 42
+```
+
+**BAD**:
+```mlir
+// CHECK: %[[RNG:.+]] = garel.range 42
+```
+
 ## Porting IPR tests
 If you are asked to port an IPR testcase, do these things:
 1. Change ag-opt in the `RUN` comment to graphalg-opt and the pass from --graphalg-to-ipr to --graphalg-to-rel

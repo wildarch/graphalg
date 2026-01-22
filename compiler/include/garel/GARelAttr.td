@@ -14,9 +14,9 @@ def JoinPredicate : GARel_Attr<"JoinPredicate", "join_pred"> {
     let summary = "A binary equality join predicate";
 
     let parameters = (ins
-        "unsigned":$lhsRelIdx,
+        "std::int32_t":$lhsRelIdx,
         "ColumnIdx":$lhsColIdx,
-        "unsigned":$rhsRelIdx,
+        "std::int32_t":$rhsRelIdx,
         "ColumnIdx":$rhsColIdx);
 
     let assemblyFormat = [{
