@@ -318,6 +318,15 @@ static mlir::FailureOr<mlir::TypedAttr> convertConstant(mlir::Operation *op,
   return op->emitOpError("cannot convert constant ") << attr;
 }
 
+static bool isTropicalnessCast(graphalg::SemiringTypeInterface inRing,
+                               graphalg::SemiringTypeInterface outRing) {
+  assert(inRing != outRing && "No-op cast");
+  // If the relational types match, it is purely a 'tropicalness' cast such as
+  // i64 -> !graphalg.trop_i64.
+  SemiringTypeConverter conv;
+  return conv.convertType(inRing) == conv.convertType(outRing);
+}
+
 // =============================================================================
 // =============================== Op Conversion ===============================
 // =============================================================================
@@ -646,6 +655,133 @@ mlir::LogicalResult OpConversion<graphalg::AddOp>::matchAndRewrite(
   }
 
   return mlir::success();
+}
+
+/*
+static mlir::Value preserveAdditiveIdentity(graphalg::CastScalarOp op,
+                                            mlir::Value input,
+                                            mlir::Value defaultOutput,
+                                            mlir::OpBuilder &builder) {
+// Return defaultOutput, except when input is the additive identity, which
+// we need to remap to the additive identity of the target type.
+auto inRing = llvm::cast<SemiringTypeInterface>(op.getInput().getType());
+auto outRing = llvm::cast<SemiringTypeInterface>(op.getType());
+
+auto inIdent = convertConstant(op, inRing.addIdentity());
+assert (mlir::succeeded(inIdent));
+auto outIdent = convertConstant(op, outRing.addIdentity());
+assert (mlir::succeeded(outIdent));
+
+auto outIdentOp = builder.create<ipr::ConstantSlotOp>(
+    input.getLoc(),
+    builder.getAttr<vec::ValueAttr>(*outIdent));
+
+auto inIdentAttr = builder.getAttr<vec::ValueAttr>(
+    *inIdent);
+auto keysAttr = builder.getAttr<vec::ValueArrayAttr>(
+    llvm::ArrayRef<vec::ValueAttr>(inIdentAttr));
+
+return builder.create<ipr::SelectSlotOp>(
+    op.getLoc(),
+    defaultOutput,
+    input,
+    keysAttr,
+    mlir::ValueRange{ outIdentOp });
+}
+*/
+
+template <>
+mlir::LogicalResult OpConversion<graphalg::CastScalarOp>::matchAndRewrite(
+    graphalg::CastScalarOp op, OpAdaptor adaptor,
+    mlir::ConversionPatternRewriter &rewriter) const {
+  auto *ctx = rewriter.getContext();
+  auto inRing =
+      llvm::cast<graphalg::SemiringTypeInterface>(op.getInput().getType());
+  auto outRing = llvm::cast<graphalg::SemiringTypeInterface>(op.getType());
+  assert(inRing != outRing && "Identity cast not removed by fold()");
+
+  if (outRing == graphalg::SemiringTypes::forBool(ctx)) {
+    // Rewrite to: input != zero(inRing)
+    /*
+    auto addIdent = convertConstant(op, inRing.addIdentity());
+    if (mlir::failed(addIdent)) {
+      return mlir::failure();
+    }
+
+    auto addIdentOp = rewriter.create<ipr::ConstantSlotOp>(
+        op.getLoc(), rewriter.getAttr<vec::ValueAttr>(*addIdent));
+
+    rewriter.replaceOpWithNewOp<ipr::CompareOp>(
+        op, adaptor.getInput(), ipr::CmpPredicate::NE, addIdentOp);
+    return mlir::success();
+    */
+  } else if (inRing == graphalg::SemiringTypes::forBool(ctx)) {
+    // Mapping:
+    // true -> multiplicative identity
+    // false -> additive identity
+
+    /*
+    auto mulIdent = convertConstant(op, outRing.mulIdentity());
+    if (mlir::failed(mulIdent)) {
+      return mlir::failure();
+    }
+
+    auto mulIdentOp = rewriter.create<ipr::ConstantSlotOp>(
+        op.getLoc(), rewriter.getAttr<vec::ValueAttr>(*mulIdent));
+
+    auto selectOp =
+        preserveAdditiveIdentity(op, adaptor.getInput(), mulIdentOp, rewriter);
+    rewriter.replaceOp(op, selectOp);
+    return mlir::success();
+    */
+  } else if (inRing.isIntOrFloat() && outRing.isIntOrFloat()) {
+    // No tropical semirings, simple cast.
+    /*
+    auto dataType =
+        convertToDataType(op, typeConverter->convertType(op.getType()));
+    if (mlir::failed(dataType)) {
+      return mlir::failure();
+    }
+
+    rewriter.replaceOpWithNewOp<ipr::CastOp>(
+        op, adaptor.getInput(), rewriter.getAttr<vec::DataTypeAttr>(*dataType));
+    return mlir::success();
+    */
+  } else if (isTropicalnessCast(inRing, outRing)) {
+    // Only cast the 'tropicalness' of the type. The underlying relational type
+    // does not change. Preserve the value unless it is the additive identity,
+    // in which case we remap it to the additive identity of the output ring.
+    /*
+    auto selectOp = preserveAdditiveIdentity(op, adaptor.getInput(),
+                                             adaptor.getInput(), rewriter);
+    rewriter.replaceOp(op, selectOp);
+    return mlir::success();
+    */
+  } else if (llvm::isa<graphalg::TropI64Type, graphalg::TropF64Type>(inRing) &&
+             llvm::isa<graphalg::TropI64Type, graphalg::TropF64Type>(outRing)) {
+    // Cast the underlying relational type, but preserve the additive identity.
+    /*
+    auto dataType =
+        convertToDataType(op, typeConverter->convertType(op.getType()));
+    if (mlir::failed(dataType)) {
+      return mlir::failure();
+    }
+
+    auto castOp = rewriter.create<ipr::CastOp>(
+        op.getLoc(), adaptor.getInput(),
+        rewriter.getAttr<vec::DataTypeAttr>(*dataType));
+
+    auto selectOp =
+        preserveAdditiveIdentity(op, adaptor.getInput(), castOp, rewriter);
+    rewriter.replaceOp(op, selectOp);
+    return mlir::success();
+    */
+  }
+
+  return op->emitOpError("cast from ")
+         << op.getInput().getType() << " to " << op.getType()
+         << " not yet supported in " << GARelDialect::getDialectNamespace()
+         << " dialect";
 }
 
 static bool hasRelationSignature(mlir::func::FuncOp op) {
