@@ -539,6 +539,89 @@ mlir::LogicalResult OpConversion<graphalg::ApplyReturnOp>::matchAndRewrite(
   return mlir::success();
 }
 
+template <>
+mlir::LogicalResult OpConversion<graphalg::BroadcastOp>::matchAndRewrite(
+    graphalg::BroadcastOp op, OpAdaptor adaptor,
+    mlir::ConversionPatternRewriter &rewriter) const {
+  MatrixAdaptor input(op.getInput(), adaptor.getInput());
+  MatrixAdaptor output(op, typeConverter->convertType(op.getType()));
+
+  llvm::SmallVector<mlir::Value> joinChildren;
+  if (input.hasRowColumn()) {
+    // Already have a row column.
+    // TODO: record row column.
+  } else if (output.hasRowColumn()) {
+    // Broadcast over all rows.
+    joinChildren.push_back(
+        createDimRead(op.getLoc(), output.matrixType().getRows(), rewriter));
+    // TODO: record row column.
+  }
+
+  if (input.hasColColumn()) {
+    // Already have a col column.
+    // TODO: record col column.
+  } else if (output.hasColColumn()) {
+    // Broadcast over all columns.
+    joinChildren.push_back(
+        createDimRead(op.getLoc(), output.matrixType().getCols(), rewriter));
+    // TODO: record col column.
+  }
+
+  joinChildren.push_back(input.relation());
+  // TODO: record val column.
+
+  /*
+  // Join with a dim read for row/col slots that we want in the output, but do
+  // not have on the input.
+  llvm::SmallVector<ipr::SlotOffset> renameSlots;
+  llvm::SmallVector<mlir::Value> joinChildren;
+  if (auto rowSlot = input.rowSlot()) {
+      // Already have a row slot.
+      renameSlots.emplace_back(rowSlot.getSlot());
+  } else if (auto rowSlot = output.rowSlot()) {
+      // Broadcast over all rows.
+      joinChildren.emplace_back(
+              createDimRead(op.getLoc(), rowSlot, rewriter));
+      renameSlots.emplace_back(rowSlot.getSlot());
+  }
+
+  if (auto colSlot = input.colSlot()) {
+      // Already have a col slot.
+      renameSlots.emplace_back(colSlot.getSlot());
+  } else if (auto colSlot = output.colSlot()) {
+      // Broadcast over all columns.
+      joinChildren.emplace_back(
+              createDimRead(op.getLoc(), colSlot, rewriter));
+      renameSlots.emplace_back(colSlot.getSlot());
+  }
+
+  joinChildren.emplace_back(input.stream());
+  renameSlots.emplace_back(input.valSlot().getSlot());
+
+  auto joinOp = rewriter.create<ipr::JoinOp>(
+          op.getLoc(),
+          joinChildren);
+  {
+      mlir::OpBuilder::InsertionGuard guard(rewriter);
+      auto& body = joinOp.getPredicates().front();
+      rewriter.setInsertionPointToStart(&body);
+      // No predicates
+      rewriter.create<ipr::JoinReturnOp>(op.getLoc(), std::nullopt);
+  }
+
+  // Rename to the desired output slots. This also handles reordering slots.
+  // We want (row, col, val) order, but the join output could be e.g.
+  // (col, row, val) if the input does not have a col slot.
+  rewriter.replaceOpWithNewOp<ipr::RenameOp>(
+          op,
+          output.streamType(),
+          joinOp,
+          rewriter.getAttr<ipr::ArrayOfSlotOffsetAttr>(renameSlots));
+  return mlir::success();
+  */
+  return mlir::failure();
+}
+
 // =============================================================================
 // ============================ Tuple Op Conversion ============================
 // =============================================================================
