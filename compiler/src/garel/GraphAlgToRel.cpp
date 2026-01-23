@@ -273,7 +273,6 @@ static mlir::FailureOr<mlir::TypedAttr> convertConstant(mlir::Operation *op,
   if (type == graphalg::SemiringTypes::forBool(ctx)) {
     return attr;
   } else if (type == graphalg::SemiringTypes::forInt(ctx)) {
-    // TODO: Need to convert to signed?
     return attr;
   } else if (type == graphalg::SemiringTypes::forReal(ctx)) {
     return attr;
@@ -312,7 +311,7 @@ static mlir::FailureOr<mlir::TypedAttr> convertConstant(mlir::Operation *op,
     }
 
     return mlir::TypedAttr(
-        mlir::FloatAttr::get(mlir::Float64Type::get(ctx), value));
+        mlir::IntegerAttr::get(mlir::IntegerType::get(ctx, 64), value));
   }
 
   return op->emitOpError("cannot convert constant ") << attr;
@@ -325,6 +324,43 @@ static bool isTropicalnessCast(graphalg::SemiringTypeInterface inRing,
   // i64 -> !graphalg.trop_i64.
   SemiringTypeConverter conv;
   return conv.convertType(inRing) == conv.convertType(outRing);
+}
+
+static mlir::Value preserveAdditiveIdentity(graphalg::CastScalarOp op,
+                                            mlir::Value input,
+                                            mlir::Value defaultOutput,
+                                            mlir::OpBuilder &builder) {
+  // Return defaultOutput, except when input is the additive identity, which
+  // we need to remap to the additive identity of the target type.
+  auto inRing =
+      llvm::cast<graphalg::SemiringTypeInterface>(op.getInput().getType());
+  auto outRing = llvm::cast<graphalg::SemiringTypeInterface>(op.getType());
+
+  auto inIdent = convertConstant(op, inRing.addIdentity());
+  assert(mlir::succeeded(inIdent));
+  auto outIdent = convertConstant(op, outRing.addIdentity());
+  assert(mlir::succeeded(outIdent));
+
+  auto inIdentOp =
+      builder.create<mlir::arith::ConstantOp>(input.getLoc(), *inIdent);
+  auto outIdentOp =
+      builder.create<mlir::arith::ConstantOp>(input.getLoc(), *outIdent);
+
+  // Compare input == inIdent
+  mlir::Value identCompare;
+  if (input.getType().isF64()) {
+    assert(inIdentOp.getType().isF64());
+    identCompare = builder.create<mlir::arith::CmpFOp>(
+        op.getLoc(), mlir::arith::CmpFPredicate::OEQ, input, inIdentOp);
+  } else {
+    assert(input.getType().isSignlessInteger(64));
+    assert(inIdentOp.getType().isSignlessInteger(64));
+    identCompare = builder.create<mlir::arith::CmpIOp>(
+        op.getLoc(), mlir::arith::CmpIPredicate::eq, input, inIdentOp);
+  }
+
+  return builder.create<mlir::arith::SelectOp>(op.getLoc(), identCompare,
+                                               outIdentOp, defaultOutput);
 }
 
 // =============================================================================
@@ -657,39 +693,6 @@ mlir::LogicalResult OpConversion<graphalg::AddOp>::matchAndRewrite(
   return mlir::success();
 }
 
-/*
-static mlir::Value preserveAdditiveIdentity(graphalg::CastScalarOp op,
-                                            mlir::Value input,
-                                            mlir::Value defaultOutput,
-                                            mlir::OpBuilder &builder) {
-// Return defaultOutput, except when input is the additive identity, which
-// we need to remap to the additive identity of the target type.
-auto inRing = llvm::cast<SemiringTypeInterface>(op.getInput().getType());
-auto outRing = llvm::cast<SemiringTypeInterface>(op.getType());
-
-auto inIdent = convertConstant(op, inRing.addIdentity());
-assert (mlir::succeeded(inIdent));
-auto outIdent = convertConstant(op, outRing.addIdentity());
-assert (mlir::succeeded(outIdent));
-
-auto outIdentOp = builder.create<ipr::ConstantSlotOp>(
-    input.getLoc(),
-    builder.getAttr<vec::ValueAttr>(*outIdent));
-
-auto inIdentAttr = builder.getAttr<vec::ValueAttr>(
-    *inIdent);
-auto keysAttr = builder.getAttr<vec::ValueArrayAttr>(
-    llvm::ArrayRef<vec::ValueAttr>(inIdentAttr));
-
-return builder.create<ipr::SelectSlotOp>(
-    op.getLoc(),
-    defaultOutput,
-    input,
-    keysAttr,
-    mlir::ValueRange{ outIdentOp });
-}
-*/
-
 template <>
 mlir::LogicalResult OpConversion<graphalg::CastScalarOp>::matchAndRewrite(
     graphalg::CastScalarOp op, OpAdaptor adaptor,
@@ -702,80 +705,84 @@ mlir::LogicalResult OpConversion<graphalg::CastScalarOp>::matchAndRewrite(
 
   if (outRing == graphalg::SemiringTypes::forBool(ctx)) {
     // Rewrite to: input != zero(inRing)
-    /*
     auto addIdent = convertConstant(op, inRing.addIdentity());
     if (mlir::failed(addIdent)) {
       return mlir::failure();
     }
 
-    auto addIdentOp = rewriter.create<ipr::ConstantSlotOp>(
-        op.getLoc(), rewriter.getAttr<vec::ValueAttr>(*addIdent));
+    auto addIdentOp =
+        rewriter.create<mlir::arith::ConstantOp>(op.getLoc(), *addIdent);
 
-    rewriter.replaceOpWithNewOp<ipr::CompareOp>(
-        op, adaptor.getInput(), ipr::CmpPredicate::NE, addIdentOp);
+    if (addIdentOp.getType().isF64()) {
+      rewriter.replaceOpWithNewOp<mlir::arith::CmpFOp>(
+          op, mlir::arith::CmpFPredicate::ONE, adaptor.getInput(), addIdentOp);
+    } else {
+      rewriter.replaceOpWithNewOp<mlir::arith::CmpIOp>(
+          op, mlir::arith::CmpIPredicate::ne, adaptor.getInput(), addIdentOp);
+    }
+
     return mlir::success();
-    */
   } else if (inRing == graphalg::SemiringTypes::forBool(ctx)) {
     // Mapping:
     // true -> multiplicative identity
     // false -> additive identity
-
-    /*
-    auto mulIdent = convertConstant(op, outRing.mulIdentity());
-    if (mlir::failed(mulIdent)) {
+    auto trueValue = convertConstant(op, outRing.mulIdentity());
+    if (mlir::failed(trueValue)) {
       return mlir::failure();
     }
 
-    auto mulIdentOp = rewriter.create<ipr::ConstantSlotOp>(
-        op.getLoc(), rewriter.getAttr<vec::ValueAttr>(*mulIdent));
-
-    auto selectOp =
-        preserveAdditiveIdentity(op, adaptor.getInput(), mulIdentOp, rewriter);
-    rewriter.replaceOp(op, selectOp);
-    return mlir::success();
-    */
-  } else if (inRing.isIntOrFloat() && outRing.isIntOrFloat()) {
-    // No tropical semirings, simple cast.
-    /*
-    auto dataType =
-        convertToDataType(op, typeConverter->convertType(op.getType()));
-    if (mlir::failed(dataType)) {
+    auto falseValue = convertConstant(op, outRing.addIdentity());
+    if (mlir::failed(falseValue)) {
       return mlir::failure();
     }
 
-    rewriter.replaceOpWithNewOp<ipr::CastOp>(
-        op, adaptor.getInput(), rewriter.getAttr<vec::DataTypeAttr>(*dataType));
+    auto trueOp =
+        rewriter.create<mlir::arith::ConstantOp>(op.getLoc(), *trueValue);
+    auto falseOp =
+        rewriter.create<mlir::arith::ConstantOp>(op.getLoc(), *falseValue);
+    rewriter.replaceOpWithNewOp<mlir::arith::SelectOp>(op, adaptor.getInput(),
+                                                       trueOp, falseOp);
     return mlir::success();
-    */
+  } else if (inRing == graphalg::SemiringTypes::forInt(ctx) &&
+             outRing == graphalg::SemiringTypes::forReal(ctx)) {
+    // Promote to i64 -> f64
+    rewriter.replaceOpWithNewOp<mlir::arith::SIToFPOp>(op, outRing,
+                                                       adaptor.getInput());
+    return mlir::success();
+  } else if (inRing == graphalg::SemiringTypes::forReal(ctx) &&
+             outRing == graphalg::SemiringTypes::forInt(ctx)) {
+    // Truncate to int
+    rewriter.replaceOpWithNewOp<mlir::arith::FPToSIOp>(op, outRing,
+                                                       adaptor.getInput());
+    return mlir::success();
   } else if (isTropicalnessCast(inRing, outRing)) {
     // Only cast the 'tropicalness' of the type. The underlying relational type
     // does not change. Preserve the value unless it is the additive identity,
     // in which case we remap it to the additive identity of the output ring.
-    /*
     auto selectOp = preserveAdditiveIdentity(op, adaptor.getInput(),
                                              adaptor.getInput(), rewriter);
     rewriter.replaceOp(op, selectOp);
     return mlir::success();
-    */
-  } else if (llvm::isa<graphalg::TropI64Type, graphalg::TropF64Type>(inRing) &&
-             llvm::isa<graphalg::TropI64Type, graphalg::TropF64Type>(outRing)) {
+  } else if (inRing == graphalg::SemiringTypes::forTropInt(ctx) &&
+             outRing == graphalg::SemiringTypes::forTropReal(ctx)) {
+    // trop_i64 to trop_f64
     // Cast the underlying relational type, but preserve the additive identity.
-    /*
-    auto dataType =
-        convertToDataType(op, typeConverter->convertType(op.getType()));
-    if (mlir::failed(dataType)) {
-      return mlir::failure();
-    }
-
-    auto castOp = rewriter.create<ipr::CastOp>(
-        op.getLoc(), adaptor.getInput(),
-        rewriter.getAttr<vec::DataTypeAttr>(*dataType));
-
+    auto castOp = rewriter.create<mlir::arith::SIToFPOp>(
+        op.getLoc(), rewriter.getF64Type(), adaptor.getInput());
     auto selectOp =
         preserveAdditiveIdentity(op, adaptor.getInput(), castOp, rewriter);
     rewriter.replaceOp(op, selectOp);
     return mlir::success();
-    */
+  } else if (inRing == graphalg::SemiringTypes::forTropReal(ctx) &&
+             outRing == graphalg::SemiringTypes::forTropInt(ctx)) {
+    // trop_f64 to trop_i64
+    // Cast the underlying relational type, but preserve the additive identity.
+    auto castOp = rewriter.create<mlir::arith::FPToSIOp>(
+        op.getLoc(), rewriter.getI64Type(), adaptor.getInput());
+    auto selectOp =
+        preserveAdditiveIdentity(op, adaptor.getInput(), castOp, rewriter);
+    rewriter.replaceOp(op, selectOp);
+    return mlir::success();
   }
 
   return op->emitOpError("cast from ")
@@ -830,10 +837,10 @@ void GraphAlgToRel::runOnOperation() {
 
   // Scalar patterns.
   // patterns.add(convertArithConstant);
-  patterns
-      .add<OpConversion<graphalg::ApplyReturnOp>,
-           OpConversion<graphalg::ConstantOp>, OpConversion<graphalg::AddOp>>(
-          semiringTypeConverter, &getContext());
+  patterns.add<
+      OpConversion<graphalg::ApplyReturnOp>, OpConversion<graphalg::ConstantOp>,
+      OpConversion<graphalg::AddOp>, OpConversion<graphalg::CastScalarOp>>(
+      semiringTypeConverter, &getContext());
 
   if (mlir::failed(mlir::applyFullConversion(getOperation(), target,
                                              std::move(patterns)))) {
