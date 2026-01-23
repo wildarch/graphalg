@@ -118,6 +118,8 @@ def UnionOp : GARel_Op<"union", [SameOperandsAndResultType]> {
         $inputs `:` type($inputs)
         attr-dict
     }];
+
+    let hasFolder = 1;
 }
 
 def AggregateOp : GARel_Op<"aggregate", [InferTypeOpAdaptor]> {

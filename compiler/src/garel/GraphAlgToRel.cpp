@@ -363,6 +363,28 @@ static mlir::Value preserveAdditiveIdentity(graphalg::CastScalarOp op,
                                                outIdentOp, defaultOutput);
 }
 
+static mlir::FailureOr<AggregatorAttr>
+createAggregator(mlir::Operation *op, graphalg::SemiringTypeInterface sring,
+                 ColumnIdx input, mlir::OpBuilder &builder) {
+  auto *ctx = builder.getContext();
+  AggregateFunc func;
+  if (sring == graphalg::SemiringTypes::forBool(ctx)) {
+    func = AggregateFunc::LOR;
+  } else if (sring.isIntOrFloat()) {
+    func = AggregateFunc::SUM;
+  } else if (llvm::isa<graphalg::TropI64Type, graphalg::TropF64Type>(sring)) {
+    func = AggregateFunc::MIN;
+  } else if (llvm::isa<graphalg::TropMaxI64Type>(sring)) {
+    func = AggregateFunc::MAX;
+  } else {
+    return op->emitOpError("aggregation with semiring ")
+           << sring << " is not supported";
+  }
+
+  std::array<ColumnIdx, 1> inputs{input};
+  return AggregatorAttr::get(ctx, func, inputs);
+}
+
 // =============================================================================
 // =============================== Op Conversion ===============================
 // =============================================================================
@@ -680,6 +702,39 @@ mlir::LogicalResult OpConversion<graphalg::ConstantMatrixOp>::matchAndRewrite(
   return mlir::success();
 }
 
+template <>
+mlir::LogicalResult OpConversion<graphalg::DeferredReduceOp>::matchAndRewrite(
+    graphalg::DeferredReduceOp op, OpAdaptor adaptor,
+    mlir::ConversionPatternRewriter &rewriter) const {
+  MatrixAdaptor input(op.getInputs()[0], adaptor.getInputs()[0]);
+  MatrixAdaptor output(op, typeConverter->convertType(op.getType()));
+
+  // Group by keys
+  llvm::SmallVector<ColumnIdx, 2> groupBy;
+  if (output.hasRowColumn()) {
+    groupBy.push_back(input.rowColumn());
+  }
+
+  if (output.hasColColumn()) {
+    groupBy.push_back(input.colColumn());
+  }
+
+  // Aggregators
+  auto aggregator =
+      createAggregator(op, input.semiring(), input.valColumn(), rewriter);
+  if (mlir::failed(aggregator)) {
+    return mlir::failure();
+  }
+
+  std::array<AggregatorAttr, 1> aggregators{*aggregator};
+
+  // union the inputs and then aggregate.
+  auto unionOp =
+      rewriter.createOrFold<UnionOp>(op.getLoc(), adaptor.getInputs());
+  rewriter.replaceOpWithNewOp<AggregateOp>(op, unionOp, groupBy, aggregators);
+  return mlir::success();
+}
+
 // =============================================================================
 // ============================ Tuple Op Conversion ============================
 // =============================================================================
@@ -886,7 +941,8 @@ void GraphAlgToRel::runOnOperation() {
   patterns.add<
       OpConversion<mlir::func::FuncOp>, OpConversion<mlir::func::ReturnOp>,
       OpConversion<graphalg::TransposeOp>, OpConversion<graphalg::BroadcastOp>,
-      OpConversion<graphalg::ConstantMatrixOp>>(matrixTypeConverter,
+      OpConversion<graphalg::ConstantMatrixOp>,
+      OpConversion<graphalg::DeferredReduceOp>>(matrixTypeConverter,
                                                 &getContext());
   patterns.add<ApplyOpConversion>(semiringTypeConverter, matrixTypeConverter,
                                   &getContext());

@@ -115,6 +115,7 @@ SelectReturnOp SelectOp::getTerminator() {
 // === JoinOp ===
 mlir::OpFoldResult JoinOp::fold(FoldAdaptor adaptor) {
   if (getInputs().size() == 1) {
+    // no-op if we only have one input.
     assert(getInputs()[0].getType() == getType());
     return getInputs()[0];
   }
@@ -123,9 +124,50 @@ mlir::OpFoldResult JoinOp::fold(FoldAdaptor adaptor) {
 }
 
 mlir::LogicalResult JoinOp::verify() {
-  // TODO: Inputs must use distinct columns.
-  // TODO: Predicates must refer to columns in distinct inputs (and to columns
-  // present in the input).
+  for (auto pred : getPredicates()) {
+    // Valid input relation
+    if (pred.getLhsRelIdx() >= getInputs().size()) {
+      return emitOpError("predicate refers to input relation ")
+             << pred.getLhsRelIdx() << ", but there are only "
+             << getInputs().size() << " input relations: " << pred;
+    } else if (pred.getRhsRelIdx() >= getInputs().size()) {
+      return emitOpError("predicate refers to input relation ")
+             << pred.getRhsRelIdx() << ", but there are only "
+             << getInputs().size() << " input relations: " << pred;
+    }
+
+    if (pred.getLhsRelIdx() == pred.getRhsRelIdx()) {
+      return emitOpError("predicate between columns of the same relation: ")
+             << pred;
+    }
+
+    // Valid column on LHS relation.
+    auto lhsInputType =
+        llvm::cast<RelationType>(getInputs()[pred.getLhsRelIdx()].getType());
+    if (pred.getLhsColIdx() >= lhsInputType.getColumns().size()) {
+      auto diag = emitOpError("predicate refers to column ")
+                  << pred.getLhsColIdx() << ", but there are only "
+                  << lhsInputType.getColumns().size()
+                  << " input columns: " << pred;
+      diag.attachNote(getInputs()[pred.getLhsRelIdx()].getLoc())
+          << "input relation defined here";
+      return diag;
+    }
+
+    // Valid column on RHS relation.
+    auto rhsInputType =
+        llvm::cast<RelationType>(getInputs()[pred.getRhsRelIdx()].getType());
+    if (pred.getRhsColIdx() >= rhsInputType.getColumns().size()) {
+      auto diag = emitOpError("predicate refers to column ")
+                  << pred.getRhsColIdx() << ", but there are only "
+                  << rhsInputType.getColumns().size()
+                  << " input columns: " << pred;
+      diag.attachNote(getInputs()[pred.getRhsRelIdx()].getLoc())
+          << "input relation defined here";
+      return diag;
+    }
+  }
+
   return mlir::success();
 }
 
@@ -140,6 +182,17 @@ mlir::LogicalResult JoinOp::inferReturnTypes(
 
   inferredReturnTypes.push_back(RelationType::get(ctx, outputColumns));
   return mlir::success();
+}
+
+// === UnionOp ===
+mlir::OpFoldResult UnionOp::fold(FoldAdaptor adaptor) {
+  if (getInputs().size() == 1) {
+    // no-op if we only have one input.
+    assert(getInputs()[0].getType() == getType());
+    return getInputs()[0];
+  }
+
+  return nullptr;
 }
 
 // === AggregateOp ===
