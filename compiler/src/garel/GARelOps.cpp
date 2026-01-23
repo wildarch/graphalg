@@ -113,6 +113,15 @@ SelectReturnOp SelectOp::getTerminator() {
 }
 
 // === JoinOp ===
+mlir::OpFoldResult JoinOp::fold(FoldAdaptor adaptor) {
+  if (getInputs().size() == 1) {
+    assert(getInputs()[0].getType() == getType());
+    return getInputs()[0];
+  }
+
+  return nullptr;
+}
+
 mlir::LogicalResult JoinOp::verify() {
   // TODO: Inputs must use distinct columns.
   // TODO: Predicates must refer to columns in distinct inputs (and to columns
@@ -270,6 +279,15 @@ mlir::OpFoldResult RemapOp::fold(FoldAdaptor adaptor) {
   }
 
   return nullptr;
+}
+
+// === ConstantOp ===
+mlir::LogicalResult ConstantOp::inferReturnTypes(
+    mlir::MLIRContext *ctx, std::optional<mlir::Location> location,
+    Adaptor adaptor, llvm::SmallVectorImpl<mlir::Type> &inferredReturnTypes) {
+  llvm::SmallVector<mlir::Type, 1> outputColumns{adaptor.getValue().getType()};
+  inferredReturnTypes.push_back(RelationType::get(ctx, outputColumns));
+  return mlir::success();
 }
 
 } // namespace garel

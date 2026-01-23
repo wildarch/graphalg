@@ -104,6 +104,7 @@ def JoinOp : GARel_Op<"join", [InferTypeOpAdaptor]> {
     }];
 
     let hasVerifier = 1;
+    let hasFolder = 1;
 }
 
 def UnionOp : GARel_Op<"union", [SameOperandsAndResultType]> {
@@ -202,6 +203,18 @@ def RemapOp : GARel_Op<"remap", [InferTypeOpAdaptor]> {
 
     let hasVerifier = 1;
     let hasFolder = 1;
+}
+
+def ConstantOp : GARel_Op<"const", [InferTypeOpAdaptor]> {
+    let summary = "A relation with one constant-value tuple";
+
+    let arguments = (ins TypedAttrInterface:$value);
+
+    let results = (outs Relation:$result);
+
+    let assemblyFormat = [{
+        $value attr-dict
+    }];
 }
 
 #endif // GAREL_OPS

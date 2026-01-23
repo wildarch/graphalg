@@ -645,6 +645,41 @@ mlir::LogicalResult OpConversion<graphalg::BroadcastOp>::matchAndRewrite(
   return mlir::success();
 }
 
+template <>
+mlir::LogicalResult OpConversion<graphalg::ConstantMatrixOp>::matchAndRewrite(
+    graphalg::ConstantMatrixOp op, OpAdaptor adaptor,
+    mlir::ConversionPatternRewriter &rewriter) const {
+  MatrixAdaptor output(op, typeConverter->convertType(op.getType()));
+
+  auto constantValue = convertConstant(op, op.getValue());
+  if (mlir::failed(constantValue)) {
+    return mlir::failure();
+  }
+
+  auto constantOp = rewriter.create<ConstantOp>(op.getLoc(), *constantValue);
+
+  // Broadcast to rows/columns if needed.
+  llvm::SmallVector<mlir::Value> joinChildren;
+  if (!output.matrixType().getRows().isOne()) {
+    // Broadcast over all rows.
+    joinChildren.push_back(
+        createDimRead(op.getLoc(), output.matrixType().getRows(), rewriter));
+  }
+
+  if (!output.matrixType().getCols().isOne()) {
+    // Broadcast over all columns.
+    joinChildren.push_back(
+        createDimRead(op.getLoc(), output.matrixType().getCols(), rewriter));
+  }
+
+  joinChildren.push_back(constantOp);
+  auto joinOp = rewriter.createOrFold<JoinOp>(
+      op.getLoc(), joinChildren, llvm::ArrayRef<JoinPredicateAttr>{});
+
+  rewriter.replaceOp(op, joinOp);
+  return mlir::success();
+}
+
 // =============================================================================
 // ============================ Tuple Op Conversion ============================
 // =============================================================================
@@ -830,13 +865,13 @@ void GraphAlgToRel::runOnOperation() {
   mlir::RewritePatternSet patterns(&getContext());
   patterns.add<
       OpConversion<mlir::func::FuncOp>, OpConversion<mlir::func::ReturnOp>,
-      OpConversion<graphalg::TransposeOp>, OpConversion<graphalg::BroadcastOp>>(
-      matrixTypeConverter, &getContext());
+      OpConversion<graphalg::TransposeOp>, OpConversion<graphalg::BroadcastOp>,
+      OpConversion<graphalg::ConstantMatrixOp>>(matrixTypeConverter,
+                                                &getContext());
   patterns.add<ApplyOpConversion>(semiringTypeConverter, matrixTypeConverter,
                                   &getContext());
 
   // Scalar patterns.
-  // patterns.add(convertArithConstant);
   patterns.add<
       OpConversion<graphalg::ApplyReturnOp>, OpConversion<graphalg::ConstantOp>,
       OpConversion<graphalg::AddOp>, OpConversion<graphalg::CastScalarOp>>(
