@@ -826,6 +826,26 @@ mlir::LogicalResult OpConversion<graphalg::CastScalarOp>::matchAndRewrite(
          << " dialect";
 }
 
+template <>
+mlir::LogicalResult OpConversion<graphalg::EqOp>::matchAndRewrite(
+    graphalg::EqOp op, OpAdaptor adaptor,
+    mlir::ConversionPatternRewriter &rewriter) const {
+  auto lhs = adaptor.getLhs();
+  auto rhs = adaptor.getRhs();
+  if (lhs.getType().isF64()) {
+    assert(rhs.getType().isF64());
+    rewriter.replaceOpWithNewOp<mlir::arith::CmpFOp>(
+        op, mlir::arith::CmpFPredicate::OEQ, lhs, rhs);
+  } else {
+    assert(lhs.getType().isSignlessInteger());
+    assert(rhs.getType().isSignlessInteger());
+    rewriter.replaceOpWithNewOp<mlir::arith::CmpIOp>(
+        op, mlir::arith::CmpIPredicate::eq, lhs, rhs);
+  }
+
+  return mlir::success();
+}
+
 static bool hasRelationSignature(mlir::func::FuncOp op) {
   // All inputs should be relations
   auto funcType = op.getFunctionType();
@@ -872,10 +892,11 @@ void GraphAlgToRel::runOnOperation() {
                                   &getContext());
 
   // Scalar patterns.
-  patterns.add<
-      OpConversion<graphalg::ApplyReturnOp>, OpConversion<graphalg::ConstantOp>,
-      OpConversion<graphalg::AddOp>, OpConversion<graphalg::CastScalarOp>>(
-      semiringTypeConverter, &getContext());
+  patterns
+      .add<OpConversion<graphalg::ApplyReturnOp>,
+           OpConversion<graphalg::ConstantOp>, OpConversion<graphalg::AddOp>,
+           OpConversion<graphalg::CastScalarOp>, OpConversion<graphalg::EqOp>>(
+          semiringTypeConverter, &getContext());
 
   if (mlir::failed(mlir::applyFullConversion(getOperation(), target,
                                              std::move(patterns)))) {
