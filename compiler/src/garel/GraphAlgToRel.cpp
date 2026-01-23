@@ -735,6 +735,19 @@ mlir::LogicalResult OpConversion<graphalg::DeferredReduceOp>::matchAndRewrite(
   return mlir::success();
 }
 
+template <>
+mlir::LogicalResult OpConversion<graphalg::DiagOp>::matchAndRewrite(
+    graphalg::DiagOp op, OpAdaptor adaptor,
+    mlir::ConversionPatternRewriter &rewriter) const {
+  MatrixAdaptor input(op.getInput(), adaptor.getInput());
+  MatrixAdaptor output(op, typeConverter->convertType(op.getType()));
+
+  std::array<ColumnIdx, 3> mapping{0, 0, 1};
+  rewriter.replaceOpWithNewOp<RemapOp>(op, adaptor.getInput(), mapping);
+
+  return mlir::success();
+}
+
 // =============================================================================
 // ============================ Tuple Op Conversion ============================
 // =============================================================================
@@ -942,8 +955,8 @@ void GraphAlgToRel::runOnOperation() {
       OpConversion<mlir::func::FuncOp>, OpConversion<mlir::func::ReturnOp>,
       OpConversion<graphalg::TransposeOp>, OpConversion<graphalg::BroadcastOp>,
       OpConversion<graphalg::ConstantMatrixOp>,
-      OpConversion<graphalg::DeferredReduceOp>>(matrixTypeConverter,
-                                                &getContext());
+      OpConversion<graphalg::DeferredReduceOp>, OpConversion<graphalg::DiagOp>>(
+      matrixTypeConverter, &getContext());
   patterns.add<ApplyOpConversion>(semiringTypeConverter, matrixTypeConverter,
                                   &getContext());
 
