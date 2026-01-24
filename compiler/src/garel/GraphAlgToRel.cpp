@@ -22,6 +22,7 @@
 #include "garel/GARelOps.h"
 #include "garel/GARelTypes.h"
 #include "graphalg/GraphAlgAttr.h"
+#include "graphalg/GraphAlgCast.h"
 #include "graphalg/GraphAlgDialect.h"
 #include "graphalg/GraphAlgOps.h"
 #include "graphalg/GraphAlgTypes.h"
@@ -1111,6 +1112,22 @@ mlir::LogicalResult OpConversion<graphalg::EqOp>::matchAndRewrite(
   return mlir::success();
 }
 
+template <>
+mlir::LogicalResult OpConversion<graphalg::MulOp>::matchAndRewrite(
+    graphalg::MulOp op, OpAdaptor adaptor,
+    mlir::ConversionPatternRewriter &rewriter) const {
+  auto sring = op.getType();
+  auto *ctx = rewriter.getContext();
+  auto mulOp = createMul(op, llvm::cast<graphalg::SemiringTypeInterface>(sring),
+                         adaptor.getLhs(), adaptor.getRhs(), rewriter);
+  if (mlir::failed(mulOp)) {
+    return mlir::failure();
+  }
+
+  rewriter.replaceOp(op, *mulOp);
+  return mlir::success();
+}
+
 static bool hasRelationSignature(mlir::func::FuncOp op) {
   // All inputs should be relations
   auto funcType = op.getFunctionType();
@@ -1162,8 +1179,8 @@ void GraphAlgToRel::runOnOperation() {
   patterns
       .add<OpConversion<graphalg::ApplyReturnOp>,
            OpConversion<graphalg::ConstantOp>, OpConversion<graphalg::AddOp>,
-           OpConversion<graphalg::CastScalarOp>, OpConversion<graphalg::EqOp>>(
-          semiringTypeConverter, &getContext());
+           OpConversion<graphalg::CastScalarOp>, OpConversion<graphalg::EqOp>,
+           OpConversion<graphalg::MulOp>>(semiringTypeConverter, &getContext());
 
   if (mlir::failed(mlir::applyFullConversion(getOperation(), target,
                                              std::move(patterns)))) {
