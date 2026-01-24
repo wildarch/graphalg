@@ -74,17 +74,6 @@ ProjectReturnOp ProjectOp::getTerminator() {
 }
 
 // === SelectOp ===
-void SelectOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
-                     mlir::Value input) {
-  auto region = state.addRegion();
-  auto &block = region->emplaceBlock();
-  auto inputType = llvm::cast<RelationType>(input.getType());
-  block.addArgument(builder.getType<TupleType>(inputType.getColumns()),
-                    builder.getUnknownLoc());
-  state.addTypes(input.getType());
-  state.addOperands(input);
-}
-
 mlir::LogicalResult SelectOp::verifyRegions() {
   if (getPredicates().getNumArguments() != 1) {
     return emitOpError("predicates block should have exactly one argument");
@@ -106,6 +95,16 @@ mlir::LogicalResult SelectOp::verifyRegions() {
   }
 
   return mlir::success();
+}
+
+mlir::Block &SelectOp::createPredicatesBlock() {
+  assert(getPredicates().empty() && "Already have a predicates block");
+  auto &block = getPredicates().emplaceBlock();
+  // Same columns as the input, but as a tuple.
+  block.addArgument(
+      TupleType::get(getContext(), getInput().getType().getColumns()),
+      getInput().getLoc());
+  return block;
 }
 
 SelectReturnOp SelectOp::getTerminator() {

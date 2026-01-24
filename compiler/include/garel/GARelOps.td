@@ -58,9 +58,6 @@ def SelectOp : GARel_Op<"select", [
     let arguments = (ins Relation:$input);
     let regions = (region SizedRegion<1>:$predicates);
 
-    let builders = [OpBuilder<(ins "mlir::Value":$child)>];
-    let skipDefaultBuilders = 1;
-
     let results = (outs Relation:$result);
 
     let assemblyFormat = [{
@@ -70,6 +67,7 @@ def SelectOp : GARel_Op<"select", [
     let hasRegionVerifier = 1;
 
     let extraClassDeclaration = [{
+        mlir::Block& createPredicatesBlock();
         SelectReturnOp getTerminator();
     }];
 }

@@ -1,3 +1,4 @@
+#include <array>
 #include <numeric>
 
 #include <llvm/ADT/ArrayRef.h>
@@ -946,6 +947,62 @@ mlir::LogicalResult OpConversion<graphalg::MatMulJoinOp>::matchAndRewrite(
   return mlir::success();
 }
 
+template <>
+mlir::LogicalResult OpConversion<graphalg::PickAnyOp>::matchAndRewrite(
+    graphalg::PickAnyOp op, OpAdaptor adaptor,
+    mlir::ConversionPatternRewriter &rewriter) const {
+  MatrixAdaptor input(op.getInput(), adaptor.getInput());
+  MatrixAdaptor output(op, typeConverter->convertType(op.getType()));
+
+  auto *ctx = rewriter.getContext();
+
+  // Remove rows where value is the additive identity.
+  auto selectOp = rewriter.create<SelectOp>(op.getLoc(), input.relation());
+  {
+    mlir::OpBuilder::InsertionGuard guard(rewriter);
+    auto &body = selectOp.createPredicatesBlock();
+    rewriter.setInsertionPointToStart(&body);
+
+    auto valOp = rewriter.create<ExtractOp>(op.getLoc(), input.valColumn(),
+                                            body.getArgument(0));
+    auto addIdent = convertConstant(op, input.semiring().addIdentity());
+    if (mlir::failed(addIdent)) {
+      return mlir::failure();
+    }
+
+    auto addIdentOp =
+        rewriter.create<mlir::arith::ConstantOp>(op.getLoc(), *addIdent);
+    mlir::Value cmpOp;
+    if (addIdentOp.getType().isF64()) {
+      cmpOp = rewriter.create<mlir::arith::CmpFOp>(
+          op.getLoc(), mlir::arith::CmpFPredicate::ONE, valOp, addIdentOp);
+    } else {
+      cmpOp = rewriter.create<mlir::arith::CmpIOp>(
+          op.getLoc(), mlir::arith::CmpIPredicate::ne, valOp, addIdentOp);
+    }
+
+    rewriter.create<SelectReturnOp>(op.getLoc(), mlir::ValueRange{cmpOp});
+  }
+
+  llvm::SmallVector<ColumnIdx, 1> groupBy;
+  if (input.hasRowColumn()) {
+    groupBy.push_back(input.rowColumn());
+  }
+
+  assert(input.hasColColumn());
+  std::array<AggregatorAttr, 2> aggregators{
+      // Minimum column
+      rewriter.getAttr<AggregatorAttr>(
+          AggregateFunc::MIN, std::array<ColumnIdx, 1>{input.colColumn()}),
+      // Value for minimum column
+      rewriter.getAttr<AggregatorAttr>(
+          AggregateFunc::ARGMIN,
+          std::array<ColumnIdx, 2>{input.valColumn(), input.colColumn()}),
+  };
+  rewriter.replaceOpWithNewOp<AggregateOp>(op, selectOp, groupBy, aggregators);
+  return mlir::success();
+}
+
 // =============================================================================
 // ============================ Tuple Op Conversion ============================
 // =============================================================================
@@ -1171,7 +1228,8 @@ void GraphAlgToRel::runOnOperation() {
       OpConversion<graphalg::ConstantMatrixOp>,
       OpConversion<graphalg::DeferredReduceOp>, OpConversion<graphalg::DiagOp>,
       OpConversion<graphalg::ForConstOp>, OpConversion<graphalg::YieldOp>,
-      OpConversion<graphalg::MatMulJoinOp>>(matrixTypeConverter, &getContext());
+      OpConversion<graphalg::MatMulJoinOp>, OpConversion<graphalg::PickAnyOp>>(
+      matrixTypeConverter, &getContext());
   patterns.add<ApplyOpConversion>(semiringTypeConverter, matrixTypeConverter,
                                   &getContext());
 
