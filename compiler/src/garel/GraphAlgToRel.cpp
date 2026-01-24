@@ -1003,6 +1003,34 @@ mlir::LogicalResult OpConversion<graphalg::PickAnyOp>::matchAndRewrite(
   return mlir::success();
 }
 
+template <>
+mlir::LogicalResult OpConversion<graphalg::TrilOp>::matchAndRewrite(
+    graphalg::TrilOp op, OpAdaptor adaptor,
+    mlir::ConversionPatternRewriter &rewriter) const {
+  MatrixAdaptor input(op.getInput(), adaptor.getInput());
+
+  if (!input.hasRowColumn() || !input.hasColColumn()) {
+    return op->emitOpError(
+        "only works on full matrices (not scalars or vector)");
+  }
+
+  auto selectOp = rewriter.replaceOpWithNewOp<SelectOp>(op, input.relation());
+
+  auto &body = selectOp.createPredicatesBlock();
+  rewriter.setInsertionPointToStart(&body);
+
+  auto row = rewriter.create<ExtractOp>(op.getLoc(), input.rowColumn(),
+                                        body.getArgument(0));
+  auto col = rewriter.create<ExtractOp>(op.getLoc(), input.colColumn(),
+                                        body.getArgument(0));
+  // col < row
+  auto cmpOp = rewriter.create<mlir::arith::CmpIOp>(
+      op.getLoc(), mlir::arith::CmpIPredicate::ult, col, row);
+  rewriter.create<SelectReturnOp>(op.getLoc(), mlir::ValueRange{cmpOp});
+
+  return mlir::success();
+}
+
 // =============================================================================
 // ============================ Tuple Op Conversion ============================
 // =============================================================================
@@ -1228,8 +1256,8 @@ void GraphAlgToRel::runOnOperation() {
       OpConversion<graphalg::ConstantMatrixOp>,
       OpConversion<graphalg::DeferredReduceOp>, OpConversion<graphalg::DiagOp>,
       OpConversion<graphalg::ForConstOp>, OpConversion<graphalg::YieldOp>,
-      OpConversion<graphalg::MatMulJoinOp>, OpConversion<graphalg::PickAnyOp>>(
-      matrixTypeConverter, &getContext());
+      OpConversion<graphalg::MatMulJoinOp>, OpConversion<graphalg::PickAnyOp>,
+      OpConversion<graphalg::TrilOp>>(matrixTypeConverter, &getContext());
   patterns.add<ApplyOpConversion>(semiringTypeConverter, matrixTypeConverter,
                                   &getContext());
 
