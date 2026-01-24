@@ -398,6 +398,32 @@ static mlir::IntegerAttr tryGetConstantInt(mlir::Value v) {
   return llvm::cast<mlir::IntegerAttr>(attr);
 }
 
+static mlir::FailureOr<mlir::Value>
+createMul(mlir::Operation *op, graphalg::SemiringTypeInterface sring,
+          mlir::Value lhs, mlir::Value rhs, mlir::OpBuilder &builder) {
+  auto *ctx = builder.getContext();
+  if (sring == graphalg::SemiringTypes::forBool(ctx)) {
+    return mlir::Value(
+        builder.create<mlir::arith::AndIOp>(op->getLoc(), lhs, rhs));
+  } else if (sring == graphalg::SemiringTypes::forInt(ctx)) {
+    return mlir::Value(
+        builder.create<mlir::arith::MulIOp>(op->getLoc(), lhs, rhs));
+  } else if (sring == graphalg::SemiringTypes::forReal(ctx)) {
+    return mlir::Value(
+        builder.create<mlir::arith::MulFOp>(op->getLoc(), lhs, rhs));
+  } else if (sring == graphalg::SemiringTypes::forTropInt(ctx) ||
+             sring == graphalg::SemiringTypes::forTropMaxInt(ctx)) {
+    return mlir::Value(
+        builder.create<mlir::arith::AddIOp>(op->getLoc(), lhs, rhs));
+  } else if (sring == graphalg::SemiringTypes::forTropReal(ctx)) {
+    return mlir::Value(
+        builder.create<mlir::arith::AddFOp>(op->getLoc(), lhs, rhs));
+  }
+
+  return op->emitOpError("multiplication with semiring ")
+         << sring << " is not supported";
+}
+
 // =============================================================================
 // =============================== Op Conversion ===============================
 // =============================================================================
@@ -854,6 +880,71 @@ mlir::LogicalResult OpConversion<graphalg::YieldOp>::matchAndRewrite(
   return mlir::success();
 }
 
+template <>
+mlir::LogicalResult OpConversion<graphalg::MatMulJoinOp>::matchAndRewrite(
+    graphalg::MatMulJoinOp op, OpAdaptor adaptor,
+    mlir::ConversionPatternRewriter &rewriter) const {
+  MatrixAdaptor lhs(op.getLhs(), adaptor.getLhs());
+  MatrixAdaptor rhs(op.getRhs(), adaptor.getRhs());
+  MatrixAdaptor result(op, typeConverter->convertType(op.getType()));
+
+  // Join matrices.
+  llvm::SmallVector<JoinPredicateAttr, 1> predicates;
+  if (lhs.hasColColumn() && rhs.hasRowColumn()) {
+    predicates.push_back(rewriter.getAttr<JoinPredicateAttr>(
+        /*lhsRelIdx=*/0, lhs.colColumn(), /*rhsRelIdx=*/1, rhs.rowColumn()));
+  }
+
+  auto joinOp = rewriter.create<JoinOp>(
+      op->getLoc(), mlir::ValueRange{lhs.relation(), rhs.relation()},
+      predicates);
+
+  // Project the multiplied values.
+  auto projOp =
+      rewriter.create<ProjectOp>(op.getLoc(), result.relType(), joinOp);
+  {
+    auto &body = projOp.createProjectionsBlock();
+    mlir::OpBuilder::InsertionGuard guard(rewriter);
+    rewriter.setInsertionPointToStart(&body);
+
+    llvm::SmallVector<mlir::Value> projections;
+
+    if (lhs.hasRowColumn()) {
+      projections.push_back(rewriter.create<ExtractOp>(
+          op.getLoc(), lhs.rowColumn(), body.getArgument(0)));
+    }
+
+    if (rhs.hasColColumn()) {
+      // In the join output, rhs columns come after lhs columns.
+      auto colIdx = lhs.columns().size() + rhs.colColumn();
+      projections.push_back(
+          rewriter.create<ExtractOp>(op.getLoc(), colIdx, body.getArgument(0)));
+    }
+
+    // Get the value slots.
+    auto lhsVal = rewriter.create<ExtractOp>(op.getLoc(), lhs.valColumn(),
+                                             body.getArgument(0));
+    auto rhsVal = rewriter.create<ExtractOp>(
+        op.getLoc(), lhs.columns().size() + rhs.valColumn(),
+        body.getArgument(0));
+
+    // Perform the multiplication
+    auto mulOp = createMul(
+        op,
+        llvm::cast<graphalg::SemiringTypeInterface>(op.getType().getSemiring()),
+        lhsVal, rhsVal, rewriter);
+    if (mlir::failed(mulOp)) {
+      return mlir::failure();
+    }
+
+    projections.push_back(*mulOp);
+    rewriter.create<ProjectReturnOp>(op.getLoc(), projections);
+  }
+
+  rewriter.replaceOp(op, projOp);
+  return mlir::success();
+}
+
 // =============================================================================
 // ============================ Tuple Op Conversion ============================
 // =============================================================================
@@ -1062,8 +1153,8 @@ void GraphAlgToRel::runOnOperation() {
       OpConversion<graphalg::TransposeOp>, OpConversion<graphalg::BroadcastOp>,
       OpConversion<graphalg::ConstantMatrixOp>,
       OpConversion<graphalg::DeferredReduceOp>, OpConversion<graphalg::DiagOp>,
-      OpConversion<graphalg::ForConstOp>, OpConversion<graphalg::YieldOp>>(
-      matrixTypeConverter, &getContext());
+      OpConversion<graphalg::ForConstOp>, OpConversion<graphalg::YieldOp>,
+      OpConversion<graphalg::MatMulJoinOp>>(matrixTypeConverter, &getContext());
   patterns.add<ApplyOpConversion>(semiringTypeConverter, matrixTypeConverter,
                                   &getContext());
 
