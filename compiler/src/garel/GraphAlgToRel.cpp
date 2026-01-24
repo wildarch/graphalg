@@ -1,15 +1,19 @@
 #include <numeric>
 
 #include <llvm/ADT/ArrayRef.h>
+#include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/SmallVector.h>
 #include <mlir/Dialect/Arith/IR/Arith.h>
 #include <mlir/Dialect/Func/IR/FuncOps.h>
+#include <mlir/IR/Builders.h>
 #include <mlir/IR/BuiltinAttributeInterfaces.h>
 #include <mlir/IR/BuiltinAttributes.h>
 #include <mlir/IR/BuiltinOps.h>
 #include <mlir/IR/BuiltinTypeInterfaces.h>
 #include <mlir/IR/BuiltinTypes.h>
 #include <mlir/IR/MLIRContext.h>
+#include <mlir/IR/Matchers.h>
+#include <mlir/IR/Value.h>
 #include <mlir/Pass/Pass.h>
 #include <mlir/Transforms/DialectConversion.h>
 
@@ -22,7 +26,6 @@
 #include "graphalg/GraphAlgOps.h"
 #include "graphalg/GraphAlgTypes.h"
 #include "graphalg/SemiringTypes.h"
-#include "mlir/IR/Builders.h"
 
 namespace garel {
 
@@ -383,6 +386,15 @@ createAggregator(mlir::Operation *op, graphalg::SemiringTypeInterface sring,
 
   std::array<ColumnIdx, 1> inputs{input};
   return AggregatorAttr::get(ctx, func, inputs);
+}
+
+static mlir::IntegerAttr tryGetConstantInt(mlir::Value v) {
+  mlir::Attribute attr;
+  if (!mlir::matchPattern(v, mlir::m_Constant(&attr))) {
+    return nullptr;
+  }
+
+  return llvm::cast<mlir::IntegerAttr>(attr);
 }
 
 // =============================================================================
@@ -748,6 +760,79 @@ mlir::LogicalResult OpConversion<graphalg::DiagOp>::matchAndRewrite(
   return mlir::success();
 }
 
+template <>
+mlir::LogicalResult OpConversion<graphalg::ForConstOp>::matchAndRewrite(
+    graphalg::ForConstOp op, OpAdaptor adaptor,
+    mlir::ConversionPatternRewriter &rewriter) const {
+  auto rangeBegin = tryGetConstantInt(op.getRangeBegin());
+  auto rangeEnd = tryGetConstantInt(op.getRangeEnd());
+  if (!rangeBegin || !rangeEnd) {
+    return op->emitOpError("iter range is not constant");
+  }
+
+  auto iters = rangeEnd.getInt() - rangeBegin.getInt();
+
+  llvm::SmallVector<mlir::Value> initArgs{adaptor.getRangeBegin()};
+  initArgs.append(adaptor.getInitArgs().begin(), adaptor.getInitArgs().end());
+
+  auto blockSignature =
+      typeConverter->convertBlockSignature(&op.getBody().front());
+  if (!blockSignature) {
+    return op->emitOpError("Failed to convert iter args");
+  }
+
+  // The relational version of this op can only have a single output value.
+  // For loops with multiple results, duplicate.
+  llvm::SmallVector<mlir::Value> resultValues;
+  for (auto i : llvm::seq(op->getNumResults())) {
+    auto result = op->getResult(i);
+    if (result.use_empty()) {
+      // Not used. Take init arg as a dummy value.
+      resultValues.emplace_back(adaptor.getInitArgs()[i]);
+      continue;
+    }
+
+    // We are adding the iteration count variable as a first argument, so offset
+    // the result index accordingly.
+    std::int64_t resultIdx = i + 1;
+    auto resultType = adaptor.getInitArgs()[i].getType();
+    auto forOp = rewriter.create<ForOp>(op.getLoc(), resultType, initArgs,
+                                        iters, resultIdx);
+    // body block
+    rewriter.cloneRegionBefore(op.getBody(), forOp.getBody(),
+                               forOp.getBody().begin());
+    rewriter.applySignatureConversion(&forOp.getBody().front(),
+                                      *blockSignature);
+
+    // until block
+    if (!op.getUntil().empty()) {
+      rewriter.cloneRegionBefore(op.getUntil(), forOp.getUntil(),
+                                 forOp.getUntil().begin());
+      rewriter.applySignatureConversion(&forOp.getUntil().front(),
+                                        *blockSignature);
+    }
+
+    resultValues.emplace_back(forOp);
+  }
+
+  rewriter.replaceOp(op, resultValues);
+  return mlir::success();
+}
+
+template <>
+mlir::LogicalResult OpConversion<graphalg::YieldOp>::matchAndRewrite(
+    graphalg::YieldOp op, OpAdaptor adaptor,
+    mlir::ConversionPatternRewriter &rewriter) const {
+  // TODO: increment
+  auto iterVar = op->getBlock()->getArgument(0);
+
+  llvm::SmallVector<mlir::Value> inputs{iterVar};
+  inputs.append(adaptor.getInputs().begin(), adaptor.getInputs().end());
+
+  rewriter.replaceOpWithNewOp<ForYieldOp>(op, inputs);
+  return mlir::success();
+}
+
 // =============================================================================
 // ============================ Tuple Op Conversion ============================
 // =============================================================================
@@ -955,7 +1040,8 @@ void GraphAlgToRel::runOnOperation() {
       OpConversion<mlir::func::FuncOp>, OpConversion<mlir::func::ReturnOp>,
       OpConversion<graphalg::TransposeOp>, OpConversion<graphalg::BroadcastOp>,
       OpConversion<graphalg::ConstantMatrixOp>,
-      OpConversion<graphalg::DeferredReduceOp>, OpConversion<graphalg::DiagOp>>(
+      OpConversion<graphalg::DeferredReduceOp>, OpConversion<graphalg::DiagOp>,
+      OpConversion<graphalg::ForConstOp>, OpConversion<graphalg::YieldOp>>(
       matrixTypeConverter, &getContext());
   patterns.add<ApplyOpConversion>(semiringTypeConverter, matrixTypeConverter,
                                   &getContext());

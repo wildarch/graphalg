@@ -148,7 +148,9 @@ def ForOp : GARel_Op<"for", [InferTypeOpAdaptor]> {
         I64Attr:$iters,
         I64Attr:$resultIdx);
 
-    let regions = (region SizedRegion<1>:$body);
+    let regions = (region
+        SizedRegion<1>:$body,
+        MaxSizedRegion<1>:$until);
 
     let results = (outs Relation:$result);
 
@@ -157,6 +159,7 @@ def ForOp : GARel_Op<"for", [InferTypeOpAdaptor]> {
         `iters` `` `=` `` $iters
         `result_idx` `` `=` `` $resultIdx
         $body
+        (`until` $until^)?
         attr-dict
     }];
 
@@ -172,7 +175,8 @@ def ForYieldOp : GARel_Op<"for.yield", [
     let arguments = (ins Variadic<Relation>:$inputs);
 
     let assemblyFormat = [{
-        $inputs `:` type($inputs) attr-dict
+        $inputs `:` type($inputs)
+        attr-dict
     }];
 
     // Note: verification performed by parent ForOp.
