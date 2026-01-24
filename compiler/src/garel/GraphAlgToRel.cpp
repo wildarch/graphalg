@@ -26,6 +26,7 @@
 #include "graphalg/GraphAlgOps.h"
 #include "graphalg/GraphAlgTypes.h"
 #include "graphalg/SemiringTypes.h"
+#include "mlir/IR/ValueRange.h"
 
 namespace garel {
 
@@ -823,10 +824,30 @@ template <>
 mlir::LogicalResult OpConversion<graphalg::YieldOp>::matchAndRewrite(
     graphalg::YieldOp op, OpAdaptor adaptor,
     mlir::ConversionPatternRewriter &rewriter) const {
-  // TODO: increment
-  auto iterVar = op->getBlock()->getArgument(0);
+  llvm::SmallVector<mlir::Value> inputs;
 
-  llvm::SmallVector<mlir::Value> inputs{iterVar};
+  auto *block = op->getBlock();
+  auto forOp = llvm::cast<ForOp>(block->getParentOp());
+  if (block == &forOp.getBody().front()) {
+    // Main body
+    auto iterVar = op->getBlock()->getArgument(0);
+    // Increment the iteration counter using a garel.project op.
+    auto loc = forOp.getLoc();
+    auto projOp = rewriter.create<ProjectOp>(loc, iterVar.getType(), iterVar);
+    auto &projBlock = projOp.createProjectionsBlock();
+    mlir::OpBuilder::InsertionGuard guard(rewriter);
+    rewriter.setInsertionPointToStart(&projBlock);
+    auto iterOp = rewriter.create<ExtractOp>(loc, 0, projBlock.getArgument(0));
+    auto oneOp = rewriter.create<mlir::arith::ConstantIntOp>(
+        loc, 1, rewriter.getI64Type());
+    auto addOp = rewriter.create<mlir::arith::AddIOp>(loc, iterOp, oneOp);
+    rewriter.create<ProjectReturnOp>(loc, mlir::ValueRange{addOp});
+
+    inputs.push_back(projOp);
+  } else {
+    // No changes needed for 'until' block.
+  }
+
   inputs.append(adaptor.getInputs().begin(), adaptor.getInputs().end());
 
   rewriter.replaceOpWithNewOp<ForYieldOp>(op, inputs);
