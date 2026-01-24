@@ -1031,6 +1031,40 @@ mlir::LogicalResult OpConversion<graphalg::TrilOp>::matchAndRewrite(
   return mlir::success();
 }
 
+template <>
+mlir::LogicalResult OpConversion<graphalg::UnionOp>::matchAndRewrite(
+    graphalg::UnionOp op, OpAdaptor adaptor,
+    mlir::ConversionPatternRewriter &rewriter) const {
+  auto targetType =
+      llvm::cast<RelationType>(typeConverter->convertType(op.getType()));
+  MatrixAdaptor target(op, targetType);
+
+  llvm::SmallVector<mlir::Value> inputs;
+  for (auto [matrix, rel] :
+       llvm::zip_equal(op.getInputs(), adaptor.getInputs())) {
+    MatrixAdaptor input(matrix, rel);
+
+    // Drop columns we don't want in the output.
+    llvm::SmallVector<ColumnIdx, 3> remap;
+    if (target.hasRowColumn()) {
+      remap.push_back(input.rowColumn());
+    }
+
+    if (target.hasColColumn()) {
+      remap.push_back(input.colColumn());
+    }
+
+    remap.push_back(input.valColumn());
+    inputs.push_back(
+        rewriter.createOrFold<RemapOp>(op.getLoc(), input.relation(), remap));
+  }
+
+  auto newOp = rewriter.createOrFold<UnionOp>(op.getLoc(), targetType, inputs);
+  rewriter.replaceOp(op, newOp);
+
+  return mlir::success();
+}
+
 // =============================================================================
 // ============================ Tuple Op Conversion ============================
 // =============================================================================
@@ -1257,7 +1291,8 @@ void GraphAlgToRel::runOnOperation() {
       OpConversion<graphalg::DeferredReduceOp>, OpConversion<graphalg::DiagOp>,
       OpConversion<graphalg::ForConstOp>, OpConversion<graphalg::YieldOp>,
       OpConversion<graphalg::MatMulJoinOp>, OpConversion<graphalg::PickAnyOp>,
-      OpConversion<graphalg::TrilOp>>(matrixTypeConverter, &getContext());
+      OpConversion<graphalg::TrilOp>, OpConversion<graphalg::UnionOp>>(
+      matrixTypeConverter, &getContext());
   patterns.add<ApplyOpConversion>(semiringTypeConverter, matrixTypeConverter,
                                   &getContext());
 
