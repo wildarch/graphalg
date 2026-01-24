@@ -15,6 +15,7 @@
 #include <mlir/IR/MLIRContext.h>
 #include <mlir/IR/Matchers.h>
 #include <mlir/IR/Value.h>
+#include <mlir/IR/ValueRange.h>
 #include <mlir/Pass/Pass.h>
 #include <mlir/Transforms/DialectConversion.h>
 
@@ -28,7 +29,6 @@
 #include "graphalg/GraphAlgOps.h"
 #include "graphalg/GraphAlgTypes.h"
 #include "graphalg/SemiringTypes.h"
-#include "mlir/IR/ValueRange.h"
 
 namespace garel {
 
@@ -37,6 +37,21 @@ namespace garel {
 
 namespace {
 
+/**
+ * Converts all GraphAlg IR ops into relation ops from the GARel dialect.
+ *
+ * Matrices, vectors and scalars are converted into relations:
+ * - Matrices => (row, column, value) tuples
+ * - Vectors => (row, value) tuples
+ * - Scalars => a single (value) tuple. For consistency, they are still
+ * relations.
+ *
+ * Top-level operations are converted into relational ops such as \c ProjectOp,
+ * \c JoinOp and \c AggregateOp.
+ *
+ * Scalar operations inside of \c ApplyOp are converted into ops from the arith
+ * dialect.
+ */
 class GraphAlgToRel : public impl::GraphAlgToRelBase<GraphAlgToRel> {
 public:
   using impl::GraphAlgToRelBase<GraphAlgToRel>::GraphAlgToRelBase;
@@ -489,7 +504,7 @@ mlir::LogicalResult OpConversion<graphalg::TransposeOp>::matchAndRewrite(
     std::swap(columns[0], columns[1]);
   }
 
-  // Return the input slots (after row and column have been swapped)
+  // Return the input columns (after row and column have been swapped)
   llvm::SmallVector<mlir::Value, 3> results;
   for (auto col : columns) {
     results.emplace_back(
@@ -594,19 +609,19 @@ mlir::LogicalResult ApplyOpConversion::matchAndRewrite(
   auto &body = projectOp.createProjectionsBlock();
   rewriter.setInsertionPointToStart(&body);
 
-  llvm::SmallVector<mlir::Value> slotReads;
+  llvm::SmallVector<mlir::Value> columnReads;
   for (auto col : valColumns) {
-    slotReads.emplace_back(
+    columnReads.emplace_back(
         rewriter.create<ExtractOp>(op->getLoc(), col, body.getArgument(0)));
   }
 
   // Inline into new body
   rewriter.inlineBlockBefore(&op.getBody().front(), &body, body.end(),
-                             slotReads);
+                             columnReads);
 
   rewriter.replaceOp(op, projectOp);
 
-  // Attach the row and column slot to the return op.
+  // Attach the row and column indexes to the return op.
   auto returnOp = llvm::cast<graphalg::ApplyReturnOp>(body.getTerminator());
   if (!rowColumns.empty()) {
     returnOp->setAttr(APPLY_ROW_IDX_ATTR_KEY,
@@ -641,7 +656,7 @@ mlir::LogicalResult OpConversion<graphalg::ApplyReturnOp>::matchAndRewrite(
         rewriter.create<ExtractOp>(op->getLoc(), idx, inputTuple));
   }
 
-  // The value slot
+  // The value column
   results.emplace_back(adaptor.getValue());
 
   rewriter.replaceOpWithNewOp<ProjectReturnOp>(op, results);
@@ -923,7 +938,7 @@ mlir::LogicalResult OpConversion<graphalg::MatMulJoinOp>::matchAndRewrite(
           rewriter.create<ExtractOp>(op.getLoc(), colIdx, body.getArgument(0)));
     }
 
-    // Get the value slots.
+    // Get the value columns.
     auto lhsVal = rewriter.create<ExtractOp>(op.getLoc(), lhs.valColumn(),
                                              body.getArgument(0));
     auto rhsVal = rewriter.create<ExtractOp>(
