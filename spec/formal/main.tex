@@ -1,0 +1,109 @@
+\documentclass{article}
+
+\usepackage{amsmath}
+\usepackage{mathpartir}
+\usepackage[capitalise, noabbrev]{cleveref}
+
+\newcommand\graphalg{\textsf{GraphAlg}}
+
+% Definitions from MATLANG paper
+\newcommand{\ML}{\mathsf{MATLANG}}
+\newcommand{\transp}[1]{#1^*}
+\newcommand{\SyntaxStyle}{\mathsf}
+\newcommand{\LetIn}[3]{\SyntaxStyle{let}\ #1=#2\ \SyntaxStyle{in}\ #3}
+\newcommand{\IfThenElse}[3]{\SyntaxStyle{if}\ #1\ \SyntaxStyle{then}\ #2\ \SyntaxStyle{else}\ #3}
+\newcommand{\rowdom}{\mathbf{1}}
+\DeclareMathOperator{\diag}{\mathsf{diag}}
+\DeclareMathOperator{\Apply}{\mathsf{apply}}
+\DeclareMathOperator{\Inv}{\inv}
+\newcommand{\one}{\rowdom}
+\newcommand{\dotmin}{\mathbin{\dot-}}
+\newcommand{\M}{M}
+\newcommand{\reals}{\mathbf{R}}
+\newcommand{\cmplx}{\mathbf{C}}
+\newcommand{\C}{\mathbf{C}}
+\newcommand{\nat}{\mathbf{N}}
+\newcommand{\pnat}{\nat_{>0}}
+\DeclareMathOperator{\var}{var}
+\newcommand{\scm}{\mathcal{S}}
+\newcommand{\sizevar}{\mathsf{SizeVars}}
+\newcommand{\mname}{\mathsf{MatNames}}
+\newcommand{\allinst}[1]{\mathcal{I}_{#1}}
+\newcommand{\cmats}{\mathcal{M}}
+\newcommand{\false}{\bot}
+\newcommand{\true}{\top}
+\newcommand{\boolinterp}{\nu}
+\DeclareMathOperator{\TC}{TC}
+
+\newcommand{\bigstep}[3]{#2(#1)=#3}
+\newcommand{\typed}[3]{#1\vdash#2:#3}
+
+\title{GraphAlg Language Specification}
+\author{Daan de Graaf}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+% TODO: Full Syntax
+
+% TODO: Typing rules (from the individual tex files under ../latex/)
+
+\section{Core Syntax}
+The \graphalg{} Core language is defined by the grammar:
+
+\begin{align*}
+  E ::= & \ M                                  & \text{(matrix variable)}           \\
+  |     & \ E^{*}                              & \text{(transpose)}                 \\
+  |     & \ \text{diag}(E)                     & \text{(diagonalizate a vector)}    \\
+  |     & \ \text{apply}[f](E_1,\ \cdots,E_n)  & \text{(pointwise application)}     \\
+  |     & \ E_1 \cdot E_2                      & \text{(matrix multiplication)}     \\
+  |     & \ \mathbf{1}(r, s)                   & \text{(one-vector)}                \\
+  |     & \ \text{for}[b](s, E_1,\ \cdots,E_n) & \text{(loop over dimension)}       \\
+  |     & \ \text{for}[b](l, E_1,\ \cdots,E_n) & \text{(loop over range)}           \\
+  |     & \ \text{pickAny}(E)                  & \text{(keep first nonzero in row)} \\
+  b ::= & \{ M_1 = E_1,\ \cdots, M_n = E_n \}  & \text{(loop body)}                 \\
+  f ::= & (C_1,\ \cdots,C_n) \ e               & \text{(pointwise function)}        \\
+  e ::= & \ C                                  & \text{(scalar variable)}           \\
+  % CastDimOp (covered by literal case)
+  |     & \ r(l)                               & \text{(scalar literal)}            \\
+  |     & \ e_1 \ \{+,\cdot,-,/,=\} \ e_2      & \text{(scalar arithmetic)}         \\
+  |     & \ \text{cast}(r, e)                  & \text{(scalar cast)}               \\
+\end{align*}
+
+\section{for-$\ML$ with simultaneous induction}
+
+\begin{itemize}
+    \item Formal semantics of $\ML$ in \cref{fig:matlang-sem}
+    \item Semantics already allow any operations over scalars
+    \item $\ML$ assumes one semiring for entire expression. We allow changing this with a cast function inside $\Apply$.
+    Minor departure from original $\ML$ definition.
+    \item Define the loop expression and semantics. Follow for-$\ML$ but allow multiple loop variables.
+    \item Name this extension (casting + simultaneous induction) ga-$\ML$.
+\end{itemize}
+
+\begin{figure}
+  \begin{mathpar}
+    \infer{\M \in \var(I)}{\bigstep{I}{\M}{I(\M)}} \and
+    \infer{\bigstep{I}{e_1}{A} \\ \bigstep{I[\M:=A]}{e_2}{B}}
+    {\bigstep{I}{(\LetIn{\M}{e_1}{e_2})}{B}} \and
+    \infer{\bigstep{I}{e}{A}}{\bigstep{I}{\transp{e}}{\transp{A}}} \and
+    \infer{\bigstep{I}{e}{A}}{\bigstep{I}{\rowdom(e)}{\rowdom(A)}} \and
+    \infer{\bigstep{I}{e}{A} \\ \text{$A$ is a column vector}}
+    {\bigstep{I}{\diag(e)}{\diag(A)}} \and
+    \infer{
+      \bigstep{I}{e_1}{A} \\ \bigstep{I}{e_2}{B} \\
+    \text{number of columns of $A$ equals the number of rows of $B$}
+      }
+    {\bigstep{I}{e_1 \cdot e_2}{A \cdot B}} \and
+    \infer{\forall k = 1, \ldots, n : (\bigstep{I}{e_k}{A_k}) \\
+      \text{all $A_k$ have the same dimensions}}
+    {\bigstep{I}{\Apply[f](e_1, \ldots, e_n)}{\Apply[f](A_1, \ldots, A_n)}}
+  \end{mathpar}
+  \caption{Big-step operational semantics of $\ML$.
+The notation $I[\M := A]$ denotes the instance that is equal to $I$,
+except that $\M$ is mapped to the matrix $A$.}
+  \label{fig:matlang-sem}
+\end{figure}
+
+\end{document}
