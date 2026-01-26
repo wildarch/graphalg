@@ -3,6 +3,7 @@
 \usepackage{amsmath}
 \usepackage{mathpartir}
 \usepackage[capitalise, noabbrev]{cleveref}
+\usepackage{stmaryrd} % Where \llbracket and \rrbracket are defined
 
 \newcommand\graphalg{\textsf{GraphAlg}}
 
@@ -35,6 +36,16 @@
 \newcommand{\boolinterp}{\nu}
 \DeclareMathOperator{\TC}{TC}
 
+% Definitions from for-MATLANG paper
+\newcommand{\ffor}[3]{\texttt{for}\, #1,#2 \texttt{.}\, #3}
+\newcommand{\Mvar}{\mathcal{V}}
+\newcommand{\I}{\mathcal{I}}
+\newcommand{\Sch}{\mathcal{S}}
+\newcommand{\ttype}{\texttt{type}_{\Sch}}
+\newcommand{\dom}{\mathcal{D}}
+\newcommand{\sem}[2]{\llbracket #1 \rrbracket(#2)}
+\newcommand{\Mnam}{\mathcal{M}}
+
 \newcommand{\bigstep}[3]{#2(#1)=#3}
 \newcommand{\typed}[3]{#1\vdash#2:#3}
 
@@ -53,57 +64,130 @@
 The \graphalg{} Core language is defined by the grammar:
 
 \begin{align*}
-  E ::= & \ M                                  & \text{(matrix variable)}           \\
-  |     & \ E^{*}                              & \text{(transpose)}                 \\
-  |     & \ \text{diag}(E)                     & \text{(diagonalizate a vector)}    \\
-  |     & \ \text{apply}[f](E_1,\ \cdots,E_n)  & \text{(pointwise application)}     \\
-  |     & \ E_1 \cdot E_2                      & \text{(matrix multiplication)}     \\
-  |     & \ \mathbf{1}(r, s)                   & \text{(one-vector)}                \\
-  |     & \ \text{for}[b](s, E_1,\ \cdots,E_n) & \text{(loop over dimension)}       \\
-  |     & \ \text{for}[b](l, E_1,\ \cdots,E_n) & \text{(loop over range)}           \\
-  |     & \ \text{pickAny}(E)                  & \text{(keep first nonzero in row)} \\
-  b ::= & \{ M_1 = E_1,\ \cdots, M_n = E_n \}  & \text{(loop body)}                 \\
-  f ::= & (C_1,\ \cdots,C_n) \ e               & \text{(pointwise function)}        \\
-  e ::= & \ C                                  & \text{(scalar variable)}           \\
-  % CastDimOp (covered by literal case)
-  |     & \ r(l)                               & \text{(scalar literal)}            \\
-  |     & \ e_1 \ \{+,\cdot,-,/,=\} \ e_2      & \text{(scalar arithmetic)}         \\
-  |     & \ \text{cast}(r, e)                  & \text{(scalar cast)}               \\
+    E ::= & \ M                                  & \text{(matrix variable)}           \\
+    |     & \ E^{*}                              & \text{(transpose)}                 \\
+    |     & \ \text{diag}(E)                     & \text{(diagonalizate a vector)}    \\
+    |     & \ \text{apply}[f](E_1,\ \cdots,E_n)  & \text{(pointwise application)}     \\
+    |     & \ E_1 \cdot E_2                      & \text{(matrix multiplication)}     \\
+    |     & \ \mathbf{1}(r, s)                   & \text{(one-vector)}                \\
+    |     & \ \text{for}[b](s, E_1,\ \cdots,E_n) & \text{(loop over dimension)}       \\
+    |     & \ \text{for}[b](l, E_1,\ \cdots,E_n) & \text{(loop over range)}           \\
+    |     & \ \text{pickAny}(E)                  & \text{(keep first nonzero in row)} \\
+    b ::= & \{ M_1 = E_1,\ \cdots, M_n = E_n \}  & \text{(loop body)}                 \\
+    f ::= & (C_1,\ \cdots,C_n) \ e               & \text{(pointwise function)}        \\
+    e ::= & \ C                                  & \text{(scalar variable)}           \\
+    % CastDimOp (covered by literal case)
+    |     & \ r(l)                               & \text{(scalar literal)}            \\
+    |     & \ e_1 \ \{+,\cdot,-,/,=\} \ e_2      & \text{(scalar arithmetic)}         \\
+    |     & \ \text{cast}(r, e)                  & \text{(scalar cast)}               \\
 \end{align*}
 
-\section{for-$\ML$ with simultaneous induction}
+\section{Core Semantics}
 
+\section{for-$\ML$ with simultaneous induction}
+This section defines a variant of for-$\ML$ that matches the expressive power of \graphalg{} Core.
+
+We start by giving the semantics of $\ML$~\cite{brijder_expressive_2019} and the extension for-$\ML$~\cite{geerts_expressive_2021} that introduces the \emph{canonical for loop} expression.
+We then modify for-$\ML$ to include support for (1) casting between semirings and (2) multiple loop variables. We denote the resulting language ga-$\ML$.
+
+Finally, we prove that:
+\begin{enumerate}
+    \item any \graphalg{} Core expression can be expressed as a ga-$\ML$ expression
+    \item any ga-$\ML$ expression can be expressed as a \graphalg{} Core expression
+\end{enumerate}
+
+Together, these demonstrate that the languages are equivalent in terms of expressive power.
+
+\subsection{Semantics of $\ML$}
+The semantics of `vanilla' $\ML$~\cite{brijder_expressive_2019} (without loops) is given in \cref{fig:matlang-sem}.
+
+\begin{figure}[h]
+    \begin{mathpar}
+        \infer{\M \in \var(I)}{\bigstep{I}{\M}{I(\M)}} \and
+        \infer{\bigstep{I}{e_1}{A} \\ \bigstep{I[\M:=A]}{e_2}{B}}
+        {\bigstep{I}{(\LetIn{\M}{e_1}{e_2})}{B}} \and
+        \infer{\bigstep{I}{e}{A}}{\bigstep{I}{\transp{e}}{\transp{A}}} \and
+        \infer{\bigstep{I}{e}{A}}{\bigstep{I}{\rowdom(e)}{\rowdom(A)}} \and
+        \infer{\bigstep{I}{e}{A} \\ \text{$A$ is a column vector}}
+        {\bigstep{I}{\diag(e)}{\diag(A)}} \and
+        \infer{
+            \bigstep{I}{e_1}{A} \\ \bigstep{I}{e_2}{B} \\
+            \text{number of columns of $A$ equals the number of rows of $B$}
+        }
+        {\bigstep{I}{e_1 \cdot e_2}{A \cdot B}} \and
+        \infer{\forall k = 1, \ldots, n : (\bigstep{I}{e_k}{A_k}) \\
+            \text{all $A_k$ have the same dimensions}}
+        {\bigstep{I}{\Apply[f](e_1, \ldots, e_n)}{\Apply[f](A_1, \ldots, A_n)}}
+    \end{mathpar}
+    \caption{Big-step operational semantics of $\ML$~\cite{brijder_expressive_2019}.
+        The notation $I[\M := A]$ denotes the instance that is equal to $I$,
+        except that $\M$ is mapped to the matrix $A$.}
+    \label{fig:matlang-sem}
+\end{figure}
+
+\subsection{Canonical Loop Definition}
+for-$\ML$~\cite{geerts_expressive_2021} adds the \emph{canonical for loop} expression:
+
+\medskip
+\begin{tabular}{lcll}
+    $\ffor{v}{X}{e}$ & (canonical for loop, with $v, X \in \Mvar$).
+\end{tabular}
+\medskip
+
+\noindent 
+To define the semantics of $\ffor{v}{X}{e}$ over an instance $\I$, we need the following notation.
+Assume that $\ttype(v)= (\gamma,1)$, and $\ttype(e) = (\alpha,\beta)$ and $n := \dom(\gamma)$.
+Then, $\sem{\ffor{v}{X}{e}}{\I}$ is defined iteratively, as follows:
 \begin{itemize}
-    \item Formal semantics of $\ML$ in \cref{fig:matlang-sem}
-    \item Semantics already allow any operations over scalars
-    \item $\ML$ assumes one semiring for entire expression. We allow changing this with a cast function inside $\Apply$.
-    Minor departure from original $\ML$ definition.
-    \item Define the loop expression and semantics. Follow for-$\ML$ but allow multiple loop variables.
-    \item Name this extension (casting + simultaneous induction) ga-$\ML$.
+    \item Let $A_0 := \mathbf{0}$ be the zero matrix of size $\dom(\alpha)\times \dom(\beta)$.
+    \item For $i=1,\ldots n$, compute $A_i:= \sem{e}{\I[v := b^{n}_i, X:= A_{i-1}]}$.
+    \item Finally, set $\sem{\ffor{v}{X}{e}}{\I}:= A_{n}$.
 \end{itemize}
 
-\begin{figure}
-  \begin{mathpar}
-    \infer{\M \in \var(I)}{\bigstep{I}{\M}{I(\M)}} \and
-    \infer{\bigstep{I}{e_1}{A} \\ \bigstep{I[\M:=A]}{e_2}{B}}
-    {\bigstep{I}{(\LetIn{\M}{e_1}{e_2})}{B}} \and
-    \infer{\bigstep{I}{e}{A}}{\bigstep{I}{\transp{e}}{\transp{A}}} \and
-    \infer{\bigstep{I}{e}{A}}{\bigstep{I}{\rowdom(e)}{\rowdom(A)}} \and
-    \infer{\bigstep{I}{e}{A} \\ \text{$A$ is a column vector}}
-    {\bigstep{I}{\diag(e)}{\diag(A)}} \and
-    \infer{
-      \bigstep{I}{e_1}{A} \\ \bigstep{I}{e_2}{B} \\
-    \text{number of columns of $A$ equals the number of rows of $B$}
-      }
-    {\bigstep{I}{e_1 \cdot e_2}{A \cdot B}} \and
-    \infer{\forall k = 1, \ldots, n : (\bigstep{I}{e_k}{A_k}) \\
-      \text{all $A_k$ have the same dimensions}}
-    {\bigstep{I}{\Apply[f](e_1, \ldots, e_n)}{\Apply[f](A_1, \ldots, A_n)}}
-  \end{mathpar}
-  \caption{Big-step operational semantics of $\ML$.
-The notation $I[\M := A]$ denotes the instance that is equal to $I$,
-except that $\M$ is mapped to the matrix $A$.}
-  \label{fig:matlang-sem}
-\end{figure}
+\subsection{Adding Simultaneous Induction}
+ga-$\ML$ modifies the loop definition to allow multiple loop variables:
+
+\medskip
+\begin{tabular}{lc}
+    $\texttt{for}\, v,\{ M_1 := e_1', \ldots, M_m := e_m' \}(e_1, \ldots, e_m)$
+\end{tabular}
+\medskip
+
+The loop is defined for any number of loop variables $m \geq 1$.
+The semantics of the loop are defined iteratively, as follows:
+\begin{itemize}
+    \item Let $\I_0 := \I[v := b^{n}_0, M_1 := e_1, \ldots, M_m := e_m]$
+    \item For $i = 1,\ldots n$, compute $\I_i := \I[v := b^{n}_i, M_1 := \sem{e_1}{\I_{i-1}}, \ldots, M_m := \sem{e_m}{\I_{i-1}}]$.
+    \item Finally, set $\sem{\texttt{for}\, v,\{ M_1 := e_1', \ldots, M_m := e_m' \}(e_1, \ldots, e_m)}{\I}:= I(M_1)$.
+\end{itemize}
+
+TODO: Typing rule
+
+\subsection{Pointwise Functions}
+The syntax definition of $\ML$ assumes a repertoire $\Omega$ of functions $f : R^n \rightarrow R^n$, representing all possible pointwise functions that can be used with $\Apply$.
+Here $R$ is scalar value domain, often the complex or real numbers.
+The definition of $\ML$ does not dictate a particular set of functions in $\Omega$. 
+Instead, $\Omega$ is chosen depending on the required scalar functions for particular proofs.
+
+In \graphalg{} the set of allowed scalar operations is made explicit in the syntax.
+In the following sections, we assume $\Omega$ to comprise the set of all possible functions that can be constructed by combining the scalar operations in \graphalg{}.
+
+\subsection{On Casting Between Semirings}
+It is typically assumed that all expressions in a $\ML$ expression operate over the same semiring.
+\graphalg{}, in contrast, introduces a cast operator to switch between different semirings. 
+To allow scalar cast expressions in $\Apply$, we relax the requirement that the input and output of functions in $f$ fall within the same domain.
+Because we now allow with different semirings to exist within a single expression, we must introduce an additional rule for type checking matrix multiplication:
+Matrix multiplication $e_1 \cdot e_2$ is allowed iff both $e_1$ and $e_2$ use the same semiring.
+
+No modifications are necessary for the typing rules of other expressions.
+Firstly, our loop definition already requires that the initial value for a binding matches that of the value generated by the loop body.
+Secondly, a mix of different semirings for arguments to $\Apply$ is readily acceptable, provided that the scalar operations are well-defined for those semirings. 
+All other operations in ga-$\ML$ have only one input operand, so there is no risk of confusion with different semirings.
+
+\subsection{Simulating ga-$\ML$ in \graphalg{} Core}
+\subsection{Simulating \graphalg{} Core in ga-$\ML$}
+
+\bibliographystyle{plain}
+\bibliography{zotero}
 
 \end{document}

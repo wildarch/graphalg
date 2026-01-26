@@ -1,7 +1,9 @@
-.*.lb
 *.aux
+*.bbg
+*.bbl
 *.cb
 *.cb2
+*.fdb_latexmk
 *.fls
 *.fmt
 *.fot
@@ -10,6 +12,6 @@
 *.lot
 *.out
 *.pdf
-*.toc
 *.synctex.gz
-*.fdb_latexmk
+*.toc
+.*.lb
