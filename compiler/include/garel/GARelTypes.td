@@ -22,13 +22,6 @@ def Relation : GARel_Type<"Relation", "rel"> {
     }];
 }
 
-def I1Relation
-        : ConfinedType<Relation, []>
-        , BuildableType<[{
-            $_builder.getType<RelationType>(
-                std::array<mlir::Type, 1>{$_builder.getI1Type()})
-        }]>;
-
 def Tuple : GARel_Type<"Tuple", "tuple"> {
     let summary = "A single tuple";
 

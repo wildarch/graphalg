@@ -456,7 +456,6 @@ mlir::LogicalResult OpConversion<mlir::func::FuncOp>::matchAndRewrite(
            << op.getFunctionType() << " cannot be converted";
   }
 
-  auto result = mlir::success();
   rewriter.modifyOpInPlace(op, [&]() {
     // Update function type.
     op.setFunctionType(funcType);
@@ -469,7 +468,7 @@ mlir::LogicalResult OpConversion<mlir::func::FuncOp>::matchAndRewrite(
     return mlir::failure();
   }
 
-  return result;
+  return mlir::success();
 }
 
 template <>
@@ -507,12 +506,11 @@ mlir::LogicalResult OpConversion<graphalg::TransposeOp>::matchAndRewrite(
   // Return the input columns (after row and column have been swapped)
   llvm::SmallVector<mlir::Value, 3> results;
   for (auto col : columns) {
-    results.emplace_back(
+    results.push_back(
         rewriter.create<ExtractOp>(op.getLoc(), col, body.getArgument(0)));
   }
 
   rewriter.create<ProjectReturnOp>(op.getLoc(), results);
-
   return mlir::success();
 }
 
@@ -536,7 +534,7 @@ mlir::LogicalResult ApplyOpConversion::matchAndRewrite(
   llvm::SmallVector<ColumnIdx> valColumns;
   ColumnIdx nextColumnIdx = 0;
   for (const auto &[idx, input] : llvm::enumerate(inputs)) {
-    joinChildren.emplace_back(input.relation());
+    joinChildren.push_back(input.relation());
 
     if (input.hasRowColumn()) {
       rowColumns.push_back(InputColumnRef{
@@ -565,7 +563,7 @@ mlir::LogicalResult ApplyOpConversion::matchAndRewrite(
     // Broadcast to all rows.
     auto rowsOp =
         createDimRead(op.getLoc(), output.matrixType().getRows(), rewriter);
-    joinChildren.emplace_back(rowsOp);
+    joinChildren.push_back(rowsOp);
     rowColumns.push_back(InputColumnRef{
         .relIdx = joinChildren.size() - 1,
         .colIdx = 0,
@@ -578,7 +576,7 @@ mlir::LogicalResult ApplyOpConversion::matchAndRewrite(
     // Broadcast to all columns.
     auto colsOp =
         createDimRead(op.getLoc(), output.matrixType().getCols(), rewriter);
-    joinChildren.emplace_back(colsOp);
+    joinChildren.push_back(colsOp);
     colColumns.push_back(InputColumnRef{
         .relIdx = joinChildren.size() - 1,
         .colIdx = 0,
@@ -611,7 +609,7 @@ mlir::LogicalResult ApplyOpConversion::matchAndRewrite(
 
   llvm::SmallVector<mlir::Value> columnReads;
   for (auto col : valColumns) {
-    columnReads.emplace_back(
+    columnReads.push_back(
         rewriter.create<ExtractOp>(op->getLoc(), col, body.getArgument(0)));
   }
 
@@ -647,17 +645,17 @@ mlir::LogicalResult OpConversion<graphalg::ApplyReturnOp>::matchAndRewrite(
   auto inputTuple = op->getBlock()->getArgument(0);
 
   if (auto idx = op->getAttrOfType<mlir::IntegerAttr>(APPLY_ROW_IDX_ATTR_KEY)) {
-    results.emplace_back(
+    results.push_back(
         rewriter.create<ExtractOp>(op->getLoc(), idx, inputTuple));
   }
 
   if (auto idx = op->getAttrOfType<mlir::IntegerAttr>(APPLY_COL_IDX_ATTR_KEY)) {
-    results.emplace_back(
+    results.push_back(
         rewriter.create<ExtractOp>(op->getLoc(), idx, inputTuple));
   }
 
   // The value column
-  results.emplace_back(adaptor.getValue());
+  results.push_back(adaptor.getValue());
 
   rewriter.replaceOpWithNewOp<ProjectReturnOp>(op, results);
   return mlir::success();
@@ -705,7 +703,6 @@ mlir::LogicalResult OpConversion<graphalg::BroadcastOp>::matchAndRewrite(
                               llvm::ArrayRef<JoinPredicateAttr>{});
 
   // Remap to correctly order as (row, col, val).
-  // TODO: Skip this if it is unnecessary.
   llvm::SmallVector<ColumnIdx, 3> outputColumns;
   if (rowColumnIdx) {
     outputColumns.push_back(*rowColumnIdx);
@@ -717,6 +714,7 @@ mlir::LogicalResult OpConversion<graphalg::BroadcastOp>::matchAndRewrite(
 
   outputColumns.push_back(valColumnIdx);
 
+  // NOTE: folds if the remapping is unncessary.
   auto remapped =
       rewriter.createOrFold<RemapOp>(op.getLoc(), joinOp, outputColumns);
   rewriter.replaceOp(op, remapped);
@@ -832,7 +830,7 @@ mlir::LogicalResult OpConversion<graphalg::ForConstOp>::matchAndRewrite(
     auto result = op->getResult(i);
     if (result.use_empty()) {
       // Not used. Take init arg as a dummy value.
-      resultValues.emplace_back(adaptor.getInitArgs()[i]);
+      resultValues.push_back(adaptor.getInitArgs()[i]);
       continue;
     }
 
@@ -856,7 +854,7 @@ mlir::LogicalResult OpConversion<graphalg::ForConstOp>::matchAndRewrite(
                                         *blockSignature);
     }
 
-    resultValues.emplace_back(forOp);
+    resultValues.push_back(forOp);
   }
 
   rewriter.replaceOp(op, resultValues);

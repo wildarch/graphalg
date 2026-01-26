@@ -1,4 +1,4 @@
-// RUN: graphalg-opt --graphalg-to-ipr < %s | FileCheck %s
+// RUN: graphalg-opt --graphalg-to-rel < %s | FileCheck %s
 
 func.func @Tril(%arg0: !graphalg.mat<42 x 42 x i64>) -> !graphalg.mat<42 x 42 x i64> {
   // CHECK: %[[#SELECT:]] = garel.select %arg0

@@ -1,4 +1,4 @@
-// RUN: ag-opt --graphalg-to-rel < %s | FileCheck %s
+// RUN: graphalg-opt --graphalg-to-rel < %s | FileCheck %s
 
 // CHECK-LABEL: @SubInt
 func.func @SubInt(%arg0: !graphalg.mat<1 x 1 x i64>, %arg1: !graphalg.mat<1 x 1 x i64>) -> !graphalg.mat<1 x 1 x i64> {
