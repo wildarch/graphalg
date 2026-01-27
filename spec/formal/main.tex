@@ -64,23 +64,31 @@
 The \graphalg{} Core language is defined by the grammar:
 
 \begin{align*}
-    E ::= & \ M                                  & \text{(matrix variable)}           \\
-    |     & \ E^{*}                              & \text{(transpose)}                 \\
-    |     & \ \text{diag}(E)                     & \text{(diagonalizate a vector)}    \\
-    |     & \ \text{apply}[f](E_1,\ \cdots,E_n)  & \text{(pointwise application)}     \\
-    |     & \ E_1 \cdot E_2                      & \text{(matrix multiplication)}     \\
-    |     & \ \mathbf{1}(r, s)                   & \text{(one-vector)}                \\
-    |     & \ \text{for}[b](s, E_1,\ \cdots,E_n) & \text{(loop over dimension)}       \\
-    |     & \ \text{for}[b](l, E_1,\ \cdots,E_n) & \text{(loop over range)}           \\
-    |     & \ \text{pickAny}(E)                  & \text{(keep first nonzero in row)} \\
-    b ::= & \{ M_1 = E_1,\ \cdots, M_n = E_n \}  & \text{(loop body)}                 \\
-    f ::= & (C_1,\ \cdots,C_n) \ e               & \text{(pointwise function)}        \\
-    e ::= & \ C                                  & \text{(scalar variable)}           \\
+    E ::= & \ M                                    & \text{(matrix variable)}           \\
+    |     & \ E^{*}                                & \text{(transpose)}                 \\
+    |     & \ \text{diag}(E)                       & \text{(diagonalizate a vector)}    \\
+    |     & \ \text{apply}[f](E_1,\ \ldots,E_n)    & \text{(pointwise application)}     \\
+    |     & \ E_1 \cdot E_2                        & \text{(matrix multiplication)}     \\
+    |     & \ \mathbf{1}(E)                        & \text{(one-vector)}                \\
+    |     & \ \text{for}[b](E_d, E_1,\ \ldots,E_n) & \text{(loop over dimension)}       \\
+    |     & \ \text{for}[b](l, E_1,\ \ldots,E_n)   & \text{(loop over range)}           \\
+    |     & \ \text{pickAny}(E)                    & \text{(keep first nonzero in row)} \\
+    b ::= & \{ M_1 = E_1,\ \ldots, M_n = E_n \}    & \text{(loop body)}                 \\
+    f ::= & (C_1,\ \ldots,C_n) \ e                 & \text{(pointwise function)}        \\
+    e ::= & \ C                                    & \text{(scalar variable)}           \\
     % CastDimOp (covered by literal case)
-    |     & \ r(l)                               & \text{(scalar literal)}            \\
-    |     & \ e_1 \ \{+,\cdot,-,/,=\} \ e_2      & \text{(scalar arithmetic)}         \\
-    |     & \ \text{cast}(r, e)                  & \text{(scalar cast)}               \\
+    |     & \ r(l)                                 & \text{(scalar literal)}            \\
+    |     & \ e_1 \ \{+,\cdot,-,/,=\} \ e_2        & \text{(scalar arithmetic)}         \\
+    |     & \ \text{cast}(r, e)                    & \text{(scalar cast)}               \\
 \end{align*}
+
+We use the following notation:
+\begin{itemize}
+    \item $E$ represents an expression that returns a matrix value, while $e$ represents a scalar value expression
+    \item $M$ names a matrix variable (defined in a loop body). The scalar equivalent is $C$ (defined in a pointwise function).
+    \item $l$ is a literal value such as $42$, $3.14$ or `true'.
+    \item $s$ is a semiring identifier such as \texttt{bool}, \texttt{int} or \texttt{real}.
+\end{itemize}
 
 \section{Core Semantics}
 
@@ -98,32 +106,68 @@ Finally, we prove that:
 
 Together, these demonstrate that the languages are equivalent in terms of expressive power.
 
-\subsection{Semantics of $\ML$}
-The semantics of `vanilla' $\ML$~\cite{brijder_expressive_2019} (without loops) is given in \cref{fig:matlang-sem}.
+\subsection{$\ML$}
+We start with `vanilla' $\ML$~\cite{brijder_expressive_2019} expressions (without loops), which is defined by the following grammar:
+\begin{align*}
+    e & ::= \M                                &  & \text{(matrix variable)}             \\
+    %&\mid\quad \LetIn{\M}{e_1}{e_2} && \text{(local binding)} \\
+      & \mid\quad \transp{e}                  &  & \text{(conjugate transpose)}         \\
+      & \mid\quad \rowdom(e)                  &  & \text{(one-vector)}                  \\
+      & \mid\quad \diag(e)                    &  & \text{(diagonalization of a vector)} \\
+      & \mid\quad e_1 \cdot e_2               &  & \text{(matrix multiplication)}       \\
+      & \mid\quad \Apply[f](e_1, \ldots, e_n) &  & \text{(pointwise
+        application, $f \in \Omega$)}
+\end{align*}
 
-\begin{figure}[h]
-    \begin{mathpar}
-        \infer{\M \in \var(I)}{\bigstep{I}{\M}{I(\M)}} \and
-        \infer{\bigstep{I}{e_1}{A} \\ \bigstep{I[\M:=A]}{e_2}{B}}
-        {\bigstep{I}{(\LetIn{\M}{e_1}{e_2})}{B}} \and
-        \infer{\bigstep{I}{e}{A}}{\bigstep{I}{\transp{e}}{\transp{A}}} \and
-        \infer{\bigstep{I}{e}{A}}{\bigstep{I}{\rowdom(e)}{\rowdom(A)}} \and
-        \infer{\bigstep{I}{e}{A} \\ \text{$A$ is a column vector}}
-        {\bigstep{I}{\diag(e)}{\diag(A)}} \and
-        \infer{
-            \bigstep{I}{e_1}{A} \\ \bigstep{I}{e_2}{B} \\
-            \text{number of columns of $A$ equals the number of rows of $B$}
-        }
-        {\bigstep{I}{e_1 \cdot e_2}{A \cdot B}} \and
-        \infer{\forall k = 1, \ldots, n : (\bigstep{I}{e_k}{A_k}) \\
-            \text{all $A_k$ have the same dimensions}}
-        {\bigstep{I}{\Apply[f](e_1, \ldots, e_n)}{\Apply[f](A_1, \ldots, A_n)}}
-    \end{mathpar}
-    \caption{Big-step operational semantics of $\ML$~\cite{brijder_expressive_2019}.
-        The notation $I[\M := A]$ denotes the instance that is equal to $I$,
-        except that $\M$ is mapped to the matrix $A$.}
-    \label{fig:matlang-sem}
-\end{figure}
+The definition of $\ML$ in \cite{brijder_expressive_2019} also includes a let binding expression $\LetIn{\M}{e_1}{e_2}$ for convenience.
+As noted in \cite{brijder_expressive_2019}, this operation can be omitted without affecting the expressive power of the language, so we omit it from our definition.
+
+Next we give the type rules for $\ML$:
+
+\begin{mathpar}
+    \infer{\M \in \var(\scm)}
+    {\typed{\scm}{\M}{\scm(\M)}} \and
+    \infer{\typed{\scm}{e_1}{\tau_1} \\ \typed{\scm[\M := \tau_1]}{e_2}{\tau_2}}
+    %{\typed{\scm}{\LetIn{\M}{e_1}{e_2}}{\tau_2}} \and
+    %\infer{\typed{\scm}{e}{s_1 \times s_2}}
+    {\typed{\scm}{\transp{e}}{s_2 \times s_1}} \and
+    \infer{\typed{\scm}{e}{s_1 \times s_2}}
+    {\typed{\scm}{\rowdom(e)}{s_1 \times 1}} \and
+    \infer{\typed{\scm}{e}{s \times 1}}
+    {\typed{\scm}{\diag(e)}{s \times s}} \and
+    \infer{\typed{\scm}{e_1}{s_1 \times s_2} \\ \typed{\scm}{e_2}{s_2 \times s_3}}
+    {\typed{\scm}{e_1 \cdot e_2}{s_1 \times s_3}} \and
+    \infer{n > 0 \\ f : \C^n\to \C \\ \forall k = 1, \ldots, n : (\typed{\scm}{e_k}{\tau})}
+    {\typed{\scm}{\Apply[f](e_1, \ldots, e_n)}{\tau}}
+\end{mathpar}
+
+The notation $\scm[\M := \tau]$ denotes the schema that is equal to $\scm$,
+except that $\M$ is mapped to the type $\tau$.
+\textbf{TODO: Need to explain the notation in more detail, like in the GraphAlg paper}
+
+The big-step operational semantics of the operations are given below.
+
+\begin{mathpar}
+    \infer{\M \in \var(I)}{\bigstep{I}{\M}{I(\M)}} \and
+    %\infer{\bigstep{I}{e_1}{A} \\ \bigstep{I[\M:=A]}{e_2}{B}}
+    %{\bigstep{I}{(\LetIn{\M}{e_1}{e_2})}{B}} \and
+    \infer{\bigstep{I}{e}{A}}{\bigstep{I}{\transp{e}}{\transp{A}}} \and
+    \infer{\bigstep{I}{e}{A}}{\bigstep{I}{\rowdom(e)}{\rowdom(A)}} \and
+    \infer{\bigstep{I}{e}{A} \\ \text{$A$ is a column vector}}
+    {\bigstep{I}{\diag(e)}{\diag(A)}} \and
+    \infer{
+        \bigstep{I}{e_1}{A} \\ \bigstep{I}{e_2}{B} \\
+        \text{number of columns of $A$ equals the number of rows of $B$}
+    }
+    {\bigstep{I}{e_1 \cdot e_2}{A \cdot B}} \and
+    \infer{\forall k = 1, \ldots, n : (\bigstep{I}{e_k}{A_k}) \\
+        \text{all $A_k$ have the same dimensions}}
+    {\bigstep{I}{\Apply[f](e_1, \ldots, e_n)}{\Apply[f](A_1, \ldots, A_n)}}
+\end{mathpar}
+
+The notation $I[\M := A]$ denotes the instance that is equal to $I$,
+except that $\M$ is mapped to the matrix $A$.
+\textbf{TODO: Need to explain the notation in more detail, like in the GraphAlg paper}
 
 \subsection{Canonical Loop Definition}
 for-$\ML$~\cite{geerts_expressive_2021} adds the \emph{canonical for loop} expression:
@@ -134,7 +178,7 @@ for-$\ML$~\cite{geerts_expressive_2021} adds the \emph{canonical for loop} expre
 \end{tabular}
 \medskip
 
-\noindent 
+\noindent
 To define the semantics of $\ffor{v}{X}{e}$ over an instance $\I$, we need the following notation.
 Assume that $\ttype(v)= (\gamma,1)$, and $\ttype(e) = (\alpha,\beta)$ and $n := \dom(\gamma)$.
 Then, $\sem{\ffor{v}{X}{e}}{\I}$ is defined iteratively, as follows:
@@ -145,28 +189,32 @@ Then, $\sem{\ffor{v}{X}{e}}{\I}$ is defined iteratively, as follows:
 \end{itemize}
 
 \subsection{Adding Simultaneous Induction}
-ga-$\ML$ modifies the loop definition to allow multiple loop variables:
+ga-$\ML$ starts from for-$\ML$, but modifies the loop definition to allow multiple loop variables:
 
 \medskip
 \begin{tabular}{lc}
-    $\texttt{for}\, v,\{ M_1 := e_1', \ldots, M_m := e_m' \}(e_1, \ldots, e_m)$
+    $\texttt{for}\, v,\{ M_1 := e_1', \ldots, M_m := e_m' \}(e_d, e_1, \ldots, e_m)$
 \end{tabular}
 \medskip
 
 The loop is defined for any number of loop variables $m \geq 1$.
+%Assume that $\ttype(e) = (\alpha,\beta)$ and $n := \dom(\gamma)$.
+Expression $e_d$ is used to define the number of loop iterations $n$.
+Assume that $\ttype(e_d) = (\alpha,\beta)$.
+Then we assign $n := \dom(\alpha)$.
 The semantics of the loop are defined iteratively, as follows:
 \begin{itemize}
     \item Let $\I_0 := \I[v := b^{n}_0, M_1 := e_1, \ldots, M_m := e_m]$
     \item For $i = 1,\ldots n$, compute $\I_i := \I[v := b^{n}_i, M_1 := \sem{e_1}{\I_{i-1}}, \ldots, M_m := \sem{e_m}{\I_{i-1}}]$.
-    \item Finally, set $\sem{\texttt{for}\, v,\{ M_1 := e_1', \ldots, M_m := e_m' \}(e_1, \ldots, e_m)}{\I}:= I(M_1)$.
+    \item Finally, set $\sem{\texttt{for}\, v,\{ M_1 := e_1', \ldots, M_m := e_m' \}(e_d, e_1, \ldots, e_m)}{\I}:= I(M_1)$.
 \end{itemize}
 
 TODO: Typing rule
 
 \subsection{Pointwise Functions}
-The syntax definition of $\ML$ assumes a repertoire $\Omega$ of functions $f : R^n \rightarrow R^n$, representing all possible pointwise functions that can be used with $\Apply$.
-Here $R$ is scalar value domain, often the complex or real numbers.
-The definition of $\ML$ does not dictate a particular set of functions in $\Omega$. 
+The syntax definition of $\ML$ assumes a repertoire $\Omega$ of functions $f : \C^n \rightarrow \C^n$, representing all possible pointwise functions that can be used with $\Apply$.
+Here $\C$ is a semiring, often the complex or real numbers.
+The definition of $\ML$ does not dictate a particular set of functions in $\Omega$.
 Instead, $\Omega$ is chosen depending on the required scalar functions for particular proofs.
 
 In \graphalg{} the set of allowed scalar operations is made explicit in the syntax.
@@ -174,18 +222,67 @@ In the following sections, we assume $\Omega$ to comprise the set of all possibl
 
 \subsection{On Casting Between Semirings}
 It is typically assumed that all expressions in a $\ML$ expression operate over the same semiring.
-\graphalg{}, in contrast, introduces a cast operator to switch between different semirings. 
-To allow scalar cast expressions in $\Apply$, we relax the requirement that the input and output of functions in $f$ fall within the same domain.
+\graphalg{}, in contrast, introduces a cast operator to switch between different semirings.
+To allow scalar cast expressions in $\Apply$, we relax the requirement that the input and output values of functions in $f$ fall within the same semiring.
 Because we now allow with different semirings to exist within a single expression, we must introduce an additional rule for type checking matrix multiplication:
 Matrix multiplication $e_1 \cdot e_2$ is allowed iff both $e_1$ and $e_2$ use the same semiring.
 
 No modifications are necessary for the typing rules of other expressions.
 Firstly, our loop definition already requires that the initial value for a binding matches that of the value generated by the loop body.
-Secondly, a mix of different semirings for arguments to $\Apply$ is readily acceptable, provided that the scalar operations are well-defined for those semirings. 
+Secondly, a mix of different semirings for arguments to $\Apply$ is readily acceptable, provided that the scalar operations are well-defined for those semirings.
 All other operations in ga-$\ML$ have only one input operand, so there is no risk of confusion with different semirings.
 
 \subsection{Simulating ga-$\ML$ in \graphalg{} Core}
+We show how ga-$\ML$ expressions can be rewritten into \graphalg{} Core expressions with equivalent semantics.
+The two languages share a number of operations. For the following operations, no rewriting is necessary:
+\begin{itemize}
+    \item matrix variable
+    \item transpose
+    \item diagonalize a vector
+    \item pointwise application.
+          Recall our definition of $\Omega$, which means that all pointwise functions are valid in \graphalg{} Core.
+    \item matrix multiplication
+    \item one-vector
+\end{itemize}
+
+This leaves only for loops to be converted.
+TODO: How to do that.
+
 \subsection{Simulating \graphalg{} Core in ga-$\ML$}
+Only two operations from \graphalg{} Core are not present in ga-$\ML$:
+\begin{enumerate}
+    \item Loops without a canonical vector.
+    \item The \texttt{pickAny} operation
+\end{enumerate}
+
+We show how to rewrite these expression from \graphalg{} Core into equivalent ga-$\ML$.
+For loops, since the semantics of \texttt{for} in \graphalg{} Core are otherwise identical to those of ga-$\ML$, we can trivially rewrite any loop using the rule:
+\begin{align*}
+    \texttt{for}\ \ \ &\{ M_1 := e_1', \ldots, M_m := e_m' \}(e_d, e_1, \ldots, e_m)
+    \rightarrow \\
+    \texttt{for}\, v,&\{ M_1 := e_1', \ldots, M_m := e_m' \}(e_d, e_1, \ldots, e_m)
+\end{align*}
+
+$\text{pickAny}(A)$ can be simulated using the for loop with canonical vectors available in for-$\ML$ (and by extension also in ga-$\ML$):
+
+\begin{tabbing}
+    L0\=L1\=L2\=L3\=L4 \kill 
+    $\texttt{for}\, v,X \texttt{.}\,$\\ 
+    \>$\Apply[+]($\\
+    \>\>$X,$\\
+    \>\>$(\texttt{for}\, w,Y \texttt{.}\,$\\ 
+    %\>\>\>$\SyntaxStyle{let}\ D=Y \cdot \one(\transp{Y}) \cdot \transp{\one(\transp{Y})}\ \SyntaxStyle{in}$ \\
+    \>\>\>$\SyntaxStyle{let}\ D=\transp{\one(Y)} \cdot \one(Y) \cdot Y\ \SyntaxStyle{in}$ \\
+    \>\>\>$\SyntaxStyle{let}\ P=\diag(v) \cdot A \cdot \diag(w)\ \SyntaxStyle{in}$ \\
+    \>\>\>$\Apply[y, d, p.\ \SyntaxStyle{if}\ d = \mathbf{0}\ \SyntaxStyle{then}\ p\ \SyntaxStyle{else}\ y](Y, D, \transp{P})))^*$\\
+\end{tabbing}
+
+The outer loop $\texttt{for}\, v$ iterates over the input rows, while $\texttt{for}\, w$ iterates over the columns.
+$Y$ contains the (partial) result for one particular row. It is stored in transposed format so that $w$ iterates over the column rather than the row dimension of $A$.
+In the inner loop, we first detect ($D$) if we already have a value for the current row.
+Then, we take the proposed ($P$) value at position $(v, w)$ in $A$, setting all other values to zero.
+Finally, the inner $\Apply$ either picks the proposed value $p$ if there is no value yet for the current row, or the existing value $y$ otherwise.
+The outer apply combines the values for the individual rows.
 
 \bibliographystyle{plain}
 \bibliography{zotero}
