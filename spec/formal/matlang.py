@@ -37,17 +37,17 @@ def ffor(M, f, debug=False):
     return A
 
 def emax(M):
-    return ffor(M, lambda v, X: v)
+    return ffor(one(M), lambda v, X: v)
 
-def S_lt(M):
-    def S_lt_inner(v, X):
+def S_lte(M):
+    def S_lte_inner(v, X):
         X_emax = matmul(X, emax(M))
         X_emax_v = X_emax + v
         X_emax_v_v = matmul(X_emax_v, transp(v))
         v_emax = matmul(v, transp(emax(M)))
         return X + X_emax_v_v + v_emax
 
-    X = ffor(M, S_lt_inner)
+    X = ffor(M, S_lte_inner)
     # FIX not in original paper
     res = X - one(X) * transp(emax(X))
     return res
@@ -66,15 +66,8 @@ def pickAny(M):
             assert(Y.shape == D.shape)
             assert(Y.shape == P.shape)
             res = pickv(Y, D, P)
-            print("Y")
-            print(Y)
-            print("D")
-            print(D)
-            print("P")
-            print(P)
             return res
         row = ffor(transp(B), pickAny_col)
-        print("==== ROW ====")
         return X + matmul(v, transp(row))
     return ffor(M, pickAny_row)
 
@@ -86,9 +79,13 @@ A = np.array([
 ])
 
 print(pickAny(A))
-# Y = np.array([
-#     [0],
-#     [2],
-#     [0],
-# ])
-#print(matmul(one(Y), matmul(transp(one(Y)), Y)))
+
+def ident(M):
+    return diag(one(M))
+
+M = np.zeros((10, 10))
+S_lt = S_lte(M) - ident(M)
+shift = pickAny(S_lt)
+print(shift)
+
+# TODO: emin
