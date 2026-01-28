@@ -9,7 +9,7 @@
 
 % Definitions from MATLANG paper
 \newcommand{\ML}{\mathsf{MATLANG}}
-\newcommand{\transp}[1]{#1^*}
+\newcommand{\transp}[1]{#1^T}
 \newcommand{\SyntaxStyle}{\mathsf}
 \newcommand{\LetIn}[3]{\SyntaxStyle{let}\ #1=#2\ \SyntaxStyle{in}\ #3}
 \newcommand{\IfThenElse}[3]{\SyntaxStyle{if}\ #1\ \SyntaxStyle{then}\ #2\ \SyntaxStyle{else}\ #3}
@@ -65,7 +65,7 @@ The \graphalg{} Core language is defined by the grammar:
 
 \begin{align*}
     E ::= & \ M                                    & \text{(matrix variable)}           \\
-    |     & \ E^{*}                                & \text{(transpose)}                 \\
+    |     & \ E^{T}                                & \text{(transpose)}                 \\
     |     & \ \text{diag}(E)                       & \text{(diagonalizate a vector)}    \\
     |     & \ \text{apply}[f](E_1,\ \ldots,E_n)    & \text{(pointwise application)}     \\
     |     & \ E_1 \cdot E_2                        & \text{(matrix multiplication)}     \\
@@ -204,16 +204,16 @@ Assume that $\ttype(e_d) = (\alpha,\beta)$.
 Then we assign $n := \dom(\alpha)$.
 The semantics of the loop are defined iteratively, as follows:
 \begin{itemize}
-    \item Let $\I_0 := \I[v := b^{n}_0, M_1 := e_1, \ldots, M_m := e_m]$
-    \item For $i = 1,\ldots n$, compute $\I_i := \I[v := b^{n}_i, M_1 := \sem{e_1}{\I_{i-1}}, \ldots, M_m := \sem{e_m}{\I_{i-1}}]$.
-    \item Finally, set $\sem{\texttt{for}\, v,\{ M_1 := e_1', \ldots, M_m := e_m' \}(e_d, e_1, \ldots, e_m)}{\I}:= I(M_1)$.
+    \item Let $\I_0 := \I[v := b^{n}_0, M_1 := \sem{e_1}{\I}, \ldots, M_m := \sem{e_m}{\I}]$
+    \item For $i = 1,\ldots n$, compute $\I_i := \I_{i-1}[v := b^{n}_i, M_1 := \sem{e_1'}{\I_{i-1}}, \ldots, M_m := \sem{e_m'}{\I_{i-1}}]$.
+    \item Finally, set $\sem{\texttt{for}\, v,\{ M_1 := e_1', \ldots, M_m := e_m' \}(e_d, e_1, \ldots, e_m)}{\I}:= \I_n(M_1)$.
 \end{itemize}
 
 TODO: Typing rule
 
 \subsection{Pointwise Functions}
-The syntax definition of $\ML$ assumes a repertoire $\Omega$ of functions $f : \C^n \rightarrow \C^n$, representing all possible pointwise functions that can be used with $\Apply$.
-Here $\C$ is a semiring, often the complex or real numbers.
+The syntax definition of $\ML$ assumes a repertoire $\Omega$ of functions $f : R^n \to R$, representing all possible pointwise functions that can be used with $\Apply$.
+Here $R$ is a semiring, often the complex or real numbers.
 The definition of $\ML$ does not dictate a particular set of functions in $\Omega$.
 Instead, $\Omega$ is chosen depending on the required scalar functions for particular proofs.
 
@@ -274,7 +274,7 @@ $\text{pickAny}(A)$ can be simulated using the for loop with canonical vectors a
     %\>\>\>$\SyntaxStyle{let}\ D=Y \cdot \one(\transp{Y}) \cdot \transp{\one(\transp{Y})}\ \SyntaxStyle{in}$ \\
     \>\>\>$\SyntaxStyle{let}\ D=\transp{\one(Y)} \cdot \one(Y) \cdot Y\ \SyntaxStyle{in}$ \\
     \>\>\>$\SyntaxStyle{let}\ P=\diag(v) \cdot A \cdot \diag(w)\ \SyntaxStyle{in}$ \\
-    \>\>\>$\Apply[y, d, p.\ \SyntaxStyle{if}\ d = \mathbf{0}\ \SyntaxStyle{then}\ p\ \SyntaxStyle{else}\ y](Y, D, \transp{P})))^*$\\
+    \>\>\>$\Apply[y, d, p.\ \SyntaxStyle{if}\ d = \mathbf{0}\ \SyntaxStyle{then}\ p\ \SyntaxStyle{else}\ y](Y, D, \transp{P})))^T$\\
 \end{tabbing}
 
 The outer loop $\texttt{for}\, v$ iterates over the input rows, while $\texttt{for}\, w$ iterates over the columns.
