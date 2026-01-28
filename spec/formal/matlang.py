@@ -99,7 +99,8 @@ def max_element_vec(M):
     X = ffor(M, max_element_inner)
     return matmul(transp(emax(M)), X)
 
-def max_element(M):
+# The goal: per-row maximum value
+def max_per_row(M):
     def max_row(v, X):
         # One row of M
         B = matmul(transp(v), M)
@@ -114,5 +115,5 @@ M = np.array([
     [5, 6],
 ])
 
-print(max_element(M))
+print(max_per_row(M))
 
