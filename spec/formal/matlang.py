@@ -32,12 +32,9 @@ def ffor(M, f, debug=False):
     if debug:
         print(f"A{n}")
         print(A)
+    
+    assert (A.shape == M.shape)
     return A
-
-A = np.array([
-    [1, 2, 3],
-    [4, 5, 6],
-])
 
 def emax(M):
     return ffor(M, lambda v, X: v)
@@ -48,32 +45,50 @@ def S_lt(M):
         X_emax_v = X_emax + v
         X_emax_v_v = matmul(X_emax_v, transp(v))
         v_emax = matmul(v, transp(emax(M)))
-        print(f"X_emax_v_v=\n{X_emax_v_v}")
-        print(f"v=\n{v}")
-        print(f"emax=\n{transp(emax(M))}")
-        print(f"v_emax=\n{v_emax}")
         return X + X_emax_v_v + v_emax
 
-    X = ffor(M, S_lt_inner, debug=True)
+    X = ffor(M, S_lt_inner)
     # FIX not in original paper
     res = X - one(X) * transp(emax(X))
     return res
 
-def max(u):
-    return transp(u) * emax(u)
+def pickAny(M):
+    def pickAny_row(v, X):
+        B = matmul(transp(v), M)
+        def pick(y, d, p):
+            if d == 0:
+                return p
+            else: return y
+        pickv = np.vectorize(pick)
+        def pickAny_col(w, Y):
+            D = matmul(one(Y), matmul(transp(one(Y)), Y))
+            P = matmul(diag(w), transp(B))
+            assert(Y.shape == D.shape)
+            assert(Y.shape == P.shape)
+            res = pickv(Y, D, P)
+            print("Y")
+            print(Y)
+            print("D")
+            print(D)
+            print("P")
+            print(P)
+            return res
+        row = ffor(transp(B), pickAny_col)
+        print("==== ROW ====")
+        return X + matmul(v, transp(row))
+    return ffor(M, pickAny_row)
 
-u = np.array([
-    [1],
-    [2],
-    [3],
+A = np.array([
+    [0, 2, 3],
+    [4, 5, 6],
+    [0, 0, 9],
+    [0, 0, 0],
 ])
 
-def prev(M):
-    def prev_inner(v, X):
-        part1 = (1 - max(v)) * v * transp(emax(M))
-        part2 = X * emax(M) * transp(emax(M))
-        part3 = X * emax(M) * transp(v)
-        return X + (part1 - part2 + part3)
-    return ffor(M, prev_inner)
-
-print(S_lt(np.zeros((10, 10))))
+print(pickAny(A))
+# Y = np.array([
+#     [0],
+#     [2],
+#     [0],
+# ])
+#print(matmul(one(Y), matmul(transp(one(Y)), Y)))
