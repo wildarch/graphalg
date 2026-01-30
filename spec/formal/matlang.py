@@ -17,24 +17,32 @@ def matmul(A, B):
 
 # apply: vectorize
 
-def ffor(M, f, debug=False):
-    A = np.zeros(M.shape, dtype=M.dtype)
+def ffor(M, f, init=False):
+    if init:
+        A = M
+    else:
+        A = np.zeros(M.shape, dtype=M.dtype)
+
     n = np.size(M, axis=0)
     for i in range(n):
-        if debug:
-            print(f"A{i}")
-            print(A)
         v = np.zeros((n, 1), dtype=M.dtype)
         v[i, 0] = 1
-
         A = f(v, A)
-    
-    if debug:
-        print(f"A{n}")
-        print(A)
     
     assert (A.shape == M.shape)
     return A
+
+def gfor(f, Md, *init):
+    # List of matrices
+    state = init
+
+    n = np.size(Md, axis=0)
+    for i in range(n):
+        v = np.zeros((n, 1), dtype=Md.dtype)
+        v[i, 0] = 1
+        state = f(v, *state)
+    
+    return state[0]
 
 def emax(M):
     return ffor(one(M), lambda v, X: v)
@@ -99,7 +107,6 @@ def max_element_vec(M):
     X = ffor(M, max_element_inner)
     return matmul(transp(emax(M)), X)
 
-# The goal: per-row maximum value
 def max_per_row(M):
     def max_row(v, X):
         # One row of M
@@ -109,11 +116,62 @@ def max_per_row(M):
         return X + B_max
     return ffor(one(M), max_row)
 
-M = np.array([
-    [1, 2],
-    [4, 3],
-    [5, 6],
+# M = np.array([
+#     [1, 2],
+#     [4, 3],
+#     [5, 6],
+# ])
+# print(max_per_row(M))
+
+def floyd_warshall(D):
+    def fw_inner(v, D):
+        to_k = matmul(D, v)
+        fo_k = matmul(transp(v), D)
+        # Workaround because we don't have min.+ semiring
+        via_k = matmul(to_k, transp(one(v))) + matmul(one(v), fo_k)
+
+        # apply[min](D, via_k)
+        return np.minimum(D, via_k)
+    return ffor(D, fw_inner, init=True)
+
+
+def floyd_warshall_path(L, D):
+    # TODO: init
+    P = np.array([
+        [1, 0, 1, 0],
+        [2, 2, 2, 0],
+        [0, 0, 3, 3],
+        [0, 4, 0, 4],
+    ])
+
+    def fw_inner(v, P, D):
+        to_k = matmul(D, v)
+        fo_k = matmul(transp(v), D)
+        via_k = matmul(to_k, transp(one(v))) + matmul(one(v), fo_k)
+
+        newD = np.minimum(D, via_k)
+
+        # Mod to get paths
+        updated = newD != D
+        newP = matmul(one(v), matmul(transp(v), P))
+        P = np.where(newD != D, newP, P)
+        return P, newD 
+    return gfor(fw_inner, P, P, D)
+
+inf = 1e32
+D = np.array([
+    [0.0, inf, -2.0, inf],
+    [4, 0, 3, inf],
+    [inf, inf, 0.0, 2.0],
+    [inf, -1, inf, 0],
 ])
 
-print(max_per_row(M))
+L = np.array([
+    [1],
+    [2],
+    [3],
+    [4],
+])
 
+#print(floyd_warshall_path(L, D))
+print(floyd_warshall(D))
