@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import numpy as np
 
 def transp(M):
@@ -28,7 +29,7 @@ def ffor(M, f, init=False):
         v = np.zeros((n, 1), dtype=M.dtype)
         v[i, 0] = 1
         A = f(v, A)
-    
+
     assert (A.shape == M.shape)
     return A
 
@@ -41,7 +42,7 @@ def gfor(f, Md, *init):
         v = np.zeros((n, 1), dtype=Md.dtype)
         v[i, 0] = 1
         state = f(v, *state)
-    
+
     return state[0]
 
 def emax(M):
@@ -155,23 +156,62 @@ def floyd_warshall_path(L, D):
         updated = newD != D
         newP = matmul(one(v), matmul(transp(v), P))
         P = np.where(newD != D, newP, P)
-        return P, newD 
+        return P, newD
     return gfor(fw_inner, P, P, D)
 
-inf = 1e32
-D = np.array([
-    [0.0, inf, -2.0, inf],
-    [4, 0, 3, inf],
-    [inf, inf, 0.0, 2.0],
-    [inf, -1, inf, 0],
+# inf = 1e32
+# D = np.array([
+#     [0.0, inf, -2.0, inf],
+#     [4, 0, 3, inf],
+#     [inf, inf, 0.0, 2.0],
+#     [inf, -1, inf, 0],
+# ])
+# L = np.array([
+#     [1],
+#     [2],
+#     [3],
+#     [4],
+# ])
+# print(floyd_warshall_path(L, D))
+# print(floyd_warshall(D))
+
+def argmin(M):
+    R = rotate(M)
+    def min_element_inner(v, X):
+        # apply[min](M, R*X)
+        return np.minimum(M, matmul(R, X))
+    X = ffor(M, min_element_inner, init=True)
+    return X == M
+
+INF = 1e32
+def prims(A, s):
+    # d = A(s, :)
+    # A is symmetric, no need to transpose
+    d = matmul(A, s)
+    def prims_inner(v, d, s):
+        u = argmin((s * INF) + d)
+        # TODO: simulate if
+        if np.all(u == one(u)):
+            return d, s
+        # Keep only one
+        u = transp(pickAny(transp(u)))
+        s = s + u
+        d = np.minimum(d, matmul(A, u))
+        return d, s
+    return gfor(prims_inner, A, d, s)
+
+A = np.array([
+    [INF, 2, INF, 1],
+    [2, INF, INF, 2],
+    [INF, INF, INF, 3],
+    [1, 2, 3, INF],
 ])
 
-L = np.array([
+s = np.array([
     [1],
-    [2],
-    [3],
-    [4],
+    [0],
+    [0],
+    [0],
 ])
 
-#print(floyd_warshall_path(L, D))
-print(floyd_warshall(D))
+print(prims(A, s))
