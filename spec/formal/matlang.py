@@ -183,35 +183,92 @@ def argmin(M):
     X = ffor(M, min_element_inner, init=True)
     return X == M
 
-INF = 1e32
-def prims(A, s):
-    # d = A(s, :)
-    # A is symmetric, no need to transpose
-    d = matmul(A, s)
-    def prims_inner(v, d, s):
-        u = argmin((s * INF) + d)
-        # TODO: simulate if
-        if np.all(u == one(u)):
-            return d, s
-        # Keep only one
-        u = transp(pickAny(transp(u)))
-        s = s + u
-        d = np.minimum(d, matmul(A, u))
-        return d, s
-    return gfor(prims_inner, A, d, s)
+# INF = 1e32
+# def prims(A, s):
+#     # d = A(s, :)
+#     # A is symmetric, no need to transpose
+#     d = matmul(A, s)
+#     def prims_inner(v, d, s):
+#         u = argmin((s * INF) + d)
+#         # TODO: simulate if
+#         if np.all(u == one(u)):
+#             return d, s
+#         # Keep only one
+#         u = transp(pickAny(transp(u)))
+#         s = s + u
+#         d = np.minimum(d, matmul(A, u))
+#         return d, s
+#     return gfor(prims_inner, A, d, s)
+
+# A = np.array([
+#     [INF, 2, INF, 1],
+#     [2, INF, INF, 2],
+#     [INF, INF, INF, 3],
+#     [1, 2, 3, INF],
+# ])
+
+# s = np.array([
+#     [1],
+#     [0],
+#     [0],
+#     [0],
+# ])
+
+# print(prims(A, s))
+
+def matmul_simulate(A, B):
+    shape = matmul(A, B)
+    def per_row(v, X):
+        A_row = matmul(transp(v), A)
+        def per_col(w, Y):
+            B_col = matmul(B, w)
+            # element-wise multiply row from A with column from B
+            mul = np.multiply(transp(A_row), B_col)
+            # Sum to a single cell value
+            cell = matmul(transp(one(mul)), mul)
+            # Map to the expected output position
+            mat = matmul(v, matmul(cell, transp(w)))
+            # NOTE: transpose mat here because we are iterating over result in 
+            # transposed form (to visit columns of B rather than rows)
+            return Y + transp(mat)
+        return X + transp(ffor(transp(shape), per_col))
+    return ffor(shape, per_row)
+
+def matmul_minplus(A, B):
+    shape = matmul(A, B)
+    def per_row(v, X):
+        A_row = matmul(transp(v), A)
+        def per_col(w, Y):
+            B_col = matmul(B, w)
+            # element-wise add row from A with column from B
+            add = transp(A_row) + B_col
+            # Get minimum value
+            cell = min_element_vec(add)
+            # Map to the expected output position
+            mat = matmul(v, matmul(cell, transp(w)))
+            # NOTE: transpose mat here because we are iterating over result in 
+            # transposed form (to visit columns of B rather than rows)
+            return Y + transp(mat)
+        return X + transp(ffor(transp(shape), per_col))
+    return ffor(shape, per_row)
+
+def min_element_vec(M):
+    R = rotate(M)
+    def min_element_inner(v, X):
+        # apply[min](M, R*X)
+        return np.minimum(M, matmul(R, X))
+    X = ffor(M, min_element_inner, init=True)
+    return matmul(transp(emax(M)), X)
 
 A = np.array([
-    [INF, 2, INF, 1],
-    [2, INF, INF, 2],
-    [INF, INF, INF, 3],
-    [1, 2, 3, INF],
+    [1, 2, 3],
+    [4, 5, 6],
 ])
 
-s = np.array([
-    [1],
-    [0],
-    [0],
-    [0],
+B = np.array([
+    [7, 8, 9, 10],
+    [11, 12, 13, 14],
+    [15, 16, 17, 18],
 ])
 
-print(prims(A, s))
+print(matmul_minplus(A, B))
