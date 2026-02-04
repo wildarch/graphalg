@@ -144,23 +144,25 @@ It is defined according to the following type rules:
 \item $\ttype(\rowdom(e)):= (\alpha,1)$ if $\ttype(e)=(\alpha,\beta)$;
 \item $\ttype(\diag(e)):= (\alpha,\alpha)$, if $\ttype(e)=(\alpha,1)$;
 \item $\ttype(e_1 \cdot e_2):= (\alpha,\gamma)$ if  $\ttype(e_1)=(\alpha,\beta)$, and $\ttype(e_2)=(\beta,\gamma)$;
-\item $\ttype(\Apply[f](e_1,\ldots ,e_k)):= (\alpha,\beta)$, if $\ttype(e_i) = (\alpha, \beta)$ for all $i := 1,\ldots,k$.
+\item $\ttype(\Apply[f](e_1,\ldots ,e_k)):= (\alpha,\beta)$, if $\ttype(e_i) = (\alpha, \beta)$ for all $i \in [1 \ldots k]$.
 \end{itemize}
 
 We call an expression \textit{well-typed} according to the schema $\Sch$ if $\ttype(e)$ is defined.
 We now proceed by defining the semantics of well-typed expressions.
+We use the notation $\mtr{\RR}$ for the set of all real matrices.
+For $A\in\mtr{\RR}$, $\dim(A)\in\NN^2$ denotes its dimensions.
 The semantics of a $\ML$ expression depends on the concrete sizes and values of the matrix variables.
-We define a function $\dom : \DD \to \NN$ which maps size symbols to sizes, 
+We define a function $\dom : \DD \to \NN$ which maps size symbols to concrete sizes, 
 and another function $\conc : \Mnam \mapsto \mtr{\RR}$ to map matrix variables to concrete matrix values.
 $\dom$ and $\conc$ are defined such that for a matrix $M$ with $\size(M) = (\alpha, \beta)$, we have $\dim(\conc(M)) = \dom(\alpha) \times \dom(\beta)$.
 Together they form an \textit{instance} $I = (\dom, \conc)$ with all the context needed to evaluate an expression that is well-typed according to $\Sch$.
-We denote the evaluation of an expression $e$ over instance $I$ as follows:
+We denote the evaluation of an expression $e$ over instance $I$ as $\sem{e}{\I}$, which we define as follows:
 
 \begin{itemize}
 \item $\sem{V}{\I} := \conc(V)$, for $V\in \Mnam$
 \item $\sem{e^T}{\I} := \sem{e}{\I}^T$, with $A^T$ the transpose of matrix $A$
 \item $\sem{\rowdom(e)}{\I}$ is an $n\times 1$ vector with value $1$ at all positions, where $\dim(\sem{e}{\I})=(n,m)$
-\item $\sem{\diag(e)}{\I}$ is a diagonal matrix with the vector $\sem{e}{\I}$ on its main diagonal, and zero in every other position
+\item $\sem{\diag(e)}{\I}$ is a matrix with the vector $\sem{e}{\I}$ on its main diagonal, and zero in every other position
 \item $\sem{e_1\cdot e_2}{\I} := \sem{e_1}{\I} \cdot \sem{e_2}{\I}$
 \item $\sem{\Apply[f](e_1,\ldots ,e_k)}{\I}$ is a matrix $A$ of the same size as $\sem{e_1}{\I}$, and where $A_{ij}$ has the value $f(\sem{e_1}{\I}_{ij},\ldots ,\sem{e_k}{\I}_{ij})$
 \end{itemize}
@@ -169,18 +171,26 @@ We denote the evaluation of an expression $e$ over instance $I$ as follows:
 for-$\ML$~\cite{geerts_expressive_2021} adds the \emph{canonical for loop} expression:
 
 \medskip
-\begin{tabular}{lcll}
+\begin{tabular}{lc}
     $\ffor{v}{X}{e}$ & (canonical for loop, with $v, X \in \Mvar$).
 \end{tabular}
 \medskip
 
 \noindent
-To define the semantics of $\ffor{v}{X}{e}$ over an instance $\I$, we need the following notation.
-Assume that $\ttype(v)= (\gamma,1)$, and $\ttype(e) = (\alpha,\beta)$ and $n := \dom(\gamma)$.
-Then, $\sem{\ffor{v}{X}{e}}{\I}$ is defined iteratively, as follows:
+This loop construct repeatedly updates state variable $X$ by evaluating $e$, where $e$ is allowed to refer to the previous state of the loop as $X$.
+Additionally, $e$ may refer to the \emph{canonical vector} $v$. 
+In the first iteration, $v$ takes on value $b_1 = [1\ 0 \cdots 0]^T$, in the second iteration $b_2 = [0\ 1\ 0 \cdots 0]^T$, etc.
+We introduce the following typing rule for the added loop construct:
+
+\begin{itemize}
+\item $\ttype(\ffor{v}{X}{e}) := (\alpha,\beta)$, if \\
+$\ttype(e)=\ttype(X) =(\alpha,\beta)$ and $\ttype(v) = (\gamma,1)$.
+\end{itemize}
+
+Assuming $n := \dom(\gamma)$, $\sem{\ffor{v}{X}{e}}{\I}$ is defined iteratively as follows:
 \begin{itemize}
     \item Let $A_0 := \mathbf{0}$ be the zero matrix of size $\dom(\alpha)\times \dom(\beta)$.
-    \item For $i=1,\ldots n$, compute $A_i:= \sem{e}{\I[v := b^{n}_i, X:= A_{i-1}]}$.
+    \item For $i=1,\ldots n$, compute $A_i:= \sem{e}{\I[v := b_i, X:= A_{i-1}]}$.
     \item Finally, set $\sem{\ffor{v}{X}{e}}{\I}:= A_{n}$.
 \end{itemize}
 
