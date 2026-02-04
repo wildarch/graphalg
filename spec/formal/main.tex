@@ -1,6 +1,7 @@
 \documentclass{article}
 
 \usepackage{amsmath}
+\usepackage{amsfonts}
 \usepackage{mathpartir}
 \usepackage[capitalise, noabbrev]{cleveref}
 \usepackage{stmaryrd} % Where \llbracket and \rrbracket are defined
@@ -45,6 +46,12 @@
 \newcommand{\dom}{\mathcal{D}}
 \newcommand{\sem}[2]{\llbracket #1 \rrbracket(#2)}
 \newcommand{\Mnam}{\mathcal{M}}
+\newcommand{\DD}{\texttt{Symb}}
+\newcommand{\size}{\texttt{size}}
+\newcommand{\mtr}[1]{\textsf{Mat}[#1]}
+\newcommand{\RR}{\mathbb{R}}
+\newcommand{\NN}{\mathbb{N}}
+\newcommand{\conc}{\texttt{mat}}
 
 \newcommand{\bigstep}[3]{#2(#1)=#3}
 \newcommand{\typed}[3]{#1\vdash#2:#3}
@@ -115,59 +122,48 @@ We start with `vanilla' $\ML$~\cite{brijder_expressive_2019} expressions (withou
       & \mid\quad \rowdom(e)                  &  & \text{(one-vector)}                  \\
       & \mid\quad \diag(e)                    &  & \text{(diagonalization of a vector)} \\
       & \mid\quad e_1 \cdot e_2               &  & \text{(matrix multiplication)}       \\
-      & \mid\quad \Apply[f](e_1, \ldots, e_n) &  & \text{(pointwise
+      & \mid\quad \Apply[f](e_1, \ldots, e_k) &  & \text{(pointwise
         application, $f \in \Omega$)}
 \end{align*}
 
 The definition of $\ML$ in \cite{brijder_expressive_2019} also includes a let binding expression $\LetIn{\M}{e_1}{e_2}$ for convenience.
 As noted in \cite{brijder_expressive_2019}, this operation can be omitted without affecting the expressive power of the language, so we omit it from our definition.
 
-Next we give the type rules for $\ML$:
+It is possible to write a $\ML$ expression that is valid according to the grammar but is not semantically valid.
+For example, it is unclear what the semantics of $A \cdot B$ are if $A$ and $B$ have incompatible dimensions, or if there is no matrix value associated with variable $B$.
+We capture such requirements using a set of type rules and the notion of a \textit{schema} that associates matrix variables with matrix sizes.
+A schema $\Sch$ is a pair $(\Mnam,\size)$, where $\Mnam\subset \Mvar$ is a finite set of matrix variables, and $\size: \Mnam \to \DD\times \DD$ is a function that maps each matrix variable in $\Mnam$ to a pair of \textit{size symbols}.
+We denote size symbols by Greek letters $\alpha,\beta,\gamma$. 
+Unit size $1$ is assumed to be in $\DD$.
+The type of an expression $e$ with respect to a schema $\Sch$ is denoted $\ttype(e)$.
+It is defined according to the following type rules:
 
-\begin{mathpar}
-    \infer{\M \in \var(\scm)}
-    {\typed{\scm}{\M}{\scm(\M)}} \and
-    \infer{\typed{\scm}{e_1}{\tau_1} \\ \typed{\scm[\M := \tau_1]}{e_2}{\tau_2}}
-    %{\typed{\scm}{\LetIn{\M}{e_1}{e_2}}{\tau_2}} \and
-    %\infer{\typed{\scm}{e}{s_1 \times s_2}}
-    {\typed{\scm}{\transp{e}}{s_2 \times s_1}} \and
-    \infer{\typed{\scm}{e}{s_1 \times s_2}}
-    {\typed{\scm}{\rowdom(e)}{s_1 \times 1}} \and
-    \infer{\typed{\scm}{e}{s \times 1}}
-    {\typed{\scm}{\diag(e)}{s \times s}} \and
-    \infer{\typed{\scm}{e_1}{s_1 \times s_2} \\ \typed{\scm}{e_2}{s_2 \times s_3}}
-    {\typed{\scm}{e_1 \cdot e_2}{s_1 \times s_3}} \and
-    \infer{n > 0 \\ f : \C^n\to \C \\ \forall k = 1, \ldots, n : (\typed{\scm}{e_k}{\tau})}
-    {\typed{\scm}{\Apply[f](e_1, \ldots, e_n)}{\tau}}
-\end{mathpar}
+\begin{itemize}
+\item $\ttype(M):= \size(M)$, for a matrix variable $M\in\Mnam$;
+\item $\ttype(\transp{e}):= (\beta,\alpha)$ if $\ttype(e)=(\alpha,\beta)$;
+\item $\ttype(\rowdom(e)):= (\alpha,1)$ if $\ttype(e)=(\alpha,\beta)$;
+\item $\ttype(\diag(e)):= (\alpha,\alpha)$, if $\ttype(e)=(\alpha,1)$;
+\item $\ttype(e_1 \cdot e_2):= (\alpha,\gamma)$ if  $\ttype(e_1)=(\alpha,\beta)$, and $\ttype(e_2)=(\beta,\gamma)$;
+\item $\ttype(\Apply[f](e_1,\ldots ,e_k)):= (\alpha,\beta)$, if $\ttype(e_i) = (\alpha, \beta)$ for all $i := 1,\ldots,k$.
+\end{itemize}
 
-The notation $\scm[\M := \tau]$ denotes the schema that is equal to $\scm$,
-except that $\M$ is mapped to the type $\tau$.
-\textbf{TODO: Need to explain the notation in more detail, like in the GraphAlg paper}
+We call an expression \textit{well-typed} according to the schema $\Sch$ if $\ttype(e)$ is defined.
+We now proceed by defining the semantics of well-typed expressions.
+The semantics of a $\ML$ expression depends on the concrete sizes and values of the matrix variables.
+We define a function $\dom : \DD \to \NN$ which maps size symbols to sizes, 
+and another function $\conc : \Mnam \mapsto \mtr{\RR}$ to map matrix variables to concrete matrix values.
+$\dom$ and $\conc$ are defined such that for a matrix $M$ with $\size(M) = (\alpha, \beta)$, we have $\dim(\conc(M)) = \dom(\alpha) \times \dom(\beta)$.
+Together they form an \textit{instance} $I = (\dom, \conc)$ with all the context needed to evaluate an expression that is well-typed according to $\Sch$.
+We denote the evaluation of an expression $e$ over instance $I$ as follows:
 
-The big-step operational semantics of the operations are given below.
-
-\begin{mathpar}
-    \infer{\M \in \var(I)}{\bigstep{I}{\M}{I(\M)}} \and
-    %\infer{\bigstep{I}{e_1}{A} \\ \bigstep{I[\M:=A]}{e_2}{B}}
-    %{\bigstep{I}{(\LetIn{\M}{e_1}{e_2})}{B}} \and
-    \infer{\bigstep{I}{e}{A}}{\bigstep{I}{\transp{e}}{\transp{A}}} \and
-    \infer{\bigstep{I}{e}{A}}{\bigstep{I}{\rowdom(e)}{\rowdom(A)}} \and
-    \infer{\bigstep{I}{e}{A} \\ \text{$A$ is a column vector}}
-    {\bigstep{I}{\diag(e)}{\diag(A)}} \and
-    \infer{
-        \bigstep{I}{e_1}{A} \\ \bigstep{I}{e_2}{B} \\
-        \text{number of columns of $A$ equals the number of rows of $B$}
-    }
-    {\bigstep{I}{e_1 \cdot e_2}{A \cdot B}} \and
-    \infer{\forall k = 1, \ldots, n : (\bigstep{I}{e_k}{A_k}) \\
-        \text{all $A_k$ have the same dimensions}}
-    {\bigstep{I}{\Apply[f](e_1, \ldots, e_n)}{\Apply[f](A_1, \ldots, A_n)}}
-\end{mathpar}
-
-The notation $I[\M := A]$ denotes the instance that is equal to $I$,
-except that $\M$ is mapped to the matrix $A$.
-\textbf{TODO: Need to explain the notation in more detail, like in the GraphAlg paper}
+\begin{itemize}
+\item $\sem{V}{\I} := \conc(V)$, for $V\in \Mnam$
+\item $\sem{e^T}{\I} := \sem{e}{\I}^T$, with $A^T$ the transpose of matrix $A$
+\item $\sem{\rowdom(e)}{\I}$ is an $n\times 1$ vector with value $1$ at all positions, where $\dim(\sem{e}{\I})=(n,m)$
+\item $\sem{\diag(e)}{\I}$ is a diagonal matrix with the vector $\sem{e}{\I}$ on its main diagonal, and zero in every other position
+\item $\sem{e_1\cdot e_2}{\I} := \sem{e_1}{\I} \cdot \sem{e_2}{\I}$
+\item $\sem{\Apply[f](e_1,\ldots ,e_k)}{\I}$ is a matrix $A$ of the same size as $\sem{e_1}{\I}$, and where $A_{ij}$ has the value $f(\sem{e_1}{\I}_{ij},\ldots ,\sem{e_k}{\I}_{ij})$
+\end{itemize}
 
 \subsection{Canonical Loop Definition}
 for-$\ML$~\cite{geerts_expressive_2021} adds the \emph{canonical for loop} expression:
