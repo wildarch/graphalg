@@ -70,13 +70,13 @@ def S_lt(M):
     return S_lte(M) - ident(M)
 
 def pickAny(M):
+    def pick(y, d, p):
+        if d == 0:
+            return p
+        else: return y
+    pickv = np.vectorize(pick)
     def pickAny_row(v, X):
         B = matmul(transp(v), M)
-        def pick(y, d, p):
-            if d == 0:
-                return p
-            else: return y
-        pickv = np.vectorize(pick)
         def pickAny_col(w, Y):
             # D = 1(Y) * 1(Y).T * Y
             D = matmul(one(Y), matmul(transp(one(Y)), Y))

@@ -7,6 +7,7 @@
 \usepackage{stmaryrd} % Where \llbracket and \rrbracket are defined
 
 \newcommand\graphalg{\textsf{GraphAlg}}
+\DeclareMathOperator{\pickAny}{\mathsf{pickAny}}
 
 % Definitions from MATLANG paper
 \newcommand{\ML}{\mathsf{MATLANG}}
@@ -42,7 +43,8 @@
 \newcommand{\Mvar}{\mathcal{V}}
 \newcommand{\I}{\mathcal{I}}
 \newcommand{\Sch}{\mathcal{S}}
-\newcommand{\ttype}{\texttt{type}_{\Sch}}
+\newcommand{\ttype}{\texttt{type}}
+\newcommand{\ttypes}{\texttt{type}_{\Sch}}
 \newcommand{\dom}{\mathcal{D}}
 \newcommand{\sem}[2]{\llbracket #1 \rrbracket(#2)}
 \newcommand{\Mnam}{\mathcal{M}}
@@ -52,7 +54,6 @@
 \newcommand{\RR}{\mathbb{R}}
 \newcommand{\NN}{\mathbb{N}}
 \newcommand{\conc}{\texttt{mat}}
-
 \newcommand{\bigstep}[3]{#2(#1)=#3}
 \newcommand{\typed}[3]{#1\vdash#2:#3}
 
@@ -102,8 +103,9 @@ We use the following notation:
 \section{for-$\ML$ with simultaneous induction}
 This section defines a variant of for-$\ML$ that matches the expressive power of \graphalg{} Core.
 
-We start by giving the semantics of $\ML$~\cite{brijder_expressive_2019} and the extension for-$\ML$~\cite{geerts_expressive_2021} that introduces the \emph{canonical for loop} expression.
-We then modify for-$\ML$ to include support for (1) casting between semirings and (2) multiple loop variables. We denote the resulting language ga-$\ML$.
+We start by giving the recalling the definitions of $\ML$~\cite{brijder_expressive_2019} and the extension for-$\ML$~\cite{geerts_expressive_2021} that introduces the \emph{canonical for loop} expression.
+We then modify for-$\ML$ to include support for multiple loop variables. 
+We denote the resulting language ga-$\ML$.
 
 Finally, we prove that:
 \begin{enumerate}
@@ -126,28 +128,34 @@ We start with `vanilla' $\ML$~\cite{brijder_expressive_2019} expressions (withou
         application, $f \in \Omega$)}
 \end{align*}
 
+This definition assumes a repertoire $\Omega$ of functions $f : R^k \to R$, representing all possible pointwise functions that can be used with $\Apply$.
+The language does not impose any requirements as to which functions should or should not be part of the repertoire.
+For our purposes of proving equivalence with \graphalg{} Core we will assume a particular definition of $\Omega$, see \cref{sec:pointwise}.
 The definition of $\ML$ in \cite{brijder_expressive_2019} also includes a let binding expression $\LetIn{\M}{e_1}{e_2}$ for convenience.
 As noted in \cite{brijder_expressive_2019}, this operation can be omitted without affecting the expressive power of the language, so we omit it from our definition.
 
+\subsubsection*{Typing}
 It is possible to write a $\ML$ expression that is valid according to the grammar but is not semantically valid.
 For example, it is unclear what the semantics of $A \cdot B$ are if $A$ and $B$ have incompatible dimensions, or if there is no matrix value associated with variable $B$.
 We capture such requirements using a set of type rules and the notion of a \textit{schema} that associates matrix variables with matrix sizes.
 A schema $\Sch$ is a pair $(\Mnam,\size)$, where $\Mnam\subset \Mvar$ is a finite set of matrix variables, and $\size: \Mnam \to \DD\times \DD$ is a function that maps each matrix variable in $\Mnam$ to a pair of \textit{size symbols}.
 We denote size symbols by Greek letters $\alpha,\beta,\gamma$. 
 Unit size $1$ is assumed to be in $\DD$.
-The type of an expression $e$ with respect to a schema $\Sch$ is denoted $\ttype(e)$.
+The type of an expression $e$ with respect to a schema $\Sch$ is denoted $\ttypes(e)$.
 It is defined according to the following type rules:
 
 \begin{itemize}
-\item $\ttype(M):= \size(M)$, for a matrix variable $M\in\Mnam$;
-\item $\ttype(\transp{e}):= (\beta,\alpha)$ if $\ttype(e)=(\alpha,\beta)$;
-\item $\ttype(\rowdom(e)):= (\alpha,1)$ if $\ttype(e)=(\alpha,\beta)$;
-\item $\ttype(\diag(e)):= (\alpha,\alpha)$, if $\ttype(e)=(\alpha,1)$;
-\item $\ttype(e_1 \cdot e_2):= (\alpha,\gamma)$ if  $\ttype(e_1)=(\alpha,\beta)$, and $\ttype(e_2)=(\beta,\gamma)$;
-\item $\ttype(\Apply[f](e_1,\ldots ,e_k)):= (\alpha,\beta)$, if $\ttype(e_i) = (\alpha, \beta)$ for all $i \in [1 \ldots k]$.
+\item $\ttypes(M):= \size(M)$, for a matrix variable $M\in\Mnam$;
+\item $\ttypes(\transp{e}):= (\beta,\alpha)$ if $\ttypes(e)=(\alpha,\beta)$;
+\item $\ttypes(\rowdom(e)):= (\alpha,1)$ if $\ttypes(e)=(\alpha,\beta)$;
+\item $\ttypes(\diag(e)):= (\alpha,\alpha)$, if $\ttypes(e)=(\alpha,1)$;
+\item $\ttypes(e_1 \cdot e_2):= (\alpha,\gamma)$ if  $\ttypes(e_1)=(\alpha,\beta)$, and $\ttypes(e_2)=(\beta,\gamma)$;
+\item $\ttypes(\Apply[f](e_1,\ldots ,e_k)):= (\alpha,\beta)$, if $\ttypes(e_i) = (\alpha, \beta)$ for all $i \in [1 \ldots k]$ and $f \in \Omega$.
 \end{itemize}
 
-We call an expression \textit{well-typed} according to the schema $\Sch$ if $\ttype(e)$ is defined.
+We call an expression \textit{well-typed} according to the schema $\Sch$ if $\ttypes(e)$ is defined.
+
+\subsubsection*{Semantics}
 We now proceed by defining the semantics of well-typed expressions.
 We use the notation $\mtr{\RR}$ for the set of all real matrices.
 For $A\in\mtr{\RR}$, $\dim(A)\in\NN^2$ denotes its dimensions.
@@ -179,12 +187,14 @@ for-$\ML$~\cite{geerts_expressive_2021} adds the \emph{canonical for loop} expre
 \noindent
 This loop construct repeatedly updates state variable $X$ by evaluating $e$, where $e$ is allowed to refer to the previous state of the loop as $X$.
 Additionally, $e$ may refer to the \emph{canonical vector} $v$. 
-In the first iteration, $v$ takes on value $b_1 = [1\ 0 \cdots 0]^T$, in the second iteration $b_2 = [0\ 1\ 0 \cdots 0]^T$, etc.
-We introduce the following typing rule for the added loop construct:
+Assume a set of canonical vectors $b_1^n,\ldots,b_n^n$ of dimension $n$ defined as $b_1^n = \transp{[1\ 0 \cdots 0]},b_2 = [0\ 1\ 0 \cdots 0]^T$.
+In the first iteration, $v$ takes on value $b_1^n$, in the second iteration $b_2^n$, etc.
+
+Following~\cite{geerts_expressive_2021}, we introduce the following typing rule for the added loop construct:
 
 \begin{itemize}
-\item $\ttype(\ffor{v}{X}{e}) := (\alpha,\beta)$, if \\
-$\ttype(e)=\ttype(X) =(\alpha,\beta)$ and $\ttype(v) = (\gamma,1)$.
+\item $\ttypes(\ffor{v}{X}{e}) := (\alpha,\beta)$, if \\
+$\ttypes(e)=\ttypes(X) =(\alpha,\beta)$ and $\ttypes(v) = (\gamma,1)$.
 \end{itemize}
 
 Assuming $n := \dom(\gamma)$, $\sem{\ffor{v}{X}{e}}{\I}$ is defined iteratively as follows:
@@ -194,7 +204,11 @@ Assuming $n := \dom(\gamma)$, $\sem{\ffor{v}{X}{e}}{\I}$ is defined iteratively 
     \item Finally, set $\sem{\ffor{v}{X}{e}}{\I}:= A_{n}$.
 \end{itemize}
 
+The notation $\I[M := A]$ denotes an instance equivalent to $\I$, except that matrix variable $M$ maps to value $A$.
+
 \subsection{Adding Simultaneous Induction}
+\textbf{TODO: Motivate why do we need simultaneous induction}
+
 ga-$\ML$ starts from for-$\ML$, but modifies the loop definition to allow multiple loop variables:
 
 \medskip
@@ -203,10 +217,22 @@ ga-$\ML$ starts from for-$\ML$, but modifies the loop definition to allow multip
 \end{tabular}
 \medskip
 
-The loop is defined for any number of loop variables $m \geq 1$.
-%Assume that $\ttype(e) = (\alpha,\beta)$ and $n := \dom(\gamma)$.
+The loop body defines a number of loop variables $m \geq 1$ that each consist of a \emph{binding variable} $M_i$ and a \emph{body expression} $e_i'$.
+Intuitively, before entering the loop, the binding variables are initialized as $M_i := e_i$. 
+Evaluation of the loop is similar to for-$\ML$, each time updating the binding variables with the results of the body expressions.
+The loop produces a single result matrix, which is the final value of $M_1$.
 Expression $e_d$ is used to define the number of loop iterations $n$.
-Assume that $\ttype(e_d) = (\alpha,\beta)$.
+
+The typing rule is modified accordingly:
+
+\begin{itemize}
+\item $\ttypes(\texttt{for}\, v,\{ M_1 := e_1', \ldots, M_m := e_m' \}(e_d, e_1, \ldots, e_m)) := \tau_1$,\\
+      if $\ttypes(e_d) = (\alpha, \beta)$ and $\tau_i := \ttypes(e_i) = \ttype_{\Sch'}(e_i')$ for all $i \in [1 \cdots m]$, where $\Sch' := \Sch[v := (\alpha, 1), M_1 := \tau_1,\ldots,M_m := \tau_m]$
+\end{itemize}
+
+The notation $\Sch[M := \tau]$ denotes a schema equivalent to $\Sch$, except that matrix variable $M$ maps to type $\tau$.
+
+Assume that $\ttypes(e_d) = (\alpha,\beta)$.
 Then we assign $n := \dom(\alpha)$.
 The semantics of the loop are defined iteratively, as follows:
 \begin{itemize}
@@ -215,10 +241,8 @@ The semantics of the loop are defined iteratively, as follows:
     \item Finally, set $\sem{\texttt{for}\, v,\{ M_1 := e_1', \ldots, M_m := e_m' \}(e_d, e_1, \ldots, e_m)}{\I}:= \I_n(M_1)$.
 \end{itemize}
 
-TODO: Typing rule
-
-\subsection{Pointwise Functions}
-The syntax definition of $\ML$ assumes a repertoire $\Omega$ of functions $f : R^n \to R$, representing all possible pointwise functions that can be used with $\Apply$.
+\subsection{Pointwise Functions}\label{sec:pointwise}
+The syntax definition of $\ML$ assumes a repertoire $\Omega$ of functions $f : R^k \to R$, representing all possible pointwise functions that can be used with $\Apply$.
 Here $R$ is a semiring, often the complex or real numbers.
 The definition of $\ML$ does not dictate a particular set of functions in $\Omega$.
 Instead, $\Omega$ is chosen depending on the required scalar functions for particular proofs.
@@ -229,14 +253,33 @@ In the following sections, we assume $\Omega$ to comprise the set of all possibl
 \subsection{On Casting Between Semirings}
 It is typically assumed that all expressions in a $\ML$ expression operate over the same semiring.
 \graphalg{}, in contrast, introduces a cast operator to switch between different semirings.
-To allow scalar cast expressions in $\Apply$, we relax the requirement that the input and output values of functions in $f$ fall within the same semiring.
-Because we now allow with different semirings to exist within a single expression, we must introduce an additional rule for type checking matrix multiplication:
-Matrix multiplication $e_1 \cdot e_2$ is allowed iff both $e_1$ and $e_2$ use the same semiring.
+\textbf{TODO: Finish this section} 
 
-No modifications are necessary for the typing rules of other expressions.
-Firstly, our loop definition already requires that the initial value for a binding matches that of the value generated by the loop body.
-Secondly, a mix of different semirings for arguments to $\Apply$ is readily acceptable, provided that the scalar operations are well-defined for those semirings.
-All other operations in ga-$\ML$ have only one input operand, so there is no risk of confusion with different semirings.
+\begin{itemize}
+    \item Assume the semiring of real number plus infinity $\RR \bigcup \{ \infty \}$ used in ga-$\ML$.
+    \item Expressions $e^T$, $diag(e)$ and loops work the same regardless of the semiring.
+    \item Within pointwise functions we can do whatever, so $\Apply$ is also fine.
+    \item For matrix multiply, we show below how to rewrite matrix multiplication with arbitrary semiring into a regular ga-$\ML$ expression.
+    \item Rewrite $\rowdom(e)$ as $\Apply[1_R](\rowdom(e))$, where $1_R$ is the multiplicative identity of the semiring associated with $e$.
+    \item For \texttt{pickAny} we also show a simple rewrite below.
+\end{itemize}
+
+For \texttt{pickAny} we only need to account for different definitions of `nonzero'. 
+Assume input expression $e$ has semiring $R$.
+We define the following rewrite rule:
+
+\begin{tabbing}
+    L0\=L1\=L2\=L3\=L4 \kill 
+    $\pickAny_R(e) \to \Apply[v,p. v \text{ if } p \text{ else } 0_R]($\\ 
+    \>$e,$\\
+    \>$\pickAny(\Apply[\neq 0_R](e)))$
+\end{tabbing}
+
+The inner $\Apply$ creates a matrix with value $1$ at positions where $e$ is nonzero according to semiring $R$.
+The $\pickAny(..)$ creates a selection mask from this for which values of $e$ to keep.
+Finally, that mask is applied by the outer $\Apply$.
+
+\textbf{TODO: Matrix multiply}
 
 \subsection{Simulating ga-$\ML$ in \graphalg{} Core}
 We show how ga-$\ML$ expressions can be rewritten into \graphalg{} Core expressions with equivalent semantics.
@@ -271,6 +314,8 @@ For loops, since the semantics of \texttt{for} in \graphalg{} Core are otherwise
 
 $\text{pickAny}(A)$ can be simulated using the for loop with canonical vectors available in for-$\ML$ (and by extension also in ga-$\ML$):
 
+\textbf{TODO: Needs updating to a simpler definition}
+
 \begin{tabbing}
     L0\=L1\=L2\=L3\=L4 \kill 
     $\texttt{for}\, v,X \texttt{.}\,$\\ 
@@ -283,12 +328,29 @@ $\text{pickAny}(A)$ can be simulated using the for loop with canonical vectors a
     \>\>\>$\Apply[y, d, p.\ \SyntaxStyle{if}\ d = \mathbf{0}\ \SyntaxStyle{then}\ p\ \SyntaxStyle{else}\ y](Y, D, \transp{P})))^T$\\
 \end{tabbing}
 
-The outer loop $\texttt{for}\, v$ iterates over the input rows, while $\texttt{for}\, w$ iterates over the columns.
-$Y$ contains the (partial) result for one particular row. It is stored in transposed format so that $w$ iterates over the column rather than the row dimension of $A$.
-In the inner loop, we first detect ($D$) if we already have a value for the current row.
-Then, we take the proposed ($P$) value at position $(v, w)$ in $A$, setting all other values to zero.
-Finally, the inner $\Apply$ either picks the proposed value $p$ if there is no value yet for the current row, or the existing value $y$ otherwise.
-The outer apply combines the values for the individual rows.
+\begin{tabbing}
+    L0\=L1\=L2\=L3\=L4 \kill 
+    $\texttt{for}\, v,X \texttt{.}\,$\\ 
+    \>$\SyntaxStyle{let}\ B = \transp{v} \cdot A \ \SyntaxStyle{in}$ \\
+    \>$\Apply[+]($\\
+    \>\>$X,$\\
+    \>\>$(\texttt{for}\, w,Y \texttt{.}\,$\\ 
+    \>\>\>$\SyntaxStyle{let}\ D=\one{Y} \cdot \transp{\one{Y}} \cdot Y\ \SyntaxStyle{in}$ \\
+    \>\>\>$\SyntaxStyle{let}\ P=\diag(w) \cdot \transp{B}\ \SyntaxStyle{in}$ \\
+    \>\>\>$\Apply[y, d, p.\ \SyntaxStyle{if}\ d = 0\ \SyntaxStyle{then}\ p\ \SyntaxStyle{else}\ y](Y, D, \transp{P})))^T$\\
+    \>\>$)^T$\\
+    %\>\>\>$\SyntaxStyle{let}\ D=Y \cdot \one(\transp{Y}) \cdot \transp{\one(\transp{Y})}\ \SyntaxStyle{in}$ \\
+    %\>\>\>$\SyntaxStyle{let}\ D=\transp{\one(Y)} \cdot \one(Y) \cdot Y\ \SyntaxStyle{in}$ \\
+    %\>\>\>$\SyntaxStyle{let}\ P=\diag(v) \cdot A \cdot \diag(w)\ \SyntaxStyle{in}$ \\
+    %\>\>\>$\Apply[y, d, p.\ \SyntaxStyle{if}\ d = \mathbf{0}\ \SyntaxStyle{then}\ p\ \SyntaxStyle{else}\ y](Y, D, \transp{P})))^T$\\
+\end{tabbing}
+
+% The outer loop $\texttt{for}\, v$ iterates over the input rows, while $\texttt{for}\, w$ iterates over the columns.
+% $Y$ contains the (partial) result for one particular row. It is stored in transposed format so that $w$ iterates over the column rather than the row dimension of $A$.
+% In the inner loop, we first detect ($D$) if we already have a value for the current row.
+% Then, we take the proposed ($P$) value at position $(v, w)$ in $A$, setting all other values to zero.
+% Finally, the inner $\Apply$ either picks the proposed value $p$ if there is no value yet for the current row, or the existing value $y$ otherwise.
+% The outer apply combines the values for the individual rows.
 
 \bibliographystyle{plain}
 \bibliography{zotero}
