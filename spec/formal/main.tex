@@ -213,7 +213,7 @@ ga-$\ML$ starts from for-$\ML$, but modifies the loop definition to allow multip
 
 \medskip
 \begin{tabular}{lc}
-    $\texttt{for}\, v,\{ M_1 := e_1', \ldots, M_m := e_m' \}(e_d, e_1, \ldots, e_m)$
+    $\texttt{for}\, v,\{ M_1 := e_1', \ldots, M_m := e_m' \}(e_1, \ldots, e_m)$
 \end{tabular}
 \medskip
 
@@ -227,18 +227,20 @@ The typing rule is modified accordingly:
 
 \begin{itemize}
 \item $\ttypes(\texttt{for}\, v,\{ M_1 := e_1', \ldots, M_m := e_m' \}(e_d, e_1, \ldots, e_m)) := \tau_1$,\\
-      if $\ttypes(e_d) = (\alpha, \beta)$ and $\tau_i := \ttypes(e_i) = \ttype_{\Sch'}(e_i')$ for all $i \in [1 \cdots m]$, where $\Sch' := \Sch[v := (\alpha, 1), M_1 := \tau_1,\ldots,M_m := \tau_m]$
+      if $\tau_i := \ttypes(e_i) = \ttype_{\Sch'}(e_i')$ for all $i \in [1 \cdots m]$,\\
+      where $\Sch' := \Sch[M_1 := \tau_1,\ldots,M_m := \tau_m]$
+      and $\ttypes(v) = (\gamma,1)$.
 \end{itemize}
 
 The notation $\Sch[M := \tau]$ denotes a schema equivalent to $\Sch$, except that matrix variable $M$ maps to type $\tau$.
 
-Assume that $\ttypes(e_d) = (\alpha,\beta)$.
-Then we assign $n := \dom(\alpha)$.
+Assume that $\ttypes(v) = (\gamma,1)$.
+Then we assign $n := \dom(\gamma)$.
 The semantics of the loop are defined iteratively, as follows:
 \begin{itemize}
     \item Let $\I_0 := \I[v := b^{n}_0, M_1 := \sem{e_1}{\I}, \ldots, M_m := \sem{e_m}{\I}]$
     \item For $i = 1,\ldots n$, compute $\I_i := \I_{i-1}[v := b^{n}_i, M_1 := \sem{e_1'}{\I_{i-1}}, \ldots, M_m := \sem{e_m'}{\I_{i-1}}]$.
-    \item Finally, set $\sem{\texttt{for}\, v,\{ M_1 := e_1', \ldots, M_m := e_m' \}(e_d, e_1, \ldots, e_m)}{\I}:= \I_n(M_1)$.
+    \item Finally, set $\sem{\texttt{for}\, v,\{ M_1 := e_1', \ldots, M_m := e_m' \}(e_1, \ldots, e_m)}{\I}:= \I_n(M_1)$.
 \end{itemize}
 
 \subsection{Pointwise Functions}\label{sec:pointwise}
@@ -257,7 +259,7 @@ It is typically assumed that all expressions in a $\ML$ expression operate over 
 
 \begin{itemize}
     \item Assume the semiring of real number plus infinity $\RR \bigcup \{ \infty \}$ used in ga-$\ML$.
-    \item Expressions $e^T$, $diag(e)$ and loops work the same regardless of the semiring.
+    \item Expressions $e^T$, $\diag(e)$ and loops work the same regardless of the semiring.
     \item Within pointwise functions we can do whatever, so $\Apply$ is also fine.
     \item For matrix multiply, we show below how to rewrite matrix multiplication with arbitrary semiring into a regular ga-$\ML$ expression.
     \item Rewrite $\rowdom(e)$ as $\Apply[1_R](\rowdom(e))$, where $1_R$ is the multiplicative identity of the semiring associated with $e$.
@@ -304,20 +306,19 @@ Only two operations from \graphalg{} Core are not present in ga-$\ML$:
     \item The \texttt{pickAny} operation
 \end{enumerate}
 
-\textbf{TODO: Remove $e_d$}
-
 We show how to rewrite these expression from \graphalg{} Core into equivalent ga-$\ML$.
 For loops, since the semantics of \texttt{for} in \graphalg{} Core are otherwise identical to those of ga-$\ML$, we can trivially rewrite any loop using the rule:
 \begin{align*}
-    \texttt{for}\ \ \ &\{ M_1 := e_1', \ldots, M_m := e_m' \}(e_d, e_1, \ldots, e_m)
-    \rightarrow \\
-    \texttt{for}\, v,&\{ M_1 := e_1', \ldots, M_m := e_m' \}(e_d, e_1, \ldots, e_m)
+    \texttt{for}\ \ \ &\{ M_1 := e_1', \ldots, M_m := e_m' \}(v, e_1, \ldots, e_m)
+    \Rightarrow \\
+    \texttt{for}\, v,&\{ M_1 := e_1', \ldots, M_m := e_m' \}(e_1, \ldots, e_m)
 \end{align*}
 
 $\text{pickAny}(A)$ can be simulated using the for loop with canonical vectors available in for-$\ML$ (and by extension also in ga-$\ML$):
 
 \begin{tabbing}
     L0\=L1\=L2\=L3\=L4 \kill 
+    $\pickAny(A) \Rightarrow$ \\
     $\SyntaxStyle{let}\ v = \one(A) \ \SyntaxStyle{in}$ \\
     $\SyntaxStyle{let}\ w = \one(\transp{A}) \ \SyntaxStyle{in}$ \\
     $\SyntaxStyle{let}\ X = A \ \SyntaxStyle{in}$ \\
