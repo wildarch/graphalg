@@ -274,7 +274,7 @@ We define the following rewrite rule:
 
 \begin{tabbing}
     L0\=L1\=L2\=L3\=L4 \kill 
-    $\pickAny_R(e) \to \Apply[v,p. v \text{ if } p \text{ else } 0_R]($\\ 
+    $\pickAny_R(e) \Rightarrow \Apply[v,p. v \text{ if } p \text{ else } 0_R]($\\ 
     \>$e,$\\
     \>$\pickAny(\Apply[\neq 0_R](e)))$
 \end{tabbing}
@@ -283,7 +283,83 @@ The inner $\Apply$ creates a matrix with value $1$ at positions where $e$ is non
 The $\pickAny(..)$ creates a selection mask from this for which values of $e$ to keep.
 Finally, that mask is applied by the outer $\Apply$.
 
-\textbf{TODO: Matrix multiply}
+To rewrite matrix multiplication, we need the following auxiliary function definitions.
+Function $\mathsf{emax}(V)$ follows the definition given in \cite{geerts_expressive_2021}, returning the last canonical vector:
+
+\begin{tabbing}
+    L0\=L1\=L2\=L3\=L4 \kill 
+    $\mathsf{emax}(V) = $\\
+    $\SyntaxStyle{let}\ v = V \ \SyntaxStyle{in}$ \\
+    $\SyntaxStyle{let}\ X = V \ \SyntaxStyle{in}$ \\
+    $\texttt{for}\, v,X \texttt{.}\, v$
+\end{tabbing}
+
+The converse $\mathsf{emin}$, which returns the first canonical vector, can be defined as $\mathsf{emin}(V) = \transp{\pickAny(\transp{\one(V)})}$.
+We also take the definition of ordering matrix $S_{\leq}$ from \cite{geerts_expressive_2021}:
+
+\begin{tabbing}
+    L0\=L1\=L2\=L3\=L4 \kill 
+    $S_{\leq}(V) = \begin{bmatrix}
+1 & 1 & \cdots &  1 \\
+0 & 1 & \cdots & 1\\
+\vdots & \vdots & \ddots & 1 \\
+0 & 0 & \cdots & 1 
+\end{bmatrix} = $\\
+    $\SyntaxStyle{let}\ v = V \ \SyntaxStyle{in}$ \\
+    $\SyntaxStyle{let}\ X = \diag(V) \ \SyntaxStyle{in}$ \\
+    $(\texttt{for}\, v,X \texttt{.}$\\
+    \>$X 
+        + (X \cdot \mathsf{emax}(V) + v) \cdot \transp{v} 
+        + v \cdot \transp{\mathsf{emax}(V)}
+    ) - \one(V) \cdot \transp{\mathsf{emax}(V)}$\\
+\end{tabbing}
+
+By subtracting the identity matrix, we obtain $S_{<} = S_{\leq}(V) - \diag(\one(V))$.
+Based on $S_{<}$, we can define function $\mathsf{rotate}(V)$:
+% NOTE: We could also omit the emax(V) * emin(V).T part to just implement shift.
+% Then in sum[..](..) we MUST use (emin(V) * for) rather than emax(V), as we only populate the first position of the vector.
+
+\[
+\mathsf{rotate(V)} = \pickAny(S_{<}(V)) + \mathsf{emax}(V) \cdot \transp{\mathsf{emin}(V)} = 
+\begin{bmatrix}
+0 & 1 & 0 & \cdots & 0 \\
+\vdots & \ddots & \ddots & \ddots & \vdots \\
+\vdots & & \ddots & \ddots & 0 \\
+0 & &  & \ddots & 1 \\
+1 & 0 & \cdots & \cdots & 0 \\
+\end{bmatrix}
+\] 
+
+The resulting matrix has the property when it is multiplied with a vector, it rotates all entries by one position.
+For example, given $V = \transp{[1\ 2\ 3]}$, we have $\mathsf{rotate}(V) \cdot V = \transp{[2\ 3\ 1]}$.
+
+Function $\mathsf{sum}[\oplus](V)$ takes as input a (column) vector $V$ and returns the sum of all entries in the vector according to addition operator $\oplus$ ($V_0 \oplus V_1 \oplus \ldots$).
+It can be defined in for-$\ML$ as:
+
+\begin{tabbing}
+    L0\=L1\=L2\=L3\=L4 \kill 
+    $\mathsf{sum}[\oplus](V) = $\\ 
+    $\SyntaxStyle{let}\ v = V \ \SyntaxStyle{in}$ \\
+    $\SyntaxStyle{let}\ X = V \ \SyntaxStyle{in}$ \\
+    $\SyntaxStyle{let}\ R = \mathsf{rotate}(V) \ \SyntaxStyle{in}$ \\
+    $\transp{\mathsf{emax}(V)} \cdot \texttt{for}\, v,X \texttt{.}\, \Apply[\oplus](V, R \cdot X)$
+\end{tabbing}
+
+Finally, matrix multiplication with addition operator $\oplus$ and multiplication operator $\otimes$ can be written as:
+
+\begin{tabbing}
+    L0\=L1\=L2\=L3\=L4 \kill 
+    $A \cdot_{\oplus,\otimes} B \Rightarrow$\\ 
+    $\SyntaxStyle{let}\ v = \one(A) \ \SyntaxStyle{in}$ \\
+    $\SyntaxStyle{let}\ w = \one(\transp{B}) \ \SyntaxStyle{in}$ \\
+    $\SyntaxStyle{let}\ X = A \cdot B \ \SyntaxStyle{in}$ \\
+    $\SyntaxStyle{let}\ Y = A \cdot B \ \SyntaxStyle{in}$ \\
+    $\texttt{for}\, v,X \texttt{.}\,$\\ 
+    \>$\SyntaxStyle{let}\ A_r = \transp{v} \cdot A \ \SyntaxStyle{in}$ \\
+    \>$X + \texttt{for}\, w,Y \texttt{.}\,$\\ 
+    \>\>$\SyntaxStyle{let}\ B_c = B \cdot w \ \SyntaxStyle{in}$ \\
+    \>\>$Y + v \cdot \mathsf{sum}[\oplus](\Apply[\otimes](\transp{A_r}, B_c)) \cdot \transp{w}$
+\end{tabbing}
 
 \subsection{Simulating ga-$\ML$ in \graphalg{} Core}
 We show how ga-$\ML$ expressions can be rewritten into \graphalg{} Core expressions with equivalent semantics.

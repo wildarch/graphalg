@@ -246,7 +246,10 @@ def matmul_simulate(A, B):
     return ffor(one(shape), shape, per_row)
 
 def matmul_minplus(A, B):
-    shape = matmul(A, B)
+    X = matmul(A, B)
+    Y = matmul(A, B)
+    v = one(A)
+    w = one(transp(B))
     def per_row(v, X):
         A_row = matmul(transp(v), A)
         def per_col(w, Y):
@@ -257,11 +260,9 @@ def matmul_minplus(A, B):
             cell = min_element_vec(add)
             # Map to the expected output position
             mat = matmul(v, matmul(cell, transp(w)))
-            # NOTE: transpose mat here because we are iterating over result in 
-            # transposed form (to visit columns of B rather than rows)
-            return Y + transp(mat)
-        return X + transp(ffor(one(transp(shape)), transp(shape), per_col))
-    return ffor(one(shape), shape, per_row)
+            return Y + mat
+        return X + ffor(w, Y, per_col)
+    return ffor(v, X, per_row)
 
 def min_element_vec(M):
     R = rotate(M)
@@ -271,22 +272,22 @@ def min_element_vec(M):
     X = ffor(one(M), M, min_element_inner, init=True)
     return matmul(transp(emax(M)), X)
 
-# A = np.array([
-#     [1, 2, 3],
-#     [4, 5, 6],
-# ])
-
-# B = np.array([
-#     [7, 8, 9, 10],
-#     [11, 12, 13, 14],
-#     [15, 16, 17, 18],
-# ])
-
-# print(matmul_minplus(A, B))
-
-M = np.array([
+A = np.array([
     [1, 2, 3],
-    [0, 5, 6],
+    [4, 5, 6],
 ])
 
-print(pickAny(M))
+B = np.array([
+    [7, 8, 9, 10],
+    [11, 12, 13, 14],
+    [15, 16, 17, 18],
+])
+
+print(matmul_minplus(A, B))
+
+# M = np.array([
+#     [1, 2, 3],
+#     [0, 5, 6],
+# ])
+
+# print(pickAny(M))
