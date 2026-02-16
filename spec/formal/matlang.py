@@ -18,13 +18,14 @@ def matmul(A, B):
 
 # apply: vectorize
 
-def ffor(M, f, init=False):
+def ffor(v, M, f, init=False):
     if init:
         A = M
     else:
         A = np.zeros(M.shape, dtype=M.dtype)
 
-    n = np.size(M, axis=0)
+    n = np.size(v, axis=0)
+    assert (v.shape == (n, 1))
     for i in range(n):
         v = np.zeros((n, 1), dtype=M.dtype)
         v[i, 0] = 1
@@ -46,7 +47,7 @@ def gfor(f, Md, *init):
     return state[0]
 
 def emax(M):
-    return ffor(one(M), lambda v, X: v)
+    return ffor(one(M), one(M), lambda v, X: v)
 
 def S_lte(M):
     def S_lte_inner(v, X):
@@ -58,7 +59,7 @@ def S_lte(M):
 
     # Output is square
     out_shape = diag(one(M))
-    X = ffor(out_shape, S_lte_inner)
+    X = ffor(one(M), out_shape, S_lte_inner)
     # FIX not in original paper
     res = X - one(X) * transp(emax(X))
     return res
@@ -69,26 +70,35 @@ def ident(M):
 def S_lt(M):
     return S_lte(M) - ident(M)
 
-def pickAny(M):
+def pickAny(A):
     def pick(y, d, p):
         if d == 0:
             return p
         else: return y
     pickv = np.vectorize(pick)
+    v = one(A)
+    w = one(transp(A))
+    X = A
+    Y = transp(w)
+    B = matmul(w, transp(w)) 
     def pickAny_row(v, X):
-        B = matmul(transp(v), M)
+        # R = V.T * A
+        R = matmul(transp(v), A)
         def pickAny_col(w, Y):
-            # D = 1(Y) * 1(Y).T * Y
-            D = matmul(one(Y), matmul(transp(one(Y)), Y))
-            # P = diag(w) * B.T
-            P = matmul(diag(w), transp(B))
+            # D = Y * B
+            D = matmul(Y, B)
+            # P = R * diag(w)
+            P = matmul(R, diag(w))
             assert(Y.shape == D.shape)
             assert(Y.shape == P.shape)
             # apply[pick](Y, D, P)
             return pickv(Y, D, P)
-        row = ffor(transp(B), pickAny_col)
-        return X + matmul(v, transp(row))
-    return ffor(M, pickAny_row)
+        # for w,Y. ...
+        row = ffor(w, Y, pickAny_col)
+        # X + v * (for w,Y. ...)
+        return X + matmul(v, row)
+    # for v,X. ...
+    return ffor(v, X, pickAny_row)
 
 def emin(M):
     # NOTE: Different definition than the one in the for-ML paper
@@ -105,7 +115,7 @@ def max_element_vec(M):
     def max_element_inner(v, X):
         # apply[max](M, R*X)
         return np.maximum(M, matmul(R, X))
-    X = ffor(M, max_element_inner)
+    X = ffor(one(M), M, max_element_inner)
     return matmul(transp(emax(M)), X)
 
 def max_per_row(M):
@@ -115,7 +125,7 @@ def max_per_row(M):
         B_max = max_element_vec(transp(B))
         B_max = matmul(v, B_max)
         return X + B_max
-    return ffor(one(M), max_row)
+    return ffor(one(M), one(M), max_row)
 
 # M = np.array([
 #     [1, 2],
@@ -133,7 +143,7 @@ def floyd_warshall(D):
 
         # apply[min](D, via_k)
         return np.minimum(D, via_k)
-    return ffor(D, fw_inner, init=True)
+    return ffor(one(D), D, fw_inner, init=True)
 
 
 def floyd_warshall_path(L, D):
@@ -180,7 +190,7 @@ def argmin(M):
     def min_element_inner(v, X):
         # apply[min](M, R*X)
         return np.minimum(M, matmul(R, X))
-    X = ffor(M, min_element_inner, init=True)
+    X = ffor(one(M), M, min_element_inner, init=True)
     return X == M
 
 # INF = 1e32
@@ -231,8 +241,9 @@ def matmul_simulate(A, B):
             # NOTE: transpose mat here because we are iterating over result in 
             # transposed form (to visit columns of B rather than rows)
             return Y + transp(mat)
-        return X + transp(ffor(transp(shape), per_col))
-    return ffor(shape, per_row)
+        # TODO: fix v
+        return X + transp(ffor(one(transp(shape)), transp(shape), per_col))
+    return ffor(one(shape), shape, per_row)
 
 def matmul_minplus(A, B):
     shape = matmul(A, B)
@@ -249,26 +260,33 @@ def matmul_minplus(A, B):
             # NOTE: transpose mat here because we are iterating over result in 
             # transposed form (to visit columns of B rather than rows)
             return Y + transp(mat)
-        return X + transp(ffor(transp(shape), per_col))
-    return ffor(shape, per_row)
+        return X + transp(ffor(one(transp(shape)), transp(shape), per_col))
+    return ffor(one(shape), shape, per_row)
 
 def min_element_vec(M):
     R = rotate(M)
     def min_element_inner(v, X):
         # apply[min](M, R*X)
         return np.minimum(M, matmul(R, X))
-    X = ffor(M, min_element_inner, init=True)
+    X = ffor(one(M), M, min_element_inner, init=True)
     return matmul(transp(emax(M)), X)
 
-A = np.array([
+# A = np.array([
+#     [1, 2, 3],
+#     [4, 5, 6],
+# ])
+
+# B = np.array([
+#     [7, 8, 9, 10],
+#     [11, 12, 13, 14],
+#     [15, 16, 17, 18],
+# ])
+
+# print(matmul_minplus(A, B))
+
+M = np.array([
     [1, 2, 3],
-    [4, 5, 6],
+    [0, 5, 6],
 ])
 
-B = np.array([
-    [7, 8, 9, 10],
-    [11, 12, 13, 14],
-    [15, 16, 17, 18],
-])
-
-print(matmul_minplus(A, B))
+print(pickAny(M))

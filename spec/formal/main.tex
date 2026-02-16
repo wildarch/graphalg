@@ -304,6 +304,8 @@ Only two operations from \graphalg{} Core are not present in ga-$\ML$:
     \item The \texttt{pickAny} operation
 \end{enumerate}
 
+\textbf{TODO: Remove $e_d$}
+
 We show how to rewrite these expression from \graphalg{} Core into equivalent ga-$\ML$.
 For loops, since the semantics of \texttt{for} in \graphalg{} Core are otherwise identical to those of ga-$\ML$, we can trivially rewrite any loop using the rule:
 \begin{align*}
@@ -314,43 +316,28 @@ For loops, since the semantics of \texttt{for} in \graphalg{} Core are otherwise
 
 $\text{pickAny}(A)$ can be simulated using the for loop with canonical vectors available in for-$\ML$ (and by extension also in ga-$\ML$):
 
-\textbf{TODO: Needs updating to a simpler definition}
-
 \begin{tabbing}
     L0\=L1\=L2\=L3\=L4 \kill 
+    $\SyntaxStyle{let}\ v = \one(A) \ \SyntaxStyle{in}$ \\
+    $\SyntaxStyle{let}\ w = \one(\transp{A}) \ \SyntaxStyle{in}$ \\
+    $\SyntaxStyle{let}\ X = A \ \SyntaxStyle{in}$ \\
+    $\SyntaxStyle{let}\ Y = \transp{w} \ \SyntaxStyle{in}$ \\
+    $\SyntaxStyle{let}\ B = w \cdot \transp{w} \ \SyntaxStyle{in}$ \\
     $\texttt{for}\, v,X \texttt{.}\,$\\ 
-    \>$\Apply[+]($\\
-    \>\>$X,$\\
-    \>\>$(\texttt{for}\, w,Y \texttt{.}\,$\\ 
-    %\>\>\>$\SyntaxStyle{let}\ D=Y \cdot \one(\transp{Y}) \cdot \transp{\one(\transp{Y})}\ \SyntaxStyle{in}$ \\
-    \>\>\>$\SyntaxStyle{let}\ D=\transp{\one(Y)} \cdot \one(Y) \cdot Y\ \SyntaxStyle{in}$ \\
-    \>\>\>$\SyntaxStyle{let}\ P=\diag(v) \cdot A \cdot \diag(w)\ \SyntaxStyle{in}$ \\
-    \>\>\>$\Apply[y, d, p.\ \SyntaxStyle{if}\ d = \mathbf{0}\ \SyntaxStyle{then}\ p\ \SyntaxStyle{else}\ y](Y, D, \transp{P})))^T$\\
+    \>$\SyntaxStyle{let}\ R = \transp{v} \cdot A \ \SyntaxStyle{in}$ \\
+    \>$X + v \cdot (\texttt{for}\, w,Y \texttt{.}\,$\\ 
+    \>\>$\SyntaxStyle{let}\ D=Y \cdot B\ \SyntaxStyle{in}$ \\
+    \>\>$\SyntaxStyle{let}\ P=R \cdot \diag(w)\ \SyntaxStyle{in}$ \\
+    \>\>$\Apply[y, d, p.\ \SyntaxStyle{if}\ d = \mathbf{0}\ \SyntaxStyle{then}\ p\ \SyntaxStyle{else}\ y](Y, D, P))$\\
 \end{tabbing}
 
-\begin{tabbing}
-    L0\=L1\=L2\=L3\=L4 \kill 
-    $\texttt{for}\, v,X \texttt{.}\,$\\ 
-    \>$\SyntaxStyle{let}\ B = \transp{v} \cdot A \ \SyntaxStyle{in}$ \\
-    \>$\Apply[+]($\\
-    \>\>$X,$\\
-    \>\>$(\texttt{for}\, w,Y \texttt{.}\,$\\ 
-    \>\>\>$\SyntaxStyle{let}\ D=\one{Y} \cdot \transp{\one{Y}} \cdot Y\ \SyntaxStyle{in}$ \\
-    \>\>\>$\SyntaxStyle{let}\ P=\diag(w) \cdot \transp{B}\ \SyntaxStyle{in}$ \\
-    \>\>\>$\Apply[y, d, p.\ \SyntaxStyle{if}\ d = 0\ \SyntaxStyle{then}\ p\ \SyntaxStyle{else}\ y](Y, D, \transp{P})))^T$\\
-    \>\>$)^T$\\
-    %\>\>\>$\SyntaxStyle{let}\ D=Y \cdot \one(\transp{Y}) \cdot \transp{\one(\transp{Y})}\ \SyntaxStyle{in}$ \\
-    %\>\>\>$\SyntaxStyle{let}\ D=\transp{\one(Y)} \cdot \one(Y) \cdot Y\ \SyntaxStyle{in}$ \\
-    %\>\>\>$\SyntaxStyle{let}\ P=\diag(v) \cdot A \cdot \diag(w)\ \SyntaxStyle{in}$ \\
-    %\>\>\>$\Apply[y, d, p.\ \SyntaxStyle{if}\ d = \mathbf{0}\ \SyntaxStyle{then}\ p\ \SyntaxStyle{else}\ y](Y, D, \transp{P})))^T$\\
-\end{tabbing}
-
-% The outer loop $\texttt{for}\, v$ iterates over the input rows, while $\texttt{for}\, w$ iterates over the columns.
-% $Y$ contains the (partial) result for one particular row. It is stored in transposed format so that $w$ iterates over the column rather than the row dimension of $A$.
-% In the inner loop, we first detect ($D$) if we already have a value for the current row.
-% Then, we take the proposed ($P$) value at position $(v, w)$ in $A$, setting all other values to zero.
-% Finally, the inner $\Apply$ either picks the proposed value $p$ if there is no value yet for the current row, or the existing value $y$ otherwise.
-% The outer apply combines the values for the individual rows.
+Initial values are assigned to $v$, $w$, $X$, $Y$ (using $\SyntaxStyle{let}\ \ldots \ \SyntaxStyle{in}\ \ldots$) only to define their dimensions, as this is needed for type checking the \texttt{for} loops.
+The outer loop $\texttt{for}\, v,X$ iterates over the input rows, while $\texttt{for}\, w,Y$ iterates over the columns.
+$Y$ contains the (partial) result for input row $R$.
+In the inner loop, we first detect ($D$) if we already have a value for the current row. 
+This uses the `broadcast' matrix $B$, which broadcasts any nonzero value in $Y$ to all positions in $D$.
+Then, we take the proposed ($P$) value at position $(v, w)$ in $A$, setting all other values to zero.
+Finally, the inner $\Apply$ either picks the proposed value $p$ if there is no value yet for the current row, or the existing value $y$ otherwise.
 
 \bibliographystyle{plain}
 \bibliography{zotero}
