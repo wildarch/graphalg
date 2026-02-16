@@ -243,6 +243,8 @@ The semantics of the loop are defined iteratively, as follows:
     \item Finally, set $\sem{\texttt{for}\, v,\{ M_1 := e_1', \ldots, M_m := e_m' \}(e_1, \ldots, e_m)}{\I}:= \I_n(M_1)$.
 \end{itemize}
 
+\textbf{TODO: Show how to convert for-ML loop into ga-ML}
+
 \subsection{Pointwise Functions}\label{sec:pointwise}
 The syntax definition of $\ML$ assumes a repertoire $\Omega$ of functions $f : R^k \to R$, representing all possible pointwise functions that can be used with $\Apply$.
 Here $R$ is a semiring, often the complex or real numbers.
@@ -296,8 +298,22 @@ The two languages share a number of operations. For the following operations, no
     \item one-vector
 \end{itemize}
 
-This leaves only for loops to be converted.
-TODO: How to do that.
+This leaves only for loops to be converted, which we can do with the following rewrite rule:
+
+\begin{tabbing}
+    L0\=L1\=L2\=L3\=L4 \kill 
+    $\texttt{for}\, v,\{ M_1 := e_1', \ldots, M_m := e_m' \}(e_1, \ldots, e_m) \Rightarrow$ \\
+    $\texttt{for}\, \{$ \\
+    \>$v := \pickAny(V - v)$ \\
+    \>$V := V - v$ \\
+    \>$ M_1 := e_1', \ldots, M_m := e_m' \}($\\
+    \>$\pickAny(V),$\\
+    \>$\one(v),$\\
+    \>$e_1, \ldots, e_m)$ \\
+\end{tabbing}
+
+The variable $V$ stores $1$ at all positions for which we have not seen a canonical vector $v$ yet.
+At the end of each iteration, one of the positions in $V$ is cleared (by subtracting the current canonical vector $v$).
 
 \subsection{Simulating \graphalg{} Core in ga-$\ML$}
 Only two operations from \graphalg{} Core are not present in ga-$\ML$:
