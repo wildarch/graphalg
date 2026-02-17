@@ -8,6 +8,7 @@
 
 \newcommand\graphalg{\textsf{GraphAlg}}
 \DeclareMathOperator{\pickAny}{\mathsf{pickAny}}
+\DeclareMathOperator{\cast}{\mathsf{cast}}
 
 % Definitions from MATLANG paper
 \newcommand{\ML}{\mathsf{MATLANG}}
@@ -87,7 +88,7 @@ The \graphalg{} Core language is defined by the grammar:
     % CastDimOp (covered by literal case)
     |     & \ r(l)                                 & \text{(scalar literal)}            \\
     |     & \ e_1 \ \{+,\cdot,-,/,=\} \ e_2        & \text{(scalar arithmetic)}         \\
-    |     & \ \text{cast}(r, e)                    & \text{(scalar cast)}               \\
+    |     & \ \cast(r, e)                          & \text{(scalar cast)}               \\
 \end{align*}
 
 We use the following notation:
@@ -265,8 +266,23 @@ As demonstrated below, all semirings supported in \graphalg{} can be simulated i
 A first observation is that the semantics of $\transp{e}$, $\diag(e)$ and loops is independent of the semirings associated with the inner expressions, and hence simulation of such operations is trivial.
 
 \subsubsection*{Pointwise Functions}
-The $\Apply$ operation is also largely independent of the semiring used, except scalar operations within pointwise functions also need to be simulated.
-\textbf{TODO: scalar ops (mainly addition and multiplication)}.
+The $\Apply$ operation is also largely independent of the semiring used, except that scalar operations within pointwise functions also need to be simulated.
+Simulations for non-trivial scalar operations are given below.
+Inner expressions are assumed to have semiring $R$, with addition operator $\oplus$ and multiplication operator $\otimes$.
+%Scalar variable references and literals require no changes and are thus trivially simulated.
+%Arithmetic operations can be simulated as follows:
+
+\begin{tabbing}
+    L0\=L1\=L2\=L3\=L4 \kill 
+    $e_1 + e_2 \Rightarrow e_1 \oplus e_2$ \\
+    $e_1 \cdot e_2 \Rightarrow e_1 \otimes e_2$ \\
+    $\cast_R(r,e) \Rightarrow \cast(R, r, e)$ \\
+\end{tabbing}
+
+Division is trivial to simulate because it is only defined when $R = \RR$.
+Subtraction additionally allows integer inputs, but in this case simulation is also trivial, because integers are included in $\RR$.
+
+\textbf{TODO: Detail how cast op works}
 
 \subsubsection*{Matrix Multiplication}
 To rewrite matrix multiplication, we need the following auxiliary function definitions.
