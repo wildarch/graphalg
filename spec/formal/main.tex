@@ -257,32 +257,18 @@ In the following sections, we assume $\Omega$ to comprise the set of all possibl
 \subsection{On Casting Between Semirings}
 It is typically assumed that all expressions in a $\ML$ expression operate over the same semiring.
 \graphalg{}, in contrast, introduces a cast operator to switch between different semirings.
-\textbf{TODO: Finish this section} 
+This feature is particularly significant because the semiring of a matrix influences the semantics of operations such as matrix multiplication (by changing the addition and multiplication operators) and $\one(e)$ (by changing the identity value $\one$).
+While a convenient abstraction, semiring casting does not make \graphalg{} more expressive.
+As demonstrated below, all semirings supported in \graphalg{} can be simulated in the semiring $\RR \bigcup \{ \infty \}$, using the regular addition and multiplication operator.
 
-\begin{itemize}
-    \item Assume the semiring of real number plus infinity $\RR \bigcup \{ \infty \}$ used in ga-$\ML$.
-    \item Expressions $e^T$, $\diag(e)$ and loops work the same regardless of the semiring.
-    \item Within pointwise functions we can do whatever, so $\Apply$ is also fine.
-    \item For matrix multiply, we show below how to rewrite matrix multiplication with arbitrary semiring into a regular ga-$\ML$ expression.
-    \item Rewrite $\rowdom(e)$ as $\Apply[1_R](\rowdom(e))$, where $1_R$ is the multiplicative identity of the semiring associated with $e$.
-    \item For \texttt{pickAny} we also show a simple rewrite below.
-\end{itemize}
+\subsubsection*{Trivial Operations}
+A first observation is that the semantics of $\transp{e}$, $\diag(e)$ and loops is independent of the semirings associated with the inner expressions, and hence simulation of such operations is trivial.
 
-For \texttt{pickAny} we only need to account for different definitions of `nonzero'. 
-Assume input expression $e$ has semiring $R$.
-We define the following rewrite rule:
+\subsubsection*{Pointwise Functions}
+The $\Apply$ operation is also largely independent of the semiring used, except scalar operations within pointwise functions also need to be simulated.
+\textbf{TODO: scalar ops (mainly addition and multiplication)}.
 
-\begin{tabbing}
-    L0\=L1\=L2\=L3\=L4 \kill 
-    $\pickAny_R(e) \Rightarrow \Apply[v,p. v \text{ if } p \text{ else } 0_R]($\\ 
-    \>$e,$\\
-    \>$\pickAny(\Apply[\neq 0_R](e)))$
-\end{tabbing}
-
-The inner $\Apply$ creates a matrix with value $1$ at positions where $e$ is nonzero according to semiring $R$.
-The $\pickAny(..)$ creates a selection mask from this for which values of $e$ to keep.
-Finally, that mask is applied by the outer $\Apply$.
-
+\subsubsection*{Matrix Multiplication}
 To rewrite matrix multiplication, we need the following auxiliary function definitions.
 Function $\mathsf{emax}(V)$ follows the definition given in \cite{geerts_expressive_2021}, returning the last canonical vector:
 
@@ -360,6 +346,25 @@ Finally, matrix multiplication with addition operator $\oplus$ and multiplicatio
     \>\>$\SyntaxStyle{let}\ B_c = B \cdot w \ \SyntaxStyle{in}$ \\
     \>\>$Y + v \cdot \mathsf{sum}[\oplus](\Apply[\otimes](\transp{A_r}, B_c)) \cdot \transp{w}$
 \end{tabbing}
+
+\subsubsection*{One-vector}
+Given an expression $e$ with semiring $R$, we can simulate $\one_R(e)$ as $\Apply[1_R](\rowdom(e))$, where $1_R$ is the multiplicative identity of $R$. 
+
+\subsubsection*{pickAny}
+For $\pickAny$ we only need to account for different definitions of `nonzero'. 
+Assume input expression $e$ has semiring $R$.
+We define the following rewrite rule:
+
+\begin{tabbing}
+    L0\=L1\=L2\=L3\=L4 \kill 
+    $\pickAny_R(e) \Rightarrow \Apply[v,p. v \text{ if } p \text{ else } 0_R]($\\ 
+    \>$e,$\\
+    \>$\pickAny(\Apply[\neq 0_R](e)))$
+\end{tabbing}
+
+The inner $\Apply$ creates a matrix with value $1$ at positions where $e$ is nonzero according to semiring $R$.
+The $\pickAny(..)$ creates a selection mask from this for which values of $e$ to keep.
+Finally, that mask is applied by the outer $\Apply$.
 
 \subsection{Simulating ga-$\ML$ in \graphalg{} Core}
 We show how ga-$\ML$ expressions can be rewritten into \graphalg{} Core expressions with equivalent semantics.
