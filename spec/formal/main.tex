@@ -9,6 +9,10 @@
 \newcommand\graphalg{\textsf{GraphAlg}}
 \DeclareMathOperator{\pickAny}{\mathsf{pickAny}}
 \DeclareMathOperator{\cast}{\mathsf{cast}}
+\newcommand{\ring}{\texttt{ring}}
+\newcommand{\tenv}{\mathcal{T}}
+\newcommand{\Ring}{\texttt{Ring}}
+\newcommand{\ttypet}{\texttt{type}_{\tenv}}
 
 % Definitions from MATLANG paper
 \newcommand{\ML}{\mathsf{MATLANG}}
@@ -77,13 +81,13 @@ The \graphalg{} Core language is defined by the grammar:
 \begin{align*}
     E ::= & \ M                                    & \text{(matrix variable)}           \\
     |     & \ E^{T}                                & \text{(transpose)}                 \\
-    |     & \ \text{diag}(E)                       & \text{(diagonalizate a vector)}    \\
-    |     & \ \text{apply}[f](E_1,\ \ldots,E_n)    & \text{(pointwise application)}     \\
+    |     & \ \one(E)                              & \text{(one-vector)}                \\
+    |     & \ \diag(E)                             & \text{(diagonalizate a vector)}    \\
     |     & \ E_1 \cdot E_2                        & \text{(matrix multiplication)}     \\
-    |     & \ \mathbf{1}(E)                        & \text{(one-vector)}                \\
+    |     & \ \Apply[f](E_1,\ \ldots,E_n)          & \text{(pointwise application)}     \\
     |     & \ \text{for}[b](E_d, E_1,\ \ldots,E_n) & \text{(loop over dimension)}       \\
-    |     & \ \text{for}[b](l, E_1,\ \ldots,E_n)   & \text{(loop over range)}           \\
-    |     & \ \text{pickAny}(E)                    & \text{(keep first nonzero in row)} \\
+    %|     & \ \text{for}[b](l, E_1,\ \ldots,E_n)   & \text{(loop over range)}           \\
+    |     & \ \pickAny(E)                          & \text{(keep first nonzero in row)} \\
     b ::= & \{ M_1 = E_1,\ \ldots, M_n = E_n \}    & \text{(loop body)}                 \\
     f ::= & (C_1,\ \ldots,C_n) \ e                 & \text{(pointwise function)}        \\
     e ::= & \ C                                    & \text{(scalar variable)}           \\
@@ -96,13 +100,64 @@ The \graphalg{} Core language is defined by the grammar:
 We use the following notation:
 \begin{itemize}
     \item $E$ represents an expression that returns a matrix value, while $e$ represents a scalar value expression
-    \item $M$ names a matrix variable (defined in a loop body). The scalar equivalent is $C$ (defined in a pointwise function).
+    \item $M$ names a matrix variable (defined in a loop body).
+          The scalar equivalent is $C$ (defined in a pointwise function).
     \item $l$ is a literal value such as $42$, $3.14$ or `true'.
     \item $s$ is a semiring identifier such as \texttt{bool}, \texttt{int} or \texttt{real}.
 \end{itemize}
 
 \section{Core Typing}
-\textbf{TODO: Typing Rules for the Core Language}
+It is possible to write a \graphalg{} Core expression that is valid according to the grammar but is not semantically valid.
+For example, it is unclear what the semantics of $A \cdot B$ are if $A$ and $B$ have incompatible dimensions, or if there is no matrix value associated with variable $B$.
+We capture such requirements using a \emph{type environment} $\tenv$.
+A type environment is a function of the form:
+
+\[
+    \tenv(M) = T
+\]
+
+which assigns the type $T$ to a matrix variable $M$.
+The type of a matrix consists of (1) the number of rows, (2) the number of columns and (3) a semiring.
+This yields a function type $\tenv : \Mnam \to \DD \times \DD \times \Ring$, where
+$\Mnam$ is a finite set of matrix variables, $\DD$ is a finite set of \emph{size symbols}, and $\Ring$ is the set of supported semirings.
+
+The use of abstract size symbols allows type checking expressions without knowing concrete matrix dimensions.
+We denote size symbols by Greek letters $\alpha,\beta,\gamma$.
+Unit size $1$ is assumed to be in $\DD$.
+
+\textbf{TODO: More on semirings here}
+
+For constructing modified type environments, we use $\tenv[M := T]$ to denote an instance equivalent to $\tenv$, except that matrix variable $M$ maps to type $T$.
+
+The type of an expression $e$ with respect to an environment $\tenv$ is denoted $\ttype_{\tenv}(e)$.
+It is defined according to the following type rules:
+
+\begin{itemize}
+    \item $\ttypet(M):= \tenv(M)$, for a matrix variable $M\in\Mnam$;
+    \item $\ttypet(\transp{E}):= (\beta,\alpha,R)$ if $\ttypet(E)=(\alpha,\beta,R)$;
+    \item $\ttypet(\rowdom(E)):= (\alpha,1)$ if $\ttypet(E)=(\alpha,\beta)$;
+    \item $\ttypet(\diag(E)):= (\alpha,\alpha,R)$, if $\ttypet(E)=(\alpha,1,R)$;
+    \item $\ttypet(e_1 \cdot e_2):= (\alpha,\gamma,R)$ if  $\ttypet(e_1)=(\alpha,\beta,R)$, and $\ttypet(e_2)=(\beta,\gamma,R)$;
+    \item \textbf{TODO: apply}
+    \item \textbf{TODO: for}
+    \item $\ttypet(\pickAny(E)) := T$ if $\ttypet(E) = T$
+    % pickAny
+\end{itemize}
+
+We call an expression \emph{well-typed} according to environment $\tenv$ if $\ttype_{\tenv}(e)$ is defined.
+
+% We capture such requirements using a set of type rules and the notion of a \textit{schema}, which for each matrix variable stores 
+% (1) the dimensions (how many rows and columns) and (2) the semiring.
+% A schema $\Sch$ is a tuple $(\Mnam,\size, \ring)$, where 
+% $\Mnam\subset \Mvar$ is a finite set of matrix variables, 
+% $\size: \Mnam \to \DD\times \DD$ is a function that maps each matrix variable in $\Mnam$ to a pair of \textit{size symbols}
+% and $\ring: \Mnam \to $.
+% We denote size symbols by Greek letters $\alpha,\beta,\gamma$. 
+% Unit size $1$ is assumed to be in $\DD$.
+% The type of an expression $e$ with respect to a schema $\Sch$ is denoted $\ttypes(e)$.
+% It is defined according to the following type rules:
+
+% We call an expression \textit{well-typed} according to the schema $\Sch$ if $\ttypes(e)$ is defined.
 
 \section{Core Semantics}
 \textbf{TODO: Semantics for operations in the Core Language}
@@ -111,7 +166,7 @@ We use the following notation:
 This section defines a variant of for-$\ML$ that matches the expressive power of \graphalg{} Core.
 
 We start by giving the recalling the definitions of $\ML$~\cite{brijder_expressive_2019} and the extension for-$\ML$~\cite{geerts_expressive_2021} that introduces the \emph{canonical for loop} expression.
-We then modify for-$\ML$ to include support for multiple loop variables. 
+We then modify for-$\ML$ to include support for multiple loop variables.
 We denote the resulting language ga-$\ML$.
 
 Finally, we prove that:
@@ -142,22 +197,26 @@ The definition of $\ML$ in \cite{brijder_expressive_2019} also includes a let bi
 As noted in \cite{brijder_expressive_2019}, this operation can be omitted without affecting the expressive power of the language, so we omit it from our definition.
 
 \subsubsection*{Typing}
+\textbf{TODO: dedupe with typing rules in core}
+
+\textbf{TODO: define $\Mvar$}
+
 It is possible to write a $\ML$ expression that is valid according to the grammar but is not semantically valid.
 For example, it is unclear what the semantics of $A \cdot B$ are if $A$ and $B$ have incompatible dimensions, or if there is no matrix value associated with variable $B$.
 We capture such requirements using a set of type rules and the notion of a \textit{schema} that associates matrix variables with matrix sizes.
 A schema $\Sch$ is a pair $(\Mnam,\size)$, where $\Mnam\subset \Mvar$ is a finite set of matrix variables, and $\size: \Mnam \to \DD\times \DD$ is a function that maps each matrix variable in $\Mnam$ to a pair of \textit{size symbols}.
-We denote size symbols by Greek letters $\alpha,\beta,\gamma$. 
+We denote size symbols by Greek letters $\alpha,\beta,\gamma$.
 Unit size $1$ is assumed to be in $\DD$.
 The type of an expression $e$ with respect to a schema $\Sch$ is denoted $\ttypes(e)$.
 It is defined according to the following type rules:
 
 \begin{itemize}
-\item $\ttypes(M):= \size(M)$, for a matrix variable $M\in\Mnam$;
-\item $\ttypes(\transp{e}):= (\beta,\alpha)$ if $\ttypes(e)=(\alpha,\beta)$;
-\item $\ttypes(\rowdom(e)):= (\alpha,1)$ if $\ttypes(e)=(\alpha,\beta)$;
-\item $\ttypes(\diag(e)):= (\alpha,\alpha)$, if $\ttypes(e)=(\alpha,1)$;
-\item $\ttypes(e_1 \cdot e_2):= (\alpha,\gamma)$ if  $\ttypes(e_1)=(\alpha,\beta)$, and $\ttypes(e_2)=(\beta,\gamma)$;
-\item $\ttypes(\Apply[f](e_1,\ldots ,e_k)):= (\alpha,\beta)$, if $\ttypes(e_i) = (\alpha, \beta)$ for all $i \in [1 \ldots k]$ and $f \in \Omega$.
+    \item $\ttypes(M):= \size(M)$, for a matrix variable $M\in\Mnam$;
+    \item $\ttypes(\transp{e}):= (\beta,\alpha)$ if $\ttypes(e)=(\alpha,\beta)$;
+    \item $\ttypes(\rowdom(e)):= (\alpha,1)$ if $\ttypes(e)=(\alpha,\beta)$;
+    \item $\ttypes(\diag(e)):= (\alpha,\alpha)$, if $\ttypes(e)=(\alpha,1)$;
+    \item $\ttypes(e_1 \cdot e_2):= (\alpha,\gamma)$ if  $\ttypes(e_1)=(\alpha,\beta)$, and $\ttypes(e_2)=(\beta,\gamma)$;
+    \item $\ttypes(\Apply[f](e_1,\ldots ,e_k)):= (\alpha,\beta)$, if $\ttypes(e_i) = (\alpha, \beta)$ for all $i \in [1 \ldots k]$ and $f \in \Omega$.
 \end{itemize}
 
 We call an expression \textit{well-typed} according to the schema $\Sch$ if $\ttypes(e)$ is defined.
@@ -167,19 +226,19 @@ We now proceed by defining the semantics of well-typed expressions.
 We use the notation $\mtr{\RR}$ for the set of all real matrices.
 For $A\in\mtr{\RR}$, $\dim(A)\in\NN^2$ denotes its dimensions.
 The semantics of a $\ML$ expression depends on the concrete sizes and values of the matrix variables.
-We define a function $\dom : \DD \to \NN$ which maps size symbols to concrete sizes, 
+We define a function $\dom : \DD \to \NN$ which maps size symbols to concrete sizes,
 and another function $\conc : \Mnam \mapsto \mtr{\RR}$ to map matrix variables to concrete matrix values.
 $\dom$ and $\conc$ are defined such that for a matrix $M$ with $\size(M) = (\alpha, \beta)$, we have $\dim(\conc(M)) = \dom(\alpha) \times \dom(\beta)$.
 Together they form an \textit{instance} $I = (\dom, \conc)$ with all the context needed to evaluate an expression that is well-typed according to $\Sch$.
 We denote the evaluation of an expression $e$ over instance $I$ as $\sem{e}{\I}$, which we define as follows:
 
 \begin{itemize}
-\item $\sem{V}{\I} := \conc(V)$, for $V\in \Mnam$
-\item $\sem{e^T}{\I} := \sem{e}{\I}^T$, with $A^T$ the transpose of matrix $A$
-\item $\sem{\rowdom(e)}{\I}$ is an $n\times 1$ vector with value $1$ at all positions, where $\dim(\sem{e}{\I})=(n,m)$
-\item $\sem{\diag(e)}{\I}$ is a matrix with the vector $\sem{e}{\I}$ on its main diagonal, and zero in every other position
-\item $\sem{e_1\cdot e_2}{\I} := \sem{e_1}{\I} \cdot \sem{e_2}{\I}$
-\item $\sem{\Apply[f](e_1,\ldots ,e_k)}{\I}$ is a matrix $A$ of the same size as $\sem{e_1}{\I}$, and where $A_{ij}$ has the value $f(\sem{e_1}{\I}_{ij},\ldots ,\sem{e_k}{\I}_{ij})$
+    \item $\sem{V}{\I} := \conc(V)$, for $V\in \Mnam$
+    \item $\sem{e^T}{\I} := \sem{e}{\I}^T$, with $A^T$ the transpose of matrix $A$
+    \item $\sem{\rowdom(e)}{\I}$ is an $n\times 1$ vector with value $1$ at all positions, where $\dim(\sem{e}{\I})=(n,m)$
+    \item $\sem{\diag(e)}{\I}$ is a matrix with the vector $\sem{e}{\I}$ on its main diagonal, and zero in every other position
+    \item $\sem{e_1\cdot e_2}{\I} := \sem{e_1}{\I} \cdot \sem{e_2}{\I}$
+    \item $\sem{\Apply[f](e_1,\ldots ,e_k)}{\I}$ is a matrix $A$ of the same size as $\sem{e_1}{\I}$, and where $A_{ij}$ has the value $f(\sem{e_1}{\I}_{ij},\ldots ,\sem{e_k}{\I}_{ij})$
 \end{itemize}
 
 \subsection{Canonical Loop Definition}
@@ -193,15 +252,15 @@ for-$\ML$~\cite{geerts_expressive_2021} adds the \emph{canonical for loop} expre
 
 \noindent
 This loop construct repeatedly updates state variable $X$ by evaluating $e$, where $e$ is allowed to refer to the previous state of the loop as $X$.
-Additionally, $e$ may refer to the \emph{canonical vector} $v$. 
+Additionally, $e$ may refer to the \emph{canonical vector} $v$.
 Assume a set of canonical vectors $b_1^n,\ldots,b_n^n$ of dimension $n$ defined as $b_1^n = \transp{[1\ 0 \cdots 0]},b_2 = [0\ 1\ 0 \cdots 0]^T$.
 In the first iteration, $v$ takes on value $b_1^n$, in the second iteration $b_2^n$, etc.
 
 Following~\cite{geerts_expressive_2021}, we introduce the following typing rule for the added loop construct:
 
 \begin{itemize}
-\item $\ttypes(\ffor{v}{X}{e}) := (\alpha,\beta)$, if \\
-$\ttypes(e)=\ttypes(X) =(\alpha,\beta)$ and $\ttypes(v) = (\gamma,1)$.
+    \item $\ttypes(\ffor{v}{X}{e}) := (\alpha,\beta)$, if \\
+          $\ttypes(e)=\ttypes(X) =(\alpha,\beta)$ and $\ttypes(v) = (\gamma,1)$.
 \end{itemize}
 
 Assuming $n := \dom(\gamma)$, $\sem{\ffor{v}{X}{e}}{\I}$ is defined iteratively as follows:
@@ -225,7 +284,7 @@ ga-$\ML$ starts from for-$\ML$, but modifies the loop definition to allow multip
 \medskip
 
 The loop body defines a number of loop variables $m \geq 1$ that each consist of a \emph{binding variable} $M_i$ and a \emph{body expression} $e_i'$.
-Intuitively, before entering the loop, the binding variables are initialized as $M_i := e_i$. 
+Intuitively, before entering the loop, the binding variables are initialized as $M_i := e_i$.
 Evaluation of the loop is similar to for-$\ML$, each time updating the binding variables with the results of the body expressions.
 The loop produces a single result matrix, which is the final value of $M_1$.
 Expression $e_d$ is used to define the number of loop iterations $n$.
@@ -233,10 +292,10 @@ Expression $e_d$ is used to define the number of loop iterations $n$.
 The typing rule is modified accordingly:
 
 \begin{itemize}
-\item $\ttypes(\texttt{for}\, v,\{ M_1 := e_1', \ldots, M_m := e_m' \}(e_d, e_1, \ldots, e_m)) := \tau_1$,\\
-      if $\tau_i := \ttypes(e_i) = \ttype_{\Sch'}(e_i')$ for all $i \in [1 \cdots m]$,\\
-      where $\Sch' := \Sch[M_1 := \tau_1,\ldots,M_m := \tau_m]$
-      and $\ttypes(v) = (\gamma,1)$.
+    \item $\ttypes(\texttt{for}\, v,\{ M_1 := e_1', \ldots, M_m := e_m' \}(e_d, e_1, \ldots, e_m)) := \tau_1$,\\
+          if $\tau_i := \ttypes(e_i) = \ttype_{\Sch'}(e_i')$ for all $i \in [1 \cdots m]$,\\
+          where $\Sch' := \Sch[M_1 := \tau_1,\ldots,M_m := \tau_m]$
+          and $\ttypes(v) = (\gamma,1)$.
 \end{itemize}
 
 The notation $\Sch[M := \tau]$ denotes a schema equivalent to $\Sch$, except that matrix variable $M$ maps to type $\tau$.
@@ -253,7 +312,7 @@ The semantics of the loop are defined iteratively, as follows:
 The ga-$\ML$ loop definition subsumes the for-$\ML$ version. A for-$\ML$ loop can be simulated as follows:
 
 \begin{tabbing}
-    L0\=L1\=L2\=L3\=L4 \kill 
+    L0\=L1\=L2\=L3\=L4 \kill
     $\ffor{v}{X}{e} \Rightarrow$\\
     $\texttt{for}\, v,\{ X := e \}(\Apply[0](X))$\\
 \end{tabbing}
@@ -290,7 +349,7 @@ Inner expressions are assumed to have semiring $R$, with addition operator $\opl
 %Arithmetic operations can be simulated as follows:
 
 \begin{tabbing}
-    L0\=L1\=L2\=L3\=L4 \kill 
+    L0\=L1\=L2\=L3\=L4 \kill
     $e_1 + e_2 \Rightarrow e_1 \oplus e_2$ \\
     $e_1 \cdot e_2 \Rightarrow e_1 \otimes e_2$ \\
     $\cast_R(r,e) \Rightarrow \cast(R, r, e)$ \\
@@ -306,7 +365,7 @@ To rewrite matrix multiplication, we need the following auxiliary function defin
 Function $\mathsf{emax}(V)$ follows the definition given in \cite{geerts_expressive_2021}, returning the last canonical vector:
 
 \begin{tabbing}
-    L0\=L1\=L2\=L3\=L4 \kill 
+    L0\=L1\=L2\=L3\=L4 \kill
     $\mathsf{emax}(V) = $\\
     $\SyntaxStyle{let}\ v = V \ \SyntaxStyle{in}$ \\
     $\SyntaxStyle{let}\ X = V \ \SyntaxStyle{in}$ \\
@@ -317,20 +376,20 @@ The converse $\mathsf{emin}$, which returns the first canonical vector, can be d
 We also take the definition of ordering matrix $S_{\leq}$ from \cite{geerts_expressive_2021}:
 
 \begin{tabbing}
-    L0\=L1\=L2\=L3\=L4 \kill 
+    L0\=L1\=L2\=L3\=L4 \kill
     $S_{\leq}(V) = \begin{bmatrix}
-1 & 1 & \cdots &  1 \\
-0 & 1 & \cdots & 1\\
-\vdots & \vdots & \ddots & 1 \\
-0 & 0 & \cdots & 1 
-\end{bmatrix} = $\\
+            1      & 1      & \cdots & 1 \\
+            0      & 1      & \cdots & 1 \\
+            \vdots & \vdots & \ddots & 1 \\
+            0      & 0      & \cdots & 1
+        \end{bmatrix} = $\\
     $\SyntaxStyle{let}\ v = V \ \SyntaxStyle{in}$ \\
     $\SyntaxStyle{let}\ X = \diag(V) \ \SyntaxStyle{in}$ \\
     $(\texttt{for}\, v,X \texttt{.}$\\
-    \>$X 
-        + (X \cdot \mathsf{emax}(V) + v) \cdot \transp{v} 
+    \>$X
+        + (X \cdot \mathsf{emax}(V) + v) \cdot \transp{v}
         + v \cdot \transp{\mathsf{emax}(V)}
-    ) - \one(V) \cdot \transp{\mathsf{emax}(V)}$\\
+        ) - \one(V) \cdot \transp{\mathsf{emax}(V)}$\\
 \end{tabbing}
 
 By subtracting the identity matrix, we obtain $S_{<} = S_{\leq}(V) - \diag(\one(V))$.
@@ -339,15 +398,15 @@ Based on $S_{<}$, we can define function $\mathsf{rotate}(V)$:
 % Then in sum[..](..) we MUST use (emin(V) * for) rather than emax(V), as we only populate the first position of the vector.
 
 \[
-\mathsf{rotate(V)} = \pickAny(S_{<}(V)) + \mathsf{emax}(V) \cdot \transp{\mathsf{emin}(V)} = 
-\begin{bmatrix}
-0 & 1 & 0 & \cdots & 0 \\
-\vdots & \ddots & \ddots & \ddots & \vdots \\
-\vdots & & \ddots & \ddots & 0 \\
-0 & &  & \ddots & 1 \\
-1 & 0 & \cdots & \cdots & 0 \\
-\end{bmatrix}
-\] 
+    \mathsf{rotate(V)} = \pickAny(S_{<}(V)) + \mathsf{emax}(V) \cdot \transp{\mathsf{emin}(V)} =
+    \begin{bmatrix}
+        0      & 1      & 0      & \cdots & 0      \\
+        \vdots & \ddots & \ddots & \ddots & \vdots \\
+        \vdots &        & \ddots & \ddots & 0      \\
+        0      &        &        & \ddots & 1      \\
+        1      & 0      & \cdots & \cdots & 0      \\
+    \end{bmatrix}
+\]
 
 The resulting matrix has the property when it is multiplied with a vector, it rotates all entries by one position.
 For example, given $V = \transp{[1\ 2\ 3]}$, we have $\mathsf{rotate}(V) \cdot V = \transp{[2\ 3\ 1]}$.
@@ -356,8 +415,8 @@ Function $\mathsf{sum}[\oplus](V)$ takes as input a (column) vector $V$ and retu
 It can be defined in for-$\ML$ as:
 
 \begin{tabbing}
-    L0\=L1\=L2\=L3\=L4 \kill 
-    $\mathsf{sum}[\oplus](V) = $\\ 
+    L0\=L1\=L2\=L3\=L4 \kill
+    $\mathsf{sum}[\oplus](V) = $\\
     $\SyntaxStyle{let}\ v = V \ \SyntaxStyle{in}$ \\
     $\SyntaxStyle{let}\ X = V \ \SyntaxStyle{in}$ \\
     $\SyntaxStyle{let}\ R = \mathsf{rotate}(V) \ \SyntaxStyle{in}$ \\
@@ -367,32 +426,32 @@ It can be defined in for-$\ML$ as:
 Finally, matrix multiplication with addition operator $\oplus$ and multiplication operator $\otimes$ can be written as:
 
 \begin{tabbing}
-    L0\=L1\=L2\=L3\=L4 \kill 
-    $A \cdot_{\oplus,\otimes} B \Rightarrow$\\ 
+    L0\=L1\=L2\=L3\=L4 \kill
+    $A \cdot_{\oplus,\otimes} B \Rightarrow$\\
     $\SyntaxStyle{let}\ v = \one(A) \ \SyntaxStyle{in}$ \\
     $\SyntaxStyle{let}\ w = \one(\transp{B}) \ \SyntaxStyle{in}$ \\
     $\SyntaxStyle{let}\ X = A \cdot B \ \SyntaxStyle{in}$ \\
     $\SyntaxStyle{let}\ Y = A \cdot B \ \SyntaxStyle{in}$ \\
-    $\texttt{for}\, v,X \texttt{.}\,$\\ 
+    $\texttt{for}\, v,X \texttt{.}\,$\\
     \>$\SyntaxStyle{let}\ A_r = \transp{v} \cdot A \ \SyntaxStyle{in}$ \\
-    \>$X + \texttt{for}\, w,Y \texttt{.}\,$\\ 
+    \>$X + \texttt{for}\, w,Y \texttt{.}\,$\\
     \>\>$\SyntaxStyle{let}\ B_c = B \cdot w \ \SyntaxStyle{in}$ \\
     \>\>$Y + v \cdot \mathsf{sum}[\oplus](\Apply[\otimes](\transp{A_r}, B_c)) \cdot \transp{w}$
 \end{tabbing}
 
 \subsubsection*{One-vector}
-Given an expression $e$ with semiring $R$, we can simulate $\one_R(e)$ as $\Apply[1_R](\rowdom(e))$, where $1_R$ is the multiplicative identity of $R$. 
+Given an expression $e$ with semiring $R$, we can simulate $\one_R(e)$ as $\Apply[1_R](\rowdom(e))$, where $1_R$ is the multiplicative identity of $R$.
 
 \subsubsection*{pickAny}
-For $\pickAny$ we only need to account for different definitions of `nonzero'. 
+For $\pickAny$ we only need to account for different definitions of `nonzero'.
 Assume input expression $e$ has semiring $R$.
 We define the following rewrite rule:
 
 \begin{tabbing}
-    L0\=L1\=L2\=L3\=L4 \kill 
-    $\pickAny_R(e) \Rightarrow \Apply[v,p. v \text{ if } p \text{ else } 0_R]($\\ 
-    \>$e,$\\
-    \>$\pickAny(\Apply[\neq 0_R](e)))$
+    L0\=L1\=L2\=L3\=L4 \kill
+    $\pickAny_R(e) \Rightarrow \Apply[v,p. v \text{ if } p \text{ else } 0_R]($\\
+        \>$e,$\\
+        \>$\pickAny(\Apply[\neq 0_R](e)))$
 \end{tabbing}
 
 The inner $\Apply$ creates a matrix with value $1$ at positions where $e$ is nonzero according to semiring $R$.
@@ -415,7 +474,7 @@ The two languages share a number of operations. For the following operations, no
 This leaves only for loops to be converted, which we can do with the following rewrite rule:
 
 \begin{tabbing}
-    L0\=L1\=L2\=L3\=L4 \kill 
+    L0\=L1\=L2\=L3\=L4 \kill
     $\texttt{for}\, v,\{ M_1 := e_1', \ldots, M_m := e_m' \}(e_1, \ldots, e_m) \Rightarrow$ \\
     $\texttt{for}\, \{$ \\
     \>$v := \pickAny(V - v)$ \\
@@ -439,33 +498,33 @@ Only two operations from \graphalg{} Core are not present in ga-$\ML$:
 We show how to rewrite these expression from \graphalg{} Core into equivalent ga-$\ML$.
 For loops, since the semantics of \texttt{for} in \graphalg{} Core are otherwise identical to those of ga-$\ML$, we can trivially rewrite any loop using the rule:
 \begin{align*}
-    \texttt{for}\ \ \ &\{ M_1 := e_1', \ldots, M_m := e_m' \}(v, e_1, \ldots, e_m)
-    \Rightarrow \\
-    \texttt{for}\, v,&\{ M_1 := e_1', \ldots, M_m := e_m' \}(e_1, \ldots, e_m)
+    \texttt{for}\ \ \  & \{ M_1 := e_1', \ldots, M_m := e_m' \}(v, e_1, \ldots, e_m)
+    \Rightarrow                                                                      \\
+    \texttt{for}\, v,  & \{ M_1 := e_1', \ldots, M_m := e_m' \}(e_1, \ldots, e_m)
 \end{align*}
 
 $\text{pickAny}(A)$ can be simulated using the for loop with canonical vectors available in for-$\ML$ (and by extension also in ga-$\ML$):
 
 \begin{tabbing}
-    L0\=L1\=L2\=L3\=L4 \kill 
+    L0\=L1\=L2\=L3\=L4 \kill
     $\pickAny(A) \Rightarrow$ \\
     $\SyntaxStyle{let}\ v = \one(A) \ \SyntaxStyle{in}$ \\
     $\SyntaxStyle{let}\ w = \one(\transp{A}) \ \SyntaxStyle{in}$ \\
     $\SyntaxStyle{let}\ X = A \ \SyntaxStyle{in}$ \\
     $\SyntaxStyle{let}\ Y = \transp{w} \ \SyntaxStyle{in}$ \\
     $\SyntaxStyle{let}\ B = w \cdot \transp{w} \ \SyntaxStyle{in}$ \\
-    $\texttt{for}\, v,X \texttt{.}\,$\\ 
+    $\texttt{for}\, v,X \texttt{.}\,$\\
     \>$\SyntaxStyle{let}\ R = \transp{v} \cdot A \ \SyntaxStyle{in}$ \\
-    \>$X + v \cdot (\texttt{for}\, w,Y \texttt{.}\,$\\ 
-    \>\>$\SyntaxStyle{let}\ D=Y \cdot B\ \SyntaxStyle{in}$ \\
-    \>\>$\SyntaxStyle{let}\ P=R \cdot \diag(w)\ \SyntaxStyle{in}$ \\
-    \>\>$\Apply[y, d, p.\ \SyntaxStyle{if}\ d = \mathbf{0}\ \SyntaxStyle{then}\ p\ \SyntaxStyle{else}\ y](Y, D, P))$\\
+    \>$X + v \cdot (\texttt{for}\, w,Y \texttt{.}\,$\\
+        \>\>$\SyntaxStyle{let}\ D=Y \cdot B\ \SyntaxStyle{in}$ \\
+        \>\>$\SyntaxStyle{let}\ P=R \cdot \diag(w)\ \SyntaxStyle{in}$ \\
+        \>\>$\Apply[y, d, p.\ \SyntaxStyle{if}\ d = \mathbf{0}\ \SyntaxStyle{then}\ p\ \SyntaxStyle{else}\ y](Y, D, P))$\\
 \end{tabbing}
 
 Initial values are assigned to $v$, $w$, $X$, $Y$ (using $\SyntaxStyle{let}\ \ldots \ \SyntaxStyle{in}\ \ldots$) only to define their dimensions, as this is needed for type checking the \texttt{for} loops.
 The outer loop $\texttt{for}\, v,X$ iterates over the input rows, while $\texttt{for}\, w,Y$ iterates over the columns.
 $Y$ contains the (partial) result for input row $R$.
-In the inner loop, we first detect ($D$) if we already have a value for the current row. 
+In the inner loop, we first detect ($D$) if we already have a value for the current row.
 This uses the `broadcast' matrix $B$, which broadcasts any nonzero value in $Y$ to all positions in $D$.
 Then, we take the proposed ($P$) value at position $(v, w)$ in $A$, setting all other values to zero.
 Finally, the inner $\Apply$ either picks the proposed value $p$ if there is no value yet for the current row, or the existing value $y$ otherwise.
