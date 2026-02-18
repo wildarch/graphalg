@@ -65,9 +65,11 @@
 \begin{document}
 \maketitle
 
-% TODO: Full Syntax
+\section{Syntax}
+\textbf{TODO: Syntax of the full language}
 
-% TODO: Typing rules (from the individual tex files under ../latex/)
+\section{Typing Rules}
+\textbf{TODO: Typing rules of the full language}
 
 \section{Core Syntax}
 The \graphalg{} Core language is defined by the grammar:
@@ -99,7 +101,11 @@ We use the following notation:
     \item $s$ is a semiring identifier such as \texttt{bool}, \texttt{int} or \texttt{real}.
 \end{itemize}
 
+\section{Core Typing}
+\textbf{TODO: Typing Rules for the Core Language}
+
 \section{Core Semantics}
+\textbf{TODO: Semantics for operations in the Core Language}
 
 \section{for-$\ML$ with simultaneous induction}
 This section defines a variant of for-$\ML$ that matches the expressive power of \graphalg{} Core.
@@ -244,7 +250,15 @@ The semantics of the loop are defined iteratively, as follows:
     \item Finally, set $\sem{\texttt{for}\, v,\{ M_1 := e_1', \ldots, M_m := e_m' \}(e_1, \ldots, e_m)}{\I}:= \I_n(M_1)$.
 \end{itemize}
 
-\textbf{TODO: Show how to convert for-ML loop into ga-ML}
+The ga-$\ML$ loop definition subsumes the for-$\ML$ version. A for-$\ML$ loop can be simulated as follows:
+
+\begin{tabbing}
+    L0\=L1\=L2\=L3\=L4 \kill 
+    $\ffor{v}{X}{e} \Rightarrow$\\
+    $\texttt{for}\, v,\{ X := e \}(\Apply[0](X))$\\
+\end{tabbing}
+
+We use $\Apply[0](X)$ to create a matrix with the shape of $X$ with value $0$ at all positions.
 
 \subsection{Pointwise Functions}\label{sec:pointwise}
 The syntax definition of $\ML$ assumes a repertoire $\Omega$ of functions $f : R^k \to R$, representing all possible pointwise functions that can be used with $\Apply$.
@@ -267,6 +281,9 @@ A first observation is that the semantics of $\transp{e}$, $\diag(e)$ and loops 
 
 \subsubsection*{Pointwise Functions}
 The $\Apply$ operation is also largely independent of the semiring used, except that scalar operations within pointwise functions also need to be simulated.
+
+\textbf{TODO: Can we avoid discussing pointwise functions by leaning on our previous statement that `$\Omega$ is assumed to comprise the set of all possible functions that can be constructed by combining scalar operations in \graphalg{}?'}
+
 Simulations for non-trivial scalar operations are given below.
 Inner expressions are assumed to have semiring $R$, with addition operator $\oplus$ and multiplication operator $\otimes$.
 %Scalar variable references and literals require no changes and are thus trivially simulated.
