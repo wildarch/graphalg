@@ -120,14 +120,15 @@ The following semirings are supported:
     \item Boolean semiring $\ringBool$
     \item Integer semiring $\ringInt$
     \item Real semiring $\ringReal$
-    \item Tropical min-plus semirings $\ringTropInt$ and $\ringTropReal$
-    \item Tropical max-plus semirings $\ringTropMaxInt$ and $\ringTropMaxReal$
+    \item Tropical min-plus semirings $\ringTropInt$ and $\ringTropReal$.
+          These semirings define the addition operator as $\min$ and multiplication as $+$.
+    \item Tropical max-plus semirings $\ringTropMaxInt$ and $\ringTropMaxReal$, substituting $\max$ for $\min$ as the addition operator.
 \end{itemize}
 
-The set of supported semirings is denoted: 
+The set of supported semirings is denoted:
 
 \[
-\Ring = \{ \ringBool, \ringInt, \ringReal, \ringTropInt, \ringTropReal, \ringTropMaxInt, \ringTropMaxReal \}
+    \Ring = \{ \ringBool, \ringInt, \ringReal, \ringTropInt, \ringTropReal, \ringTropMaxInt, \ringTropMaxReal \}
 \]
 
 \section{Core Typing}
@@ -188,7 +189,50 @@ Let the type environment for the loop body be $\tenv_b = \tenv[M_1 := \ttypet(E_
 Then the loop body is well-typed iff $\ttype_{\tenv_b}(E_i') = \ttypet(E_i)$ for all $1 \leq i \leq n$.
 
 \section{Core Semantics}
-\textbf{TODO: Semantics for operations in the Core Language}
+\textbf{TODO: Introduce notation}
+
+We refer to the addition and multiplication operators of semiring $R$ as $\oplus_R$ and $\otimes_R$, respectively.
+We write $0_R$ and $1_R$ to denote the additive and multiplicative identities of semiring $R$, respectively.
+
+\begin{itemize}
+    \item $\sem{V}{\I} := \conc(V)$, for $V\in \Mnam$
+    \item $\sem{E^T}{\I} := \sem{E}{\I}^T$, with $A^T$ the transpose of matrix $A$
+    \item $\sem{\rowdom(E)}{\I}$ is an $n\times 1$ vector with value $1_R$ at all positions,\\
+          where $\dim(\sem{E}{\I})=(n,m)$ and $\ttypet(E) = (\alpha, \beta, R)$
+    \item $\sem{\diag(E)}{\I}$ is a matrix with the vector $\sem{E}{\I}$ on its main diagonal, and $0_R$ in every other position
+    \item $\sem{E_1\cdot E_2}{\I} := \sem{E_1}{\I} \cdot \sem{E_2}{\I}$
+    \item $\sem{\Apply[f](E_1,\ldots ,E_n)}{\I}$ is a matrix $A$ of the same size as $\sem{E_1}{\I}$, and where $A_{ij}$ has the value $f(\sem{E_1}{\I}_{ij},\ldots ,\sem{E_n}{\I}_{ij})$
+    \item $\sem{\text{for}[b](E_d, E_1,\ \ldots,E_n)}{\I}$ is defined iteratively, see below.
+    \item $\sem{\pickAny(E)}{\I} = $ \textbf{TODO}
+\end{itemize}
+
+Scalar expressions take as input $1 \times 1$ matrices and return a $1 \times 1$ matrix.
+Therefore, in the rules below we define them as if operating on single values rather than matrices:
+
+\begin{itemize}
+    \item $\sem{r(l)}{\I} := l$
+    \item $\sem{e_1 + e_2}{\I} := \sem{e_1}{\I} \oplus_R \sem{e_2}{\I}$ where $\ttypet(e_1) = \ttypet(e_2) = R$
+    \item $\sem{e_1 \cdot e_2}{\I} := \sem{e_1}{\I} \otimes_R \sem{e_2}{\I}$ where $\ttypet(e_1) = \ttypet(e_2) = R$
+    \item $\sem{e_1 - e_2}{\I} := \sem{e_1}{\I} - \sem{e_2}{\I}$
+    \item $\sem{e_1 / e_2}{\I} := \sem{e_1}{\I} / \sem{e_2}{\I}$
+    \item $\sem{e_1 = e_2}{\I} := \sem{e_1}{\I} = \sem{e_2}{\I}$
+    \item $\sem{\cast(r, e)}{\I} := \cast(R, r, \sem{e}{\I})$, whose definition is given below.
+\end{itemize}
+
+Function $\cast(R, r, v)$ casts a value from semiring $R$ to semiring $r$.
+A key rule in casting is that additive identities are preserved: If $v = 0_R$, the value after casting is $0_r$ (see the second rule below).
+This rule takes precedence over all rules that follow it.
+For the remaining casting rules, only the value domain of the semiring is significant.
+To simplify the rule set, we write for example $\mathcal{Z}$ where any semiring over integers is accepted.
+
+\begin{align*}
+    \cast(R, R, v)                     & = v                 \\
+    \cast(R, r, 0_R)                   & = 0_r               \\
+    \cast(R, \mathcal{B}, v)           & = 1                 \\
+    \cast(\mathcal{B}, r, 1)           & = 1_r               \\
+    \cast(\mathcal{Z}, \mathcal{R}, v) & = v                 \\
+    \cast(\mathcal{R}, \mathcal{Z}, v) & = \lfloor v \rfloor \\
+\end{align*}
 
 \section{for-$\ML$ with simultaneous induction}
 This section defines a variant of for-$\ML$ that matches the expressive power of \graphalg{} Core.
@@ -208,7 +252,7 @@ Together, these demonstrate that the languages are equivalent in terms of expres
 \subsection{$\ML$}
 We start with `vanilla' $\ML$~\cite{brijder_expressive_2019} expressions (without loops), which is defined by the following grammar:
 \begin{align*}
-    e & ::= \M                                &  & \text{(matrix variable)}             \\
+    e & ::= \M \in \Mvar                      &  & \text{(matrix variable)}             \\
     %&\mid\quad \LetIn{\M}{e_1}{e_2} && \text{(local binding)} \\
       & \mid\quad \transp{e}                  &  & \text{(transpose)}                   \\
       & \mid\quad \rowdom(e)                  &  & \text{(one-vector)}                  \\
@@ -218,21 +262,18 @@ We start with `vanilla' $\ML$~\cite{brijder_expressive_2019} expressions (withou
         application, $f \in \Omega$)}
 \end{align*}
 
-This definition assumes a repertoire $\Omega$ of functions $f : R^k \to R$, representing all possible pointwise functions that can be used with $\Apply$.
+Where $\Mvar$ is a countably infinite set of matrix variables.
+The above grammar definition assumes a repertoire $\Omega$ of functions $f : R^k \to R$, representing all possible pointwise functions that can be used with $\Apply$.
 The language does not impose any requirements as to which functions should or should not be part of the repertoire.
 For our purposes of proving equivalence with \graphalg{} Core we will assume a particular definition of $\Omega$, see \cref{sec:pointwise}.
 The definition of $\ML$ in \cite{brijder_expressive_2019} also includes a let binding expression $\LetIn{\M}{e_1}{e_2}$ for convenience.
 As noted in \cite{brijder_expressive_2019}, this operation can be omitted without affecting the expressive power of the language, so we omit it from our definition.
 
 \subsubsection*{Typing}
-\textbf{TODO: dedupe with typing rules in core}
-
-\textbf{TODO: define $\Mvar$}
-
-It is possible to write a $\ML$ expression that is valid according to the grammar but is not semantically valid.
-For example, it is unclear what the semantics of $A \cdot B$ are if $A$ and $B$ have incompatible dimensions, or if there is no matrix value associated with variable $B$.
-We capture such requirements using a set of type rules and the notion of a \textit{schema} that associates matrix variables with matrix sizes.
-A schema $\Sch$ is a pair $(\Mnam,\size)$, where $\Mnam\subset \Mvar$ is a finite set of matrix variables, and $\size: \Mnam \to \DD\times \DD$ is a function that maps each matrix variable in $\Mnam$ to a pair of \textit{size symbols}.
+For type checking $\ML$ expressions we need the notion of a \emph{schema} that associates matrix variables with matrix sizes,
+similar to the type environment used for type checking \graphalg{}.
+A schema $\Sch$ is a pair $(\Mnam,\size)$, where $\Mnam\subset \Mvar$ is a finite set of matrix variables,
+and $\size: \Mnam \to \DD\times \DD$ is a function that maps each matrix variable in $\Mnam$ to a pair of \textit{size symbols}.
 We denote size symbols by Greek letters $\alpha,\beta,\gamma$.
 Unit size $1$ is assumed to be in $\DD$.
 The type of an expression $e$ with respect to a schema $\Sch$ is denoted $\ttypes(e)$.
@@ -250,6 +291,8 @@ It is defined according to the following type rules:
 We call an expression \textit{well-typed} according to the schema $\Sch$ if $\ttypes(e)$ is defined.
 
 \subsubsection*{Semantics}
+\textbf{TODO: dedupe with \graphalg{} section}
+
 We now proceed by defining the semantics of well-typed expressions.
 We use the notation $\mtr{\RR}$ for the set of all real matrices.
 For $A\in\mtr{\RR}$, $\dim(A)\in\NN^2$ denotes its dimensions.
