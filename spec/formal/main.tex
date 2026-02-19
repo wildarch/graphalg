@@ -14,6 +14,14 @@
 \newcommand{\Ring}{\texttt{Ring}}
 \newcommand{\ttypet}{\texttt{type}_{\tenv}}
 
+\newcommand{\ringBool}{\mathcal{B}_{\lor,\land}}
+\newcommand{\ringInt}{\mathcal{Z}_{+,\times}}
+\newcommand{\ringReal}{\mathcal{R}_{+,\times}}
+\newcommand{\ringTropInt}{\mathcal{Z}_{\min,+}}
+\newcommand{\ringTropReal}{\mathcal{R}_{\min,+}}
+\newcommand{\ringTropMaxInt}{\mathcal{Z}_{\max,+}}
+\newcommand{\ringTropMaxReal}{\mathcal{R}_{\max,+}}
+
 % Definitions from MATLANG paper
 \newcommand{\ML}{\mathsf{MATLANG}}
 \newcommand{\transp}[1]{#1^T}
@@ -103,8 +111,24 @@ We use the following notation:
     \item $M$ names a matrix variable (defined in a loop body).
           The scalar equivalent is $C$ (defined in a pointwise function).
     \item $l$ is a literal value such as $42$, $3.14$ or `true'.
-    \item $s$ is a semiring identifier such as \texttt{bool}, \texttt{int} or \texttt{real}.
+    \item $r$ is a semiring from the set $\Ring$ (see below).
 \end{itemize}
+
+The following semirings are supported:
+
+\begin{itemize}
+    \item Boolean semiring $\ringBool$
+    \item Integer semiring $\ringInt$
+    \item Real semiring $\ringReal$
+    \item Tropical min-plus semirings $\ringTropInt$ and $\ringTropReal$
+    \item Tropical max-plus semirings $\ringTropMaxInt$ and $\ringTropMaxReal$
+\end{itemize}
+
+The set of supported semirings is denoted: 
+
+\[
+\Ring = \{ \ringBool, \ringInt, \ringReal, \ringTropInt, \ringTropReal, \ringTropMaxInt, \ringTropMaxReal \}
+\]
 
 \section{Core Typing}
 It is possible to write a \graphalg{} Core expression that is valid according to the grammar but is not semantically valid.
@@ -120,13 +144,9 @@ which assigns the type $T$ to a matrix variable $M$.
 The type of a matrix consists of (1) the number of rows, (2) the number of columns and (3) a semiring.
 This yields a function type $\tenv : \Mnam \to \DD \times \DD \times \Ring$, where
 $\Mnam$ is a finite set of matrix variables, $\DD$ is a finite set of \emph{size symbols}, and $\Ring$ is the set of supported semirings.
-
 The use of abstract size symbols allows type checking expressions without knowing concrete matrix dimensions.
 We denote size symbols by Greek letters $\alpha,\beta,\gamma$.
 Unit size $1$ is assumed to be in $\DD$.
-
-\textbf{TODO: More on semirings here}
-
 For constructing modified type environments, we use $\tenv[M := T]$ to denote an instance equivalent to $\tenv$, except that matrix variable $M$ maps to type $T$.
 
 The type of an expression $e$ with respect to an environment $\tenv$ is denoted $\ttype_{\tenv}(e)$.
@@ -137,10 +157,10 @@ We call an expression \emph{well-typed} according to environment $\tenv$ if $\tt
     \item $\ttypet(M):= \tenv(M)$, for a matrix variable $M\in\Mnam$;
     \item $\ttypet(\transp{E}):= (\beta,\alpha,R)$ if $\ttypet(E)=(\alpha,\beta,R)$;
     \item $\ttypet(\rowdom(E)):= (\alpha,1)$ if $\ttypet(E)=(\alpha,\beta)$;
-    \item $\ttypet(\diag(E)):= (\alpha,\alpha,R)$, if $\ttypet(E)=(\alpha,1,R)$;
+    \item $\ttypet(\diag(E)):= (\alpha,\alpha,R)$ if $\ttypet(E)=(\alpha,1,R)$;
     \item $\ttypet(e_1 \cdot e_2):= (\alpha,\gamma,R)$ if  $\ttypet(e_1)=(\alpha,\beta,R)$, and $\ttypet(e_2)=(\beta,\gamma,R)$;
     \item $\ttypet(\Apply[f](E_1,\ldots,E_n)) = (\alpha,\beta,R_f)$ if $R_f$ is the output semiring of function $f$ (see below);
-    \item $\text{for}[b](E_d, E_1,\ \ldots,E_n) := (\alpha, \beta, R_1)$ if $\ttypet(E_d) = (\gamma, 1, R_d)$, \\$\ttypet(E_1) = (\alpha, \beta, R_1)$ and $b$ is well-typed (see below).
+    \item $\text{for}[b](E_d, E_1,\ \ldots,E_n) := (\alpha, \beta, R_1)$ if $\ttypet(E_d) = (\gamma, 1, R_d)$, \\$\ttypet(E_1) = (\alpha, \beta, R_1)$ and $b$ is well-typed (see below);
     \item $\ttypet(\pickAny(E)) := T$ if $\ttypet(E) = T$
 \end{itemize}
 
@@ -159,27 +179,13 @@ Because scalar expressions always produce a matrix with dimensions $(1, 1)$, we 
     \item $\ttypet(e_1 - e_2):= R$ if $\ttypet(e_1) = \ttypet(e_2) = R$ and $R \in \{ \texttt{int}, \texttt{real} \}$;
     \item $\ttypet(e_1 / e_2):= R$ if $\ttypet(e_1) = \ttypet(e_2) = R$ and $R = \texttt{real}$;
     \item $\ttypet(e_1 = e_2):= \texttt{bool}$ if $\ttypet(e_1) = \ttypet(e_2) = R$;
-    \item $\ttypet(\cast(r,e)):= r$ if $r \in \Ring$ and $\ttypet(e) = R$;
+    \item $\ttypet(\cast(r,e)):= r$ if $r \in \Ring$ and $\ttypet(e) = R$
 \end{itemize}
 
 \subsubsection*{Loop Bodies}
 For type checking loop body $b$ in $\text{for}[b](E_d, E_1,\ \ldots,E_n)$ according to environment $\tenv$, assume $b = \{ M_1 := E_1',\ldots,M_n := E_n' \}$.
 Let the type environment for the loop body be $\tenv_b = \tenv[M_1 := \ttypet(E_1),\ldots,M_n := \ttypet(E_n)]$.
 Then the loop body is well-typed iff $\ttype_{\tenv_b}(E_i') = \ttypet(E_i)$ for all $1 \leq i \leq n$.
-
-
-% We capture such requirements using a set of type rules and the notion of a \textit{schema}, which for each matrix variable stores 
-% (1) the dimensions (how many rows and columns) and (2) the semiring.
-% A schema $\Sch$ is a tuple $(\Mnam,\size, \ring)$, where 
-% $\Mnam\subset \Mvar$ is a finite set of matrix variables, 
-% $\size: \Mnam \to \DD\times \DD$ is a function that maps each matrix variable in $\Mnam$ to a pair of \textit{size symbols}
-% and $\ring: \Mnam \to $.
-% We denote size symbols by Greek letters $\alpha,\beta,\gamma$. 
-% Unit size $1$ is assumed to be in $\DD$.
-% The type of an expression $e$ with respect to a schema $\Sch$ is denoted $\ttypes(e)$.
-% It is defined according to the following type rules:
-
-% We call an expression \textit{well-typed} according to the schema $\Sch$ if $\ttypes(e)$ is defined.
 
 \section{Core Semantics}
 \textbf{TODO: Semantics for operations in the Core Language}
