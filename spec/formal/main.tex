@@ -96,7 +96,7 @@ The \graphalg{} Core language is defined by the grammar:
     |     & \ \text{for}[b](E_d, E_1,\ \ldots,E_n) & \text{(loop over dimension)}       \\
     %|     & \ \text{for}[b](l, E_1,\ \ldots,E_n)   & \text{(loop over range)}           \\
     |     & \ \pickAny(E)                          & \text{(keep first nonzero in row)} \\
-    b ::= & \{ M_1 = E_1,\ \ldots, M_n = E_n \}    & \text{(loop body)}                 \\
+    b ::= & \{ M_1 := E_1,\ \ldots, M_n := E_n \}  & \text{(loop body)}                 \\
     f ::= & (C_1,\ \ldots,C_n) \ e                 & \text{(pointwise function)}        \\
     e ::= & \ C                                    & \text{(scalar variable)}           \\
     % CastDimOp (covered by literal case)
@@ -189,7 +189,10 @@ Let the type environment for the loop body be $\tenv_b = \tenv[M_1 := \ttypet(E_
 Then the loop body is well-typed iff $\ttype_{\tenv_b}(E_i') = \ttypet(E_i)$ for all $1 \leq i \leq n$.
 
 \section{Core Semantics}
-\textbf{TODO: Introduce notation}
+We now proceed by defining the semantics of well-typed expressions.
+In addition to the type environment, the semantics of \graphalg{} expressions depend on the concrete matrix values of referenced matrix variables.
+We capture this using an \emph{instance} $\I$, which is a function that maps matrix variables to concrete matrices.
+Similar to type environments, we use $\I[M := A]$ to denote an instance equivalent to $\I$, except that matrix variable $M$ maps to concrete matrix $A$.
 
 We refer to the addition and multiplication operators of semiring $R$ as $\oplus_R$ and $\otimes_R$, respectively.
 We write $0_R$ and $1_R$ to denote the additive and multiplicative identities of semiring $R$, respectively.
@@ -198,16 +201,34 @@ We write $0_R$ and $1_R$ to denote the additive and multiplicative identities of
     \item $\sem{V}{\I} := \conc(V)$, for $V\in \Mnam$
     \item $\sem{E^T}{\I} := \sem{E}{\I}^T$, with $A^T$ the transpose of matrix $A$
     \item $\sem{\rowdom(E)}{\I}$ is an $n\times 1$ vector with value $1_R$ at all positions,\\
-          where $\dim(\sem{E}{\I})=(n,m)$ and $\ttypet(E) = (\alpha, \beta, R)$
-    \item $\sem{\diag(E)}{\I}$ is a matrix with the vector $\sem{E}{\I}$ on its main diagonal, and $0_R$ in every other position
-    \item $\sem{E_1\cdot E_2}{\I} := \sem{E_1}{\I} \cdot \sem{E_2}{\I}$
-    \item $\sem{\Apply[f](E_1,\ldots ,E_n)}{\I}$ is a matrix $A$ of the same size as $\sem{E_1}{\I}$, and where $A_{ij}$ has the value $f(\sem{E_1}{\I}_{ij},\ldots ,\sem{E_n}{\I}_{ij})$
+          where $\sem{E}{\I}$ is an $n \times m$ matrix and $\ttypet(E) = (\alpha, \beta, R)$
+    \item $\sem{\diag(E)}{\I}$ is a matrix with the vector $\sem{E}{\I}$ on its main diagonal, and $0_R$ in every other position, with $R$ derived from $\ttypet(E) = (\alpha, \beta, R)$.
+    \item $\sem{E_1\cdot E_2}{\I} := \sem{E_1}{\I} \cdot \sem{E_2}{\I}$, with the matrix multiplication using operators $\oplus_R$ and $\otimes_R$ as inferred from $\ttypet(E_1) = (\alpha,\beta,R)$.
+    \item $\sem{\Apply[f](E_1,\ldots ,E_n)}{\I}$ is a matrix $A$ of the same dimensions as $\sem{E}{\I}$, with the value at each position $A_{ij}$ defined by the semantics of the pointwise function (see below).
     \item $\sem{\text{for}[b](E_d, E_1,\ \ldots,E_n)}{\I}$ is defined iteratively, see below.
-    \item $\sem{\pickAny(E)}{\I} = $ \textbf{TODO}
+    \item $\sem{\pickAny(E)}{\I}$ is a matrix $A$ of the same type as $\sem{E}{\I}$, and where $A_{ij}$ has the value of $\sem{E}{\I}_{ij}$ if $\sem{E}{\I}_{ik} = 0_R$ for all $k < j$, or $0_R$ otherwise, with $R$ the semiring of $A$.
 \end{itemize}
 
+\subsubsection*{For Loops}
+The semantics of $\text{for}[b](E_d, E_1,\ \ldots,E_n)$ are defined as follows.
+Let $b = \{ M_1 := E_1, \ldots, M_n := E_n \}$, and assume $\sem{E_d}{\I}$ is a $d \times m$ matrix.
+Then $\sem{\text{for}[b](E_d, E_1,\ \ldots,E_n)}{\I}$ is defined iteratively:
+
+\begin{itemize}
+    \item Let $\I_0 := \I[M_1 := \sem{e_1}{\I}, \ldots, M_n := \sem{e_n}{\I}]$
+    \item For $i = 1,\ldots d$, compute $\I_i := \I_{i-1}[M_1 := \sem{e_1'}{\I_{i-1}}, \ldots, M_d := \sem{e_d'}{\I_{i-1}}]$.
+    \item Finally, set $\sem{\texttt{for}\, \{ M_1 := e_1', \ldots, M_d := e_d' \}(e_1, \ldots, e_d)}{\I}:= \I_d(M_1)$.
+\end{itemize}
+
+\subsubsection*{Pointwise Function Application}
+$\sem{\Apply[f](E_1,\ldots ,E_n)}{\I}$ is a matrix $A$ of the same size as $\sem{E_1}{\I}$.
+The value at position $A_{ij}$ is defined as follows.
+Assume $f = (C_1,\ldots,C_n)\ e$.
+Let $\I_{ij} = \{ C_1 := \sem{E_1}{\I}_{ij},\ldots, C_n := \sem{E_n}{\I}_{ij} \}$.
+%We treat individual elements of a matrix, such as $\sem{E_1}{\I}$, as $1 \times 1$ matrices.
+Now define $A_{ij} = \sem{e}{\I_{ij}}$ using the semantics for scalar expressions defined below.
 Scalar expressions take as input $1 \times 1$ matrices and return a $1 \times 1$ matrix.
-Therefore, in the rules below we define them as if operating on single values rather than matrices:
+Therefore, we define scalar expression rules as if operating on single values rather than matrices:
 
 \begin{itemize}
     \item $\sem{r(l)}{\I} := l$
@@ -219,6 +240,7 @@ Therefore, in the rules below we define them as if operating on single values ra
     \item $\sem{\cast(r, e)}{\I} := \cast(R, r, \sem{e}{\I})$, whose definition is given below.
 \end{itemize}
 
+\subsubsection*{Casting}
 Function $\cast(R, r, v)$ casts a value from semiring $R$ to semiring $r$.
 A key rule in casting is that additive identities are preserved: If $v = 0_R$, the value after casting is $0_r$ (see the second rule below).
 This rule takes precedence over all rules that follow it.
@@ -291,12 +313,9 @@ It is defined according to the following type rules:
 We call an expression \textit{well-typed} according to the schema $\Sch$ if $\ttypes(e)$ is defined.
 
 \subsubsection*{Semantics}
-\textbf{TODO: dedupe with \graphalg{} section}
-
-We now proceed by defining the semantics of well-typed expressions.
+The semantics of a $\ML$ expression depends on an instance $\I$ similar to \graphalg{} Core. 
 We use the notation $\mtr{\RR}$ for the set of all real matrices.
 For $A\in\mtr{\RR}$, $\dim(A)\in\NN^2$ denotes its dimensions.
-The semantics of a $\ML$ expression depends on the concrete sizes and values of the matrix variables.
 We define a function $\dom : \DD \to \NN$ which maps size symbols to concrete sizes,
 and another function $\conc : \Mnam \mapsto \mtr{\RR}$ to map matrix variables to concrete matrix values.
 $\dom$ and $\conc$ are defined such that for a matrix $M$ with $\size(M) = (\alpha, \beta)$, we have $\dim(\conc(M)) = \dom(\alpha) \times \dom(\beta)$.
