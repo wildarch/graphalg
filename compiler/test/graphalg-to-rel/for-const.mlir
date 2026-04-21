@@ -6,7 +6,8 @@ func.func @ForConst(%arg0: !graphalg.mat<1 x 1 x i64>) -> !graphalg.mat<1 x 1 x 
   %1 = graphalg.const_mat 10 : i64 -> <1 x 1 x i64>
 
   // CHECK: %[[#BEGIN:]] = garel.const 0 : i64
-  // CHECK: %[[#FOR:]] = garel.for %[[#BEGIN]], %arg0 : !garel.rel<i64>, !garel.rel<i64> iters=10 result_idx=1 {
+  // CHECK: %[[#ITERS:]] = garel.const 10 : i64
+  // CHECK: %[[#FOR:]] = garel.for %[[#BEGIN]], %arg0 : !garel.rel<i64>, !garel.rel<i64> iters=%[[#ITERS]] result_idx=1 {
   %2 = graphalg.for_const range(%0, %1) : <1 x 1 x i64> init(%arg0) : !graphalg.mat<1 x 1 x i64> -> !graphalg.mat<1 x 1 x i64> body {
   ^bb0(%arg1: !graphalg.mat<1 x 1 x i64>, %arg2: !graphalg.mat<1 x 1 x i64>):
     // CHECK: %[[#PROJ:]] = garel.project %arg1

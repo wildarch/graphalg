@@ -30,9 +30,14 @@
 #include "graphalg/GraphAlgOps.h"
 #include "graphalg/GraphAlgTypes.h"
 #include "graphalg/SemiringTypes.h"
+#include "mlir/IR/Attributes.h"
+#include "mlir/IR/Location.h"
+#include "mlir/IR/Operation.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/Support/LLVM.h"
 #include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/Support/Casting.h"
 
 namespace garel {
 
@@ -269,14 +274,64 @@ MatrixTypeConverter::MatrixTypeConverter(
 // ============================== Helper Methods ===============================
 // =============================================================================
 
+static llvm::StringLiteral INPUT_DIMS_ATTR_KEY = "garel.input_dims";
+
 /**
  * Create a relation with all indices for a matrix dimension.
  *
  * Used to broadcast scalar values to a larger matrix.
  */
-static RangeOp createDimRead(mlir::Location loc, graphalg::DimAttr dim,
-                             mlir::OpBuilder &builder) {
-  return builder.create<RangeOp>(loc, dim.getConcreteDim());
+static mlir::Value createDimRead(mlir::Location loc, graphalg::DimAttr dim,
+                                 mlir::OpBuilder &builder) {
+  if (dim.isConcrete()) {
+    return builder.create<RangeOp>(loc, dim.getConcreteDim());
+  }
+
+  assert(dim.isAbstract());
+
+  // Find owning func
+  mlir::func::FuncOp funcOp;
+  auto parentOp = builder.getInsertionBlock()->getParentOp();
+  funcOp = llvm::dyn_cast<mlir::func::FuncOp>(parentOp);
+  if (!funcOp) {
+    funcOp = parentOp->getParentOfType<mlir::func::FuncOp>();
+  }
+
+  assert(funcOp && "not contained inside a function");
+  auto inputDims = funcOp->getAttrOfType<mlir::ArrayAttr>(INPUT_DIMS_ATTR_KEY);
+  if (!inputDims) {
+    funcOp.emitOpError("missing input dims attribute");
+    return nullptr;
+  }
+
+  // Find the function argument for this dimension.
+  auto args = funcOp.getFunctionBody().getArguments();
+  for (auto [d, v] : llvm::zip(inputDims.getAsRange<graphalg::DimAttr>(),
+                               llvm::reverse(args))) {
+    if (dim == d) {
+      return v;
+    }
+  }
+
+  funcOp.emitOpError("dimension ")
+      << dim << "is not defined within this function";
+  return nullptr;
+}
+
+/**
+ * Create a relation with one tuple that contains the number of valid indices
+ * for a matrix dimension.
+ */
+static mlir::Value createDimInt(mlir::Location loc, graphalg::DimAttr dim,
+                                mlir::OpBuilder &builder) {
+  auto input = createDimRead(loc, dim, builder);
+  llvm::ArrayRef<ColumnIdx> groupBy;
+  std::array<AggregatorAttr, 1> aggregators{
+      builder.getAttr<AggregatorAttr>(AggregateFunc::COUNT,
+                                      llvm::ArrayRef<ColumnIdx>{}),
+  };
+
+  return builder.create<AggregateOp>(loc, input, groupBy, aggregators);
 }
 
 static void
@@ -413,15 +468,6 @@ createAggregator(mlir::Operation *op, graphalg::SemiringTypeInterface sring,
   return AggregatorAttr::get(ctx, func, inputs);
 }
 
-static mlir::IntegerAttr tryGetConstantInt(mlir::Value v) {
-  mlir::Attribute attr;
-  if (!mlir::matchPattern(v, mlir::m_Constant(&attr))) {
-    return nullptr;
-  }
-
-  return llvm::cast<mlir::IntegerAttr>(attr);
-}
-
 static mlir::FailureOr<mlir::Value>
 createMul(mlir::Operation *op, graphalg::SemiringTypeInterface sring,
           mlir::Value lhs, mlir::Value rhs, mlir::OpBuilder &builder) {
@@ -446,6 +492,16 @@ createMul(mlir::Operation *op, graphalg::SemiringTypeInterface sring,
 
   return op->emitOpError("multiplication with semiring ")
          << sring << " is not supported";
+}
+
+static bool isConstantZeroI64(mlir::Value rangeBegin) {
+  if (auto constOp = rangeBegin.getDefiningOp<ConstantOp>()) {
+    auto zero = mlir::IntegerAttr::get(
+        mlir::IntegerType::get(rangeBegin.getContext(), 64), 0);
+    return constOp.getValue() == zero;
+  }
+
+  return false;
 }
 
 // =============================================================================
@@ -477,82 +533,6 @@ mlir::LogicalResult OpConversion<mlir::func::FuncOp>::matchAndRewrite(
 
   return mlir::success();
 }
-
-static void addDimensionInputs(
-    mlir::func::FuncOp funcOp,
-    llvm::SmallDenseMap<graphalg::DimAttr, mlir::Value> &dimToValue) {
-  // Function type
-  llvm::SmallVector<mlir::Type> inputs(funcOp.getFunctionType().getInputs());
-  llvm::SmallVector<graphalg::DimAttr> dims;
-  for (auto t : funcOp.getFunctionType().getInputs()) {
-    auto matType = llvm::cast<graphalg::MatrixType>(t);
-    for (auto d : {matType.getRows(), matType.getCols()}) {
-      if (d.isAbstract() && !llvm::is_contained(dims, d)) {
-        dims.push_back(d);
-      }
-    }
-  }
-
-  // Add dimension inputs to function type
-  auto *ctx = funcOp.getContext();
-  auto dimReadType = RelationType::get(
-      ctx, mlir::ArrayRef<mlir::Type>{mlir::IndexType::get(ctx)});
-  inputs.append(dims.size(), dimReadType);
-  auto newType = mlir::FunctionType::get(ctx, inputs,
-                                         funcOp.getFunctionType().getResults());
-  funcOp.setFunctionType(newType);
-
-  // Add dimension inputs as block args.
-  auto &block = funcOp.getFunctionBody().front();
-  for (auto d : dims) {
-    auto arg = block.addArgument(dimReadType, funcOp.getLoc());
-    dimToValue[d] = arg;
-  }
-}
-
-/*
-static mlir::LogicalResult convertFunc(mlir::func::FuncOp funcOp,
-                                       mlir::IRRewriter &rewriter,
-                                       MatrixTypeConverter &typeConverter) {
-  rewriter.setInsertionPointAfter(funcOp);
-
-  // Function type
-  llvm::SmallVector<mlir::Type> inputs;
-  llvm::SmallVector<graphalg::DimAttr> dims;
-  for (auto t : funcOp.getFunctionType().getInputs()) {
-    auto relType = typeConverter.convertType(t);
-    if (!relType) {
-      return funcOp.emitOpError("input type ") << t << " cannot be converted";
-    }
-
-    inputs.push_back(relType);
-
-    auto matType = llvm::cast<graphalg::MatrixType>(t);
-    for (auto d : {matType.getRows(), matType.getCols()}) {
-      if (d.isAbstract() && !llvm::is_contained(dims, d)) {
-        dims.push_back(d);
-      }
-    }
-  }
-
-  // Add dimension inputs.
-  auto dimReadType = rewriter.getType<RelationType>(
-      mlir::ArrayRef<mlir::Type>{rewriter.getIndexType()});
-  for (auto _d : dims) {
-    inputs.push_back(dimReadType);
-  }
-
-  llvm::SmallVector<mlir::Type> results;
-  for (auto t : funcOp.getFunctionType().getResults()) {
-    auto relType = typeConverter.convertType(t);
-    if (!relType) {
-      return funcOp.emitOpError("result type ") << t << " cannot be converted";
-    }
-
-    results.push_back(relType);
-  }
-}
-*/
 
 template <>
 mlir::LogicalResult OpConversion<mlir::func::ReturnOp>::matchAndRewrite(
@@ -646,6 +626,10 @@ mlir::LogicalResult ApplyOpConversion::matchAndRewrite(
     // Broadcast to all rows.
     auto rowsOp =
         createDimRead(op.getLoc(), output.matrixType().getRows(), rewriter);
+    if (!rowsOp) {
+      return mlir::failure();
+    }
+
     joinChildren.push_back(rowsOp);
     rowColumns.push_back(InputColumnRef{
         .relIdx = joinChildren.size() - 1,
@@ -659,6 +643,10 @@ mlir::LogicalResult ApplyOpConversion::matchAndRewrite(
     // Broadcast to all columns.
     auto colsOp =
         createDimRead(op.getLoc(), output.matrixType().getCols(), rewriter);
+    if (!colsOp) {
+      return mlir::failure();
+    }
+
     joinChildren.push_back(colsOp);
     colColumns.push_back(InputColumnRef{
         .relIdx = joinChildren.size() - 1,
@@ -762,8 +750,13 @@ mlir::LogicalResult OpConversion<graphalg::BroadcastOp>::matchAndRewrite(
     rowColumnIdx = input.rowColumn();
   } else if (output.hasRowColumn()) {
     // Broadcast over all rows.
-    joinChildren.push_back(
-        createDimRead(op.getLoc(), output.matrixType().getRows(), rewriter));
+    auto rowsOp =
+        createDimRead(op.getLoc(), output.matrixType().getRows(), rewriter);
+    if (!rowsOp) {
+      return mlir::failure();
+    }
+
+    joinChildren.push_back(rowsOp);
     rowColumnIdx = currentColIdx++;
   }
 
@@ -772,8 +765,13 @@ mlir::LogicalResult OpConversion<graphalg::BroadcastOp>::matchAndRewrite(
     colColumnIdx = input.colColumn();
   } else if (output.hasColColumn()) {
     // Broadcast over all columns.
-    joinChildren.push_back(
-        createDimRead(op.getLoc(), output.matrixType().getCols(), rewriter));
+    auto colsOp =
+        createDimRead(op.getLoc(), output.matrixType().getCols(), rewriter);
+    if (!colsOp) {
+      return mlir::failure();
+    }
+
+    joinChildren.push_back(colsOp);
     colColumnIdx = currentColIdx++;
   }
 
@@ -821,14 +819,24 @@ mlir::LogicalResult OpConversion<graphalg::ConstantMatrixOp>::matchAndRewrite(
   llvm::SmallVector<mlir::Value> joinChildren;
   if (!output.matrixType().getRows().isOne()) {
     // Broadcast over all rows.
-    joinChildren.push_back(
-        createDimRead(op.getLoc(), output.matrixType().getRows(), rewriter));
+    auto rowsOp =
+        createDimRead(op.getLoc(), output.matrixType().getRows(), rewriter);
+    if (!rowsOp) {
+      return mlir::failure();
+    }
+
+    joinChildren.push_back(rowsOp);
   }
 
   if (!output.matrixType().getCols().isOne()) {
     // Broadcast over all columns.
-    joinChildren.push_back(
-        createDimRead(op.getLoc(), output.matrixType().getCols(), rewriter));
+    auto colsOp =
+        createDimRead(op.getLoc(), output.matrixType().getCols(), rewriter);
+    if (!colsOp) {
+      return mlir::failure();
+    }
+
+    joinChildren.push_back(colsOp);
   }
 
   joinChildren.push_back(constantOp);
@@ -885,25 +893,44 @@ mlir::LogicalResult OpConversion<graphalg::DiagOp>::matchAndRewrite(
   return mlir::success();
 }
 
-template <>
-mlir::LogicalResult OpConversion<graphalg::ForConstOp>::matchAndRewrite(
-    graphalg::ForConstOp op, OpAdaptor adaptor,
-    mlir::ConversionPatternRewriter &rewriter) const {
-  auto rangeBegin = tryGetConstantInt(op.getRangeBegin());
-  auto rangeEnd = tryGetConstantInt(op.getRangeEnd());
-  if (!rangeBegin || !rangeEnd) {
-    return op->emitOpError("iter range is not constant");
-  }
+// Sharing logic between ForConstOp and ForDimOp
+static mlir::LogicalResult
+convertFor(mlir::Operation *op, mlir::ValueRange adaptorInitArgs,
+           mlir::Value rangeBegin, mlir::Value rangeEnd, mlir::Region &body,
+           mlir::Region &until, const mlir::TypeConverter *typeConverter,
+           mlir::ConversionPatternRewriter &rewriter) {
+  llvm::SmallVector<mlir::Value> initArgs{rangeBegin};
+  initArgs.append(adaptorInitArgs.begin(), adaptorInitArgs.end());
 
-  auto iters = rangeEnd.getInt() - rangeBegin.getInt();
-
-  llvm::SmallVector<mlir::Value> initArgs{adaptor.getRangeBegin()};
-  initArgs.append(adaptor.getInitArgs().begin(), adaptor.getInitArgs().end());
-
-  auto blockSignature =
-      typeConverter->convertBlockSignature(&op.getBody().front());
+  auto blockSignature = typeConverter->convertBlockSignature(&body.front());
   if (!blockSignature) {
     return op->emitOpError("Failed to convert iter args");
+  }
+
+  mlir::Value iters;
+  if (isConstantZeroI64(rangeBegin)) {
+    iters = rangeEnd;
+  } else {
+    // Subtract rangeBegin from rangeEnd
+    auto joinOp = rewriter.create<JoinOp>(
+        op->getLoc(), mlir::ValueRange{rangeBegin, rangeEnd},
+        rewriter.getAttr<JoinPredicatesAttr>(
+            llvm::ArrayRef<JoinPredicateAttr>{}));
+    auto projOp = rewriter.create<ProjectOp>(
+        op->getLoc(), getI64RelationType(op->getContext()), joinOp);
+
+    auto &block = projOp.createProjectionsBlock();
+    mlir::OpBuilder::InsertionGuard guard{rewriter};
+    rewriter.setInsertionPointToStart(&block);
+
+    auto begin =
+        rewriter.create<ExtractOp>(op->getLoc(), 0, block.getArgument(0));
+    auto end =
+        rewriter.create<ExtractOp>(op->getLoc(), 1, block.getArgument(0));
+    auto res = rewriter.create<mlir::arith::SubIOp>(op->getLoc(), end, begin);
+    rewriter.create<ProjectReturnOp>(op->getLoc(), mlir::ValueRange{res});
+
+    iters = projOp;
   }
 
   // The relational version of this op can only have a single output value.
@@ -913,25 +940,24 @@ mlir::LogicalResult OpConversion<graphalg::ForConstOp>::matchAndRewrite(
     auto result = op->getResult(i);
     if (result.use_empty()) {
       // Not used. Take init arg as a dummy value.
-      resultValues.push_back(adaptor.getInitArgs()[i]);
+      resultValues.push_back(adaptorInitArgs[i]);
       continue;
     }
 
     // We are adding the iteration count variable as a first argument, so offset
     // the result index accordingly.
     std::int64_t resultIdx = i + 1;
-    auto resultType = adaptor.getInitArgs()[i].getType();
-    auto forOp = rewriter.create<ForOp>(op.getLoc(), resultType, initArgs,
+    auto resultType = adaptorInitArgs[i].getType();
+    auto forOp = rewriter.create<ForOp>(op->getLoc(), resultType, initArgs,
                                         iters, resultIdx);
     // body block
-    rewriter.cloneRegionBefore(op.getBody(), forOp.getBody(),
-                               forOp.getBody().begin());
+    rewriter.cloneRegionBefore(body, forOp.getBody(), forOp.getBody().begin());
     rewriter.applySignatureConversion(&forOp.getBody().front(),
                                       *blockSignature);
 
     // until block
-    if (!op.getUntil().empty()) {
-      rewriter.cloneRegionBefore(op.getUntil(), forOp.getUntil(),
+    if (!until.empty()) {
+      rewriter.cloneRegionBefore(until, forOp.getUntil(),
                                  forOp.getUntil().begin());
       rewriter.applySignatureConversion(&forOp.getUntil().front(),
                                         *blockSignature);
@@ -942,6 +968,28 @@ mlir::LogicalResult OpConversion<graphalg::ForConstOp>::matchAndRewrite(
 
   rewriter.replaceOp(op, resultValues);
   return mlir::success();
+}
+
+template <>
+mlir::LogicalResult OpConversion<graphalg::ForConstOp>::matchAndRewrite(
+    graphalg::ForConstOp op, OpAdaptor adaptor,
+    mlir::ConversionPatternRewriter &rewriter) const {
+  return convertFor(op, adaptor.getInitArgs(), adaptor.getRangeBegin(),
+                    adaptor.getRangeEnd(), op.getBody(), op.getUntil(),
+                    typeConverter, rewriter);
+}
+
+template <>
+mlir::LogicalResult OpConversion<graphalg::ForDimOp>::matchAndRewrite(
+    graphalg::ForDimOp op, OpAdaptor adaptor,
+    mlir::ConversionPatternRewriter &rewriter) const {
+  auto ctx = op.getContext();
+  auto rangeBegin =
+      rewriter.create<ConstantOp>(op.getLoc(), rewriter.getI64IntegerAttr(0));
+  auto rangeEnd = createDimInt(op.getLoc(), op.getDim(), rewriter);
+
+  return convertFor(op, adaptor.getInitArgs(), rangeBegin, rangeEnd,
+                    op.getBody(), op.getUntil(), typeConverter, rewriter);
 }
 
 template <>
@@ -1161,6 +1209,14 @@ mlir::LogicalResult OpConversion<graphalg::UnionOp>::matchAndRewrite(
   return mlir::success();
 }
 
+template <>
+mlir::LogicalResult OpConversion<graphalg::CastDimOp>::matchAndRewrite(
+    graphalg::CastDimOp op, OpAdaptor adaptor,
+    mlir::ConversionPatternRewriter &rewriter) const {
+  rewriter.replaceOp(op, createDimInt(op->getLoc(), op.getInput(), rewriter));
+  return mlir::success();
+}
+
 // =============================================================================
 // ============================ Tuple Op Conversion ============================
 // =============================================================================
@@ -1362,14 +1418,69 @@ static bool hasRelationOperands(mlir::Operation *op) {
                       [](auto t) { return llvm::isa<RelationType>(t); });
 }
 
+static void addDimensionInputs(mlir::func::FuncOp funcOp) {
+  // Function type
+  llvm::SmallVector<mlir::Type> inputs(funcOp.getFunctionType().getInputs());
+  llvm::SmallVector<graphalg::DimAttr> dims;
+  for (auto t : funcOp.getFunctionType().getInputs()) {
+    auto matType = llvm::cast<graphalg::MatrixType>(t);
+    for (auto d : {matType.getRows(), matType.getCols()}) {
+      if (d.isAbstract() && !llvm::is_contained(dims, d)) {
+        dims.push_back(d);
+      }
+    }
+  }
+
+  // Add dimension inputs to function type
+  auto *ctx = funcOp.getContext();
+  auto dimReadType = RelationType::get(
+      ctx, mlir::ArrayRef<mlir::Type>{mlir::IndexType::get(ctx)});
+  inputs.append(dims.size(), dimReadType);
+  auto newType = mlir::FunctionType::get(ctx, inputs,
+                                         funcOp.getFunctionType().getResults());
+  funcOp.setFunctionType(newType);
+
+  // Add dimension inputs as block args.
+  auto &block = funcOp.getFunctionBody().front();
+  for (auto d : dims) {
+    auto arg = block.addArgument(dimReadType, funcOp.getLoc());
+  }
+
+  // Annotate with input_dims attribute.
+  llvm::SmallVector<mlir::Attribute> dimsErased;
+  for (auto d : dims) {
+    dimsErased.push_back(d);
+  }
+  funcOp->setAttr(INPUT_DIMS_ATTR_KEY, mlir::ArrayAttr::get(ctx, dimsErased));
+}
+
+/*
+static mlir::LogicalResult forDimToConst(graphalg::ForDimOp op,
+                                         mlir::PatternRewriter &rewriter) {
+  auto ctx = op.getContext();
+  auto rangeBegin = rewriter.create<graphalg::ConstantMatrixOp>(
+      op.getLoc(),
+      graphalg::MatrixType::scalarOf(graphalg::SemiringTypes::forInt(ctx)),
+      rewriter.getI64IntegerAttr(0));
+  auto rangeEnd =
+      rewriter.create<graphalg::CastDimOp>(op.getLoc(), op.getDim());
+  auto newOp = rewriter.create<graphalg::ForConstOp>(
+      op.getLoc(), op->getResultTypes(), op.getInitArgs(), rangeBegin,
+      rangeEnd);
+  newOp.getBody().takeBody(op.getBody());
+  newOp.getUntil().takeBody(op.getUntil());
+  rewriter.replaceOp(op, newOp);
+  return mlir::success();
+}
+*/
+
 void GraphAlgToRel::runOnOperation() {
   // Add dimension inputs
   llvm::SmallVector<mlir::func::FuncOp> funcOps(
       getOperation().getOps<mlir::func::FuncOp>());
   mlir::IRRewriter rewriter(getOperation());
   for (auto op : funcOps) {
-    llvm::SmallDenseMap<graphalg::DimAttr, mlir::Value> dimToValue;
-    addDimensionInputs(op, dimToValue);
+    addDimensionInputs(op);
   }
 
   mlir::ConversionTarget target(getContext());
@@ -1394,9 +1505,10 @@ void GraphAlgToRel::runOnOperation() {
       OpConversion<graphalg::TransposeOp>, OpConversion<graphalg::BroadcastOp>,
       OpConversion<graphalg::ConstantMatrixOp>,
       OpConversion<graphalg::DeferredReduceOp>, OpConversion<graphalg::DiagOp>,
-      OpConversion<graphalg::ForConstOp>, OpConversion<graphalg::YieldOp>,
-      OpConversion<graphalg::MatMulJoinOp>, OpConversion<graphalg::PickAnyOp>,
-      OpConversion<graphalg::TrilOp>, OpConversion<graphalg::UnionOp>>(
+      OpConversion<graphalg::ForConstOp>, OpConversion<graphalg::ForDimOp>,
+      OpConversion<graphalg::YieldOp>, OpConversion<graphalg::MatMulJoinOp>,
+      OpConversion<graphalg::PickAnyOp>, OpConversion<graphalg::TrilOp>,
+      OpConversion<graphalg::UnionOp>, OpConversion<graphalg::CastDimOp>>(
       matrixTypeConverter, &getContext());
   patterns.add<ApplyOpConversion>(semiringTypeConverter, matrixTypeConverter,
                                   &getContext());
