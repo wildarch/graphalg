@@ -1,4 +1,5 @@
 #include <array>
+#include <initializer_list>
 #include <numeric>
 
 #include <llvm/ADT/ArrayRef.h>
@@ -29,6 +30,9 @@
 #include "graphalg/GraphAlgOps.h"
 #include "graphalg/GraphAlgTypes.h"
 #include "graphalg/SemiringTypes.h"
+#include "mlir/IR/PatternMatch.h"
+#include "mlir/Support/LLVM.h"
+#include "llvm/ADT/DenseMap.h"
 
 namespace garel {
 
@@ -256,6 +260,9 @@ MatrixTypeConverter::MatrixTypeConverter(
 
   addConversion(
       [this](graphalg::MatrixType t) { return convertMatrixType(t); });
+
+  // No need to convert.
+  addConversion([](RelationType t) { return t; });
 }
 
 // =============================================================================
@@ -470,6 +477,82 @@ mlir::LogicalResult OpConversion<mlir::func::FuncOp>::matchAndRewrite(
 
   return mlir::success();
 }
+
+static void addDimensionInputs(
+    mlir::func::FuncOp funcOp,
+    llvm::SmallDenseMap<graphalg::DimAttr, mlir::Value> &dimToValue) {
+  // Function type
+  llvm::SmallVector<mlir::Type> inputs(funcOp.getFunctionType().getInputs());
+  llvm::SmallVector<graphalg::DimAttr> dims;
+  for (auto t : funcOp.getFunctionType().getInputs()) {
+    auto matType = llvm::cast<graphalg::MatrixType>(t);
+    for (auto d : {matType.getRows(), matType.getCols()}) {
+      if (d.isAbstract() && !llvm::is_contained(dims, d)) {
+        dims.push_back(d);
+      }
+    }
+  }
+
+  // Add dimension inputs to function type
+  auto *ctx = funcOp.getContext();
+  auto dimReadType = RelationType::get(
+      ctx, mlir::ArrayRef<mlir::Type>{mlir::IndexType::get(ctx)});
+  inputs.append(dims.size(), dimReadType);
+  auto newType = mlir::FunctionType::get(ctx, inputs,
+                                         funcOp.getFunctionType().getResults());
+  funcOp.setFunctionType(newType);
+
+  // Add dimension inputs as block args.
+  auto &block = funcOp.getFunctionBody().front();
+  for (auto d : dims) {
+    auto arg = block.addArgument(dimReadType, funcOp.getLoc());
+    dimToValue[d] = arg;
+  }
+}
+
+/*
+static mlir::LogicalResult convertFunc(mlir::func::FuncOp funcOp,
+                                       mlir::IRRewriter &rewriter,
+                                       MatrixTypeConverter &typeConverter) {
+  rewriter.setInsertionPointAfter(funcOp);
+
+  // Function type
+  llvm::SmallVector<mlir::Type> inputs;
+  llvm::SmallVector<graphalg::DimAttr> dims;
+  for (auto t : funcOp.getFunctionType().getInputs()) {
+    auto relType = typeConverter.convertType(t);
+    if (!relType) {
+      return funcOp.emitOpError("input type ") << t << " cannot be converted";
+    }
+
+    inputs.push_back(relType);
+
+    auto matType = llvm::cast<graphalg::MatrixType>(t);
+    for (auto d : {matType.getRows(), matType.getCols()}) {
+      if (d.isAbstract() && !llvm::is_contained(dims, d)) {
+        dims.push_back(d);
+      }
+    }
+  }
+
+  // Add dimension inputs.
+  auto dimReadType = rewriter.getType<RelationType>(
+      mlir::ArrayRef<mlir::Type>{rewriter.getIndexType()});
+  for (auto _d : dims) {
+    inputs.push_back(dimReadType);
+  }
+
+  llvm::SmallVector<mlir::Type> results;
+  for (auto t : funcOp.getFunctionType().getResults()) {
+    auto relType = typeConverter.convertType(t);
+    if (!relType) {
+      return funcOp.emitOpError("result type ") << t << " cannot be converted";
+    }
+
+    results.push_back(relType);
+  }
+}
+*/
 
 template <>
 mlir::LogicalResult OpConversion<mlir::func::ReturnOp>::matchAndRewrite(
@@ -1280,6 +1363,15 @@ static bool hasRelationOperands(mlir::Operation *op) {
 }
 
 void GraphAlgToRel::runOnOperation() {
+  // Add dimension inputs
+  llvm::SmallVector<mlir::func::FuncOp> funcOps(
+      getOperation().getOps<mlir::func::FuncOp>());
+  mlir::IRRewriter rewriter(getOperation());
+  for (auto op : funcOps) {
+    llvm::SmallDenseMap<graphalg::DimAttr, mlir::Value> dimToValue;
+    addDimensionInputs(op, dimToValue);
+  }
+
   mlir::ConversionTarget target(getContext());
   // Eliminate all graphalg ops
   target.addIllegalDialect<graphalg::GraphAlgDialect>();
