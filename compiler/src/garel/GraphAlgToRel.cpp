@@ -1,20 +1,24 @@
 #include <array>
-#include <initializer_list>
 #include <numeric>
 
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/SmallVector.h>
+#include <llvm/ADT/StringRef.h>
+#include <llvm/Support/Casting.h>
 #include <mlir/Dialect/Arith/IR/Arith.h>
 #include <mlir/Dialect/Func/IR/FuncOps.h>
+#include <mlir/IR/Attributes.h>
 #include <mlir/IR/Builders.h>
 #include <mlir/IR/BuiltinAttributeInterfaces.h>
 #include <mlir/IR/BuiltinAttributes.h>
 #include <mlir/IR/BuiltinOps.h>
 #include <mlir/IR/BuiltinTypeInterfaces.h>
 #include <mlir/IR/BuiltinTypes.h>
+#include <mlir/IR/Location.h>
 #include <mlir/IR/MLIRContext.h>
 #include <mlir/IR/Matchers.h>
+#include <mlir/IR/Operation.h>
 #include <mlir/IR/Value.h>
 #include <mlir/IR/ValueRange.h>
 #include <mlir/Pass/Pass.h>
@@ -30,14 +34,6 @@
 #include "graphalg/GraphAlgOps.h"
 #include "graphalg/GraphAlgTypes.h"
 #include "graphalg/SemiringTypes.h"
-#include "mlir/IR/Attributes.h"
-#include "mlir/IR/Location.h"
-#include "mlir/IR/Operation.h"
-#include "mlir/IR/PatternMatch.h"
-#include "mlir/Support/LLVM.h"
-#include "llvm/ADT/DenseMap.h"
-#include "llvm/ADT/StringRef.h"
-#include "llvm/Support/Casting.h"
 
 namespace garel {
 
@@ -1453,26 +1449,6 @@ static void addDimensionInputs(mlir::func::FuncOp funcOp) {
   }
   funcOp->setAttr(INPUT_DIMS_ATTR_KEY, mlir::ArrayAttr::get(ctx, dimsErased));
 }
-
-/*
-static mlir::LogicalResult forDimToConst(graphalg::ForDimOp op,
-                                         mlir::PatternRewriter &rewriter) {
-  auto ctx = op.getContext();
-  auto rangeBegin = rewriter.create<graphalg::ConstantMatrixOp>(
-      op.getLoc(),
-      graphalg::MatrixType::scalarOf(graphalg::SemiringTypes::forInt(ctx)),
-      rewriter.getI64IntegerAttr(0));
-  auto rangeEnd =
-      rewriter.create<graphalg::CastDimOp>(op.getLoc(), op.getDim());
-  auto newOp = rewriter.create<graphalg::ForConstOp>(
-      op.getLoc(), op->getResultTypes(), op.getInitArgs(), rangeBegin,
-      rangeEnd);
-  newOp.getBody().takeBody(op.getBody());
-  newOp.getUntil().takeBody(op.getUntil());
-  rewriter.replaceOp(op, newOp);
-  return mlir::success();
-}
-*/
 
 void GraphAlgToRel::runOnOperation() {
   // Add dimension inputs
