@@ -242,6 +242,39 @@ mlir::OpFoldResult BroadcastOp::fold(FoldAdaptor adaptor) {
   return nullptr;
 }
 
+mlir::LogicalResult
+ForOp::fold(FoldAdaptor adaptor,
+            ::llvm::SmallVectorImpl<::mlir::OpFoldResult> &results) {
+  if (!getBegin() && adaptor.getDynBegin()) {
+    // Can infer a constant begin to the range.
+    auto begin = llvm::cast<mlir::IntegerAttr>(adaptor.getDynBegin());
+    setBeginAttr(begin);
+    getDynBeginMutable().clear();
+    return mlir::success();
+  }
+
+  if (!getIters() && getBegin() && adaptor.getDynEnd()) {
+    // Can infer a constant number of iterations.
+    auto begin = *getBegin();
+    auto end = llvm::cast<mlir::IntegerAttr>(adaptor.getDynEnd())
+                   .getValue()
+                   .getZExtValue();
+    // If end < begin, drop to 0 iterations.
+    std::size_t iters = 0;
+    if (begin < end) {
+      iters = end - begin;
+    }
+
+    // NOTE: number of iterations is encoded as a DimAttr.
+    auto dim = DimAttr::getConcrete(getContext(), iters);
+    setItersAttr(dim);
+    getDynEndMutable().clear();
+    return mlir::success();
+  }
+
+  return mlir::failure();
+}
+
 static mlir::LogicalResult forDimConst(ForDimOp op,
                                        mlir::PatternRewriter &rewriter) {
   if (!op.getDim().isConcrete()) {

@@ -505,6 +505,41 @@ mlir::LogicalResult BroadcastOp::verify() {
   return mlir::success();
 }
 
+// === ForOp ===
+mlir::LogicalResult ForOp::verify() {
+  if (getDynBegin() && getBegin()) {
+    return emitOpError("begin and dyn_begin are mutually exclusive");
+  } else if (!getDynBegin() && !getBegin()) {
+    return emitOpError("no loop start: must have 'begin' or 'dyn_begin'");
+  }
+
+  if (getDynEnd() && getIters()) {
+    return emitOpError("begin and iters are mutually exclusive");
+  } else if (!getDynEnd() && !getIters()) {
+    return emitOpError("no loop end: must have 'iters' or 'dyn_end'");
+  }
+
+  return mlir::success();
+}
+
+mlir::LogicalResult ForOp::verifyRegions() {
+  return verifyLoop(getOperation(), getInitArgs(), getBody(), getUntil());
+}
+
+void ForOp::getSuccessorRegions(
+    mlir::RegionBranchPoint point,
+    llvm::SmallVectorImpl<mlir::RegionSuccessor> &regions) {
+  getLoopSuccessorRegions(getOperation(), getBody(), getUntil(), point,
+                          regions);
+}
+
+mlir::OperandRange
+ForOp::getEntrySuccessorOperands(mlir::RegionBranchPoint point) {
+  return getInitArgs();
+}
+
+bool ForOp::isDynamicRange() { return getDynBegin() || getDynEnd(); }
+
 // === ForConstOp ===
 mlir::LogicalResult ForConstOp::verifyRegions() {
   return verifyLoop(getOperation(), getInitArgs(), getBody(), getUntil());

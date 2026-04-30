@@ -8,7 +8,7 @@ module @"<stdin>" {
     %4 = graphalg.broadcast %3 : <1 x 1 x i1> -> <#dim x 1 x i1>
     %5 = graphalg.diag %4 : !graphalg.mat<#dim x 1 x i1>
     %6 = graphalg.literal 0 : i64
-    %7 = graphalg.for_const range(%6, %0) : <1 x 1 x i64> init(%5) : !graphalg.mat<#dim x #dim x i1> -> !graphalg.mat<#dim x #dim x i1> body {
+    %7 = graphalg.for dyn_begin=%6 dyn_end=%0 init(%5) : !graphalg.mat<#dim x #dim x i1> -> !graphalg.mat<#dim x #dim x i1> body {
     ^bb0(%arg1: !graphalg.mat<1 x 1 x i64>, %arg2: !graphalg.mat<#dim x #dim x i1>):
       %19 = graphalg.cast %arg0 : <#dim x #dim x i1> -> <#dim x #dim x i64>
       %20 = graphalg.cast %arg2 : <#dim x #dim x i1> -> <#dim x #dim x i64>

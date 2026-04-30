@@ -35,6 +35,7 @@ private:
   mlir::LogicalResult evaluate(ReduceOp op);
   mlir::LogicalResult evaluate(BroadcastOp op);
   mlir::LogicalResult evaluate(ConstantMatrixOp op);
+  mlir::LogicalResult evaluate(ForOp op);
   mlir::LogicalResult evaluate(ForConstOp op);
   mlir::LogicalResult evaluate(ApplyOp op);
   mlir::LogicalResult evaluate(PickAnyOp op);
@@ -187,6 +188,88 @@ mlir::LogicalResult Evaluator::evaluate(ConstantMatrixOp op) {
   return mlir::success();
 }
 
+mlir::LogicalResult Evaluator::evaluate(ForOp op) {
+  auto begin = op.getBegin();
+  if (!begin) {
+    return op.emitOpError("loop begin is not constant");
+  }
+
+  auto iters = op.getIters();
+  if (!iters || iters->isAbstract()) {
+    return op.emitOpError("number of loop iterations is not constant");
+  }
+
+  auto rangeBegin = *begin;
+  auto rangeEnd = rangeBegin + iters->getConcreteDim();
+
+  auto &body = op.getBody().front();
+  auto *ctx = op.getContext();
+
+  // Initialize block arguments
+  for (auto [init, blockArg] :
+       llvm::zip_equal(op.getInitArgs(), body.getArguments().drop_front())) {
+    _values[blockArg] = _values[init];
+  }
+
+  for (auto i : llvm::seq(rangeBegin, rangeEnd)) {
+    // Iteration variable.
+    auto iterAttr = mlir::IntegerAttr::get(SemiringTypes::forInt(ctx), i);
+    auto iterArg = body.getArgument(0);
+    auto iterType = llvm::cast<MatrixType>(iterArg.getType());
+    MatrixAttrBuilder iterBuilder(iterType);
+    iterBuilder.set(0, 0, iterAttr);
+    _values[body.getArgument(0)] = iterBuilder.build();
+
+    for (auto &op : body) {
+      if (auto yieldOp = llvm::dyn_cast<YieldOp>(op)) {
+        // Update block arguments
+        for (auto [value, blockArg] : llvm::zip_equal(
+                 yieldOp.getInputs(), body.getArguments().drop_front())) {
+          _values[blockArg] = _values[value];
+        }
+      } else if (mlir::failed(evaluate(&op))) {
+        return mlir::failure();
+      }
+    }
+
+    bool breakFromUntil = false;
+    if (!op.getUntil().empty()) {
+      // Have an until clause to evaluate.
+      auto &until = op.getUntil().front();
+
+      // Use current state of loop variables as input to until block.
+      for (auto [bodyArg, untilArg] :
+           llvm::zip_equal(body.getArguments(), until.getArguments())) {
+        _values[untilArg] = _values[bodyArg];
+      }
+
+      for (auto &op : until) {
+        if (auto yieldOp = llvm::dyn_cast<YieldOp>(op)) {
+          // Check break condition
+          assert(yieldOp->getNumOperands() == 1);
+          MatrixAttrReader condMat(_values[yieldOp.getInputs().front()]);
+          breakFromUntil =
+              llvm::cast<mlir::BoolAttr>(condMat.at(0, 0)).getValue();
+        } else if (mlir::failed(evaluate(&op))) {
+          return mlir::failure();
+        }
+      }
+    }
+
+    if (breakFromUntil) {
+      break;
+    }
+  }
+
+  // Set loop results.
+  for (auto [value, result] :
+       llvm::zip_equal(body.getArguments().drop_front(), op->getResults())) {
+    _values[result] = _values[value];
+  }
+
+  return mlir::success();
+}
+
 mlir::LogicalResult Evaluator::evaluate(ForConstOp op) {
   MatrixAttrReader rangeBeginMat(_values[op.getRangeBegin()]);
   MatrixAttrReader rangeEndMat(_values[op.getRangeEnd()]);
@@ -332,12 +415,13 @@ mlir::LogicalResult Evaluator::evaluate(mlir::Operation *op) {
   return llvm::TypeSwitch<mlir::Operation *, mlir::LogicalResult>(op)
 #define GA_CASE(Op) .Case<Op>([&](Op op) { return evaluate(op); })
       GA_CASE(TransposeOp) GA_CASE(DiagOp) GA_CASE(MatMulOp) GA_CASE(ReduceOp)
-          GA_CASE(BroadcastOp) GA_CASE(ConstantMatrixOp) GA_CASE(ForConstOp)
-              GA_CASE(ApplyOp) GA_CASE(PickAnyOp) GA_CASE(TrilOp)
+          GA_CASE(BroadcastOp) GA_CASE(ConstantMatrixOp) GA_CASE(ForOp)
+              GA_CASE(ForConstOp) GA_CASE(ApplyOp) GA_CASE(PickAnyOp)
+                  GA_CASE(TrilOp)
 #undef GA_CASE
-                  .Default([](mlir::Operation *op) {
-                    return op->emitOpError("unsupported op");
-                  });
+                      .Default([](mlir::Operation *op) {
+                        return op->emitOpError("unsupported op");
+                      });
 }
 
 MatrixAttr Evaluator::evaluate(mlir::func::FuncOp funcOp,

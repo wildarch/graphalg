@@ -7,7 +7,7 @@ module @"<stdin>" {
     %3 = graphalg.broadcast %2 : <1 x 1 x i1> -> <#dim x 1 x i1>
     %4 = graphalg.diag %3 : !graphalg.mat<#dim x 1 x i1>
     %5 = graphalg.cast_dim #dim
-    %6 = graphalg.for_dim range(#dim) init(%4) : !graphalg.mat<#dim x #dim x i1> -> !graphalg.mat<#dim x #dim x i1> body {
+    %6 = graphalg.for begin=0 iters=#dim init(%4) : !graphalg.mat<#dim x #dim x i1> -> !graphalg.mat<#dim x #dim x i1> body {
     ^bb0(%arg1: !graphalg.mat<1 x 1 x i64>, %arg2: !graphalg.mat<#dim x #dim x i1>):
       %7 = graphalg.mxm %arg0, %arg2 : <#dim x #dim x i1>, <#dim x #dim x i1>
       %8 = graphalg.ewise %arg2 ADD %7 : <#dim x #dim x i1>

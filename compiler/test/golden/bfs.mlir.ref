@@ -14,7 +14,7 @@ module @"<stdin>" {
     %3 = graphalg.broadcast %2 : <1 x 1 x i64> -> <#dim x 1 x i64>
     %4 = graphalg.mask %1<%arg1 : <#dim x 1 x i1>> = %3 : <#dim x 1 x i64> {complement = false}
     %5 = graphalg.cast_dim #dim
-    %6:3 = graphalg.for_dim range(#dim) init(%4, %arg1, %arg1) : !graphalg.mat<#dim x 1 x i64>, !graphalg.mat<#dim x 1 x i1>, !graphalg.mat<#dim x 1 x i1> -> !graphalg.mat<#dim x 1 x i64>, !graphalg.mat<#dim x 1 x i1>, !graphalg.mat<#dim x 1 x i1> body {
+    %6:3 = graphalg.for begin=0 iters=#dim init(%4, %arg1, %arg1) : !graphalg.mat<#dim x 1 x i64>, !graphalg.mat<#dim x 1 x i1>, !graphalg.mat<#dim x 1 x i1> -> !graphalg.mat<#dim x 1 x i64>, !graphalg.mat<#dim x 1 x i1>, !graphalg.mat<#dim x 1 x i1> body {
     ^bb0(%arg2: !graphalg.mat<1 x 1 x i64>, %arg3: !graphalg.mat<#dim x 1 x i64>, %arg4: !graphalg.mat<#dim x 1 x i1>, %arg5: !graphalg.mat<#dim x 1 x i1>):
       %7 = graphalg.cast_dim #dim
       %8 = graphalg.const_mat false -> <#dim x 1 x i1>

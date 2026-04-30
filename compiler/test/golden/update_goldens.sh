@@ -7,6 +7,6 @@ GOLDEN_DIR=$(dirname $0)
 
 for f in $GOLDEN_DIR/*.gr; do
     out="${f%.gr}.mlir.ref"
-    "$BUILD_DIR/graphalg-translate" --import-graphalg < "$f" > "$out"
+    "$BUILD_DIR/tools/graphalg-translate" --import-graphalg < "$f" > "$out"
     echo "Wrote $out"
 done

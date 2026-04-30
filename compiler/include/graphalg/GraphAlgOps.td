@@ -403,6 +403,70 @@ def BroadcastOp : Core_Op<"broadcast", [
     let hasVerifier = 1;
 }
 
+def ForOp : Core_Op<"for", [
+        Pure,
+        AttrSizedOperandSegments,
+        DeclareOpInterfaceMethods<RegionBranchOpInterface, ["getEntrySuccessorOperands"]>]> {
+    let summary = "For loop with dynamic bounds";
+
+    let description = [{
+        A loop iterating over one of three ranges:
+        1) `dynBegin` (inclusive) to `dynEnd` (exclusive)
+        2) `begin` to `begin` + `iters`, where `iters` is an integer
+        3) `begin` to `begin` + `iters`, where `iters` is a matrix dimension
+
+        Only instances with range types 2 or 3 are considered part of GraphAlg
+        Core. Constant propagation is expected to transform range type 1 into
+        either 2 or 3.
+
+        The `body` region is executed once for every value in the integer range
+        (that value is passed as the first block argument).
+        At the first iteration of the loop, the other block arguments take the
+        values of `initArgs`. For subsequent iterations, results from the
+        previous iteration (produced by `YieldOp`) are taken instead.
+        The `until` region, if present, is executed after `body`, and produces a
+        single boolean scalar indicating whether the loop should terminate
+        early.
+
+        In more imperative terms, `initArgs` can be seen as the set of variables
+        that are updated in the loop body.
+        Within the loop body, those variables can be accessed through the block
+        arguments, and their updated values are set through `YieldOp`.
+        Finally, `results` represents the new state of those variables after the
+        loop terminates.
+    }];
+
+    let arguments = (ins
+        Variadic<Matrix>:$initArgs,
+        Optional<I64Scalar>:$dynBegin,
+        Optional<I64Scalar>:$dynEnd,
+        OptionalAttr<I64Attr>:$begin,
+        OptionalAttr<DimAttr>:$iters);
+
+    let results = (outs Variadic<Matrix>:$results);
+
+    let regions = (region SizedRegion<1>:$body, MaxSizedRegion<1>:$until);
+
+    let assemblyFormat = [{
+        (`dyn_begin` `` `=` `` $dynBegin^)?
+        (`dyn_end` `` `=` `` $dynEnd^)?
+        (`begin` `` `=` `` $begin^)?
+        (`iters` `` `=` `` $iters^)?
+        `init` `(` $initArgs `)` `:` type($initArgs) `->` type($results) attr-dict
+        `body` $body
+        `until` $until
+    }];
+
+    let hasVerifier = 1;
+    let hasRegionVerifier = 1;
+    let hasFolder = 1;
+
+    let extraClassDeclaration = [{
+        /** Whether at least one of `dyn_begin` and `dyn_end` is set. */
+        bool isDynamicRange();
+    }];
+}
+
 // Not core according to spec, but we don't want to unroll in the general case.
 def ForConstOp : Core_Op<"for_const", [
         Pure,
@@ -483,7 +547,7 @@ def ForDimOp : Core_Op<"for_dim", [
 def YieldOp : Core_Op<"yield", [
         Pure,
         Terminator,
-        ParentOneOf<["ForConstOp", "ForDimOp"]>,
+        ParentOneOf<["ForOp", "ForConstOp", "ForDimOp"]>,
         DeclareOpInterfaceMethods<RegionBranchTerminatorOpInterface>]> {
     let summary = "Yield from a loop body";
 
