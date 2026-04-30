@@ -831,7 +831,7 @@ mlir::ParseResult Parser::parseStmtReturn() {
 
   // Check if return is inside a loop
   auto *parentOp = _builder.getInsertionBlock()->getParentOp();
-  if (llvm::isa<ForOp, ForConstOp, ForDimOp>(parentOp)) {
+  if (llvm::isa<ForOp>(parentOp)) {
     return mlir::emitError(loc)
            << "return statement inside a loop is not allowed";
   }

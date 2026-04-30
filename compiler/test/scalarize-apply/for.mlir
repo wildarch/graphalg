@@ -2,21 +2,23 @@
 
 #dim = #graphalg.dim<distinct[0]<>>
 
-func.func @ForDim(%arg0: !graphalg.mat<#dim x #dim x i64>) -> !graphalg.mat<#dim x #dim x i64> {
+func.func @For(%arg0: !graphalg.mat<#dim x #dim x i64>) -> !graphalg.mat<#dim x #dim x i64> {
   // CHECK: %[[#APPLY:]] = graphalg.apply %arg0
   %0 = graphalg.apply_inline %arg0 : !graphalg.mat<#dim x #dim x i64> -> <#dim x #dim x i64> {
   ^bb0(%arg1: !graphalg.mat<1 x 1 x i64>):
     // CHECK: %[[#ONE:]] = graphalg.const 1
-    // CHECK: %[[#ADD:]] = graphalg.add %arg1, %[[#ONE]]
+    // CHECK: %[[#ADD0:]] = graphalg.add %arg1, %[[#ONE]]
+    // CHECK: %[[#ADD1:]] = graphalg.add %[[#ADD0]], %[[#ONE]]
+    // CHECK: %[[#ADD2:]] = graphalg.add %[[#ADD1]], %[[#ONE]]
     %1 = graphalg.literal 1 : i64
-    %2 = graphalg.for_dim range(1) init(%arg1) : !graphalg.mat<1 x 1 x i64> -> !graphalg.mat<1 x 1 x i64> body {
+    %2 = graphalg.for begin=2 iters=<3> init(%arg1) : !graphalg.mat<1 x 1 x i64> -> !graphalg.mat<1 x 1 x i64> body {
     ^bb0(%arg2: !graphalg.mat<1 x 1 x i64>, %arg3: !graphalg.mat<1 x 1 x i64>):
       %3 = graphalg.ewise %arg3 ADD %1 : <1 x 1 x i64>
       graphalg.yield %3 : !graphalg.mat<1 x 1 x i64>
     } until {
     }
 
-    // CHECK: graphalg.apply.return %[[#ADD]]
+    // CHECK: graphalg.apply.return %[[#ADD2]]
     graphalg.apply_inline.return %2 : <1 x 1 x i64>
   }
 

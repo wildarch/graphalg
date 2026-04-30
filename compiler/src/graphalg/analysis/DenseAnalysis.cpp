@@ -52,7 +52,7 @@ DenseAnalysis::visitOperation(mlir::Operation *op,
 void DenseAnalysis::visitNonControlFlowArguments(
     mlir::Operation *op, const mlir::RegionSuccessor &successor,
     llvm::ArrayRef<DensityLattice *> argLattices, unsigned firstIndex) {
-  if (llvm::isa<ForConstOp, ForDimOp>(op)) {
+  if (llvm::isa<ForOp>(op)) {
     // Iteration counter is dense.
     assert(firstIndex == 1);
     auto arg = argLattices[0];

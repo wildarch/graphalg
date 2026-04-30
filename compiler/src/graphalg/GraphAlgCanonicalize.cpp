@@ -272,38 +272,9 @@ ForOp::fold(FoldAdaptor adaptor,
     return mlir::success();
   }
 
+  // TODO: Fold if iters=0
+
   return mlir::failure();
-}
-
-static mlir::LogicalResult forDimConst(ForDimOp op,
-                                       mlir::PatternRewriter &rewriter) {
-  if (!op.getDim().isConcrete()) {
-    return mlir::failure();
-  }
-
-  // The number of iterations is known, so we can replace with a ForConstOp.
-  auto end = op.getDim().getConcreteDim();
-
-  // Range from 0 to dim.
-  auto intType =
-      MatrixType::scalarOf(SemiringTypes::forInt(rewriter.getContext()));
-  auto beginOp = rewriter.create<ConstantMatrixOp>(
-      op->getLoc(), intType, rewriter.getI64IntegerAttr(0));
-  auto endOp = rewriter.create<ConstantMatrixOp>(
-      op->getLoc(), intType, rewriter.getI64IntegerAttr(end));
-
-  auto forConstOp = rewriter.create<ForConstOp>(
-      op->getLoc(), op->getResultTypes(), op.getInitArgs(), beginOp, endOp);
-  rewriter.inlineRegionBefore(op.getBody(), forConstOp.getBody(),
-                              forConstOp.getBody().begin());
-  rewriter.replaceOp(op, forConstOp);
-
-  return mlir::success();
-}
-
-void ForDimOp::getCanonicalizationPatterns(mlir::RewritePatternSet &patterns,
-                                           mlir::MLIRContext *context) {
-  patterns.add(forDimConst);
 }
 
 mlir::OpFoldResult PickAnyOp::fold(FoldAdaptor adaptor) {

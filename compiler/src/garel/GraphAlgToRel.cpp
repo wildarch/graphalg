@@ -320,6 +320,11 @@ static mlir::Value createDimRead(mlir::Location loc, graphalg::DimAttr dim,
  */
 static mlir::Value createDimInt(mlir::Location loc, graphalg::DimAttr dim,
                                 mlir::OpBuilder &builder) {
+  if (dim.isConcrete()) {
+    return builder.create<ConstantOp>(
+        loc, builder.getI64IntegerAttr(dim.getConcreteDim()));
+  }
+
   auto input = createDimRead(loc, dim, builder);
   llvm::ArrayRef<ColumnIdx> groupBy;
   std::array<AggregatorAttr, 1> aggregators{
@@ -889,44 +894,20 @@ mlir::LogicalResult OpConversion<graphalg::DiagOp>::matchAndRewrite(
   return mlir::success();
 }
 
-// Sharing logic between ForConstOp and ForDimOp
-static mlir::LogicalResult
-convertFor(mlir::Operation *op, mlir::ValueRange adaptorInitArgs,
-           mlir::Value rangeBegin, mlir::Value rangeEnd, mlir::Region &body,
-           mlir::Region &until, const mlir::TypeConverter *typeConverter,
-           mlir::ConversionPatternRewriter &rewriter) {
-  llvm::SmallVector<mlir::Value> initArgs{rangeBegin};
-  initArgs.append(adaptorInitArgs.begin(), adaptorInitArgs.end());
+template <>
+mlir::LogicalResult OpConversion<graphalg::ForOp>::matchAndRewrite(
+    graphalg::ForOp op, OpAdaptor adaptor,
+    mlir::ConversionPatternRewriter &rewriter) const {
+  auto begin =
+      rewriter.create<ConstantOp>(op.getLoc(), rewriter.getI64IntegerAttr(0));
+  auto iters = createDimInt(op.getLoc(), *op.getIters(), rewriter);
+  llvm::SmallVector<mlir::Value> initArgs{begin};
+  initArgs.append(adaptor.getInitArgs().begin(), adaptor.getInitArgs().end());
 
-  auto blockSignature = typeConverter->convertBlockSignature(&body.front());
+  auto blockSignature =
+      typeConverter->convertBlockSignature(&op.getBody().front());
   if (!blockSignature) {
     return op->emitOpError("Failed to convert iter args");
-  }
-
-  mlir::Value iters;
-  if (isConstantZeroI64(rangeBegin)) {
-    iters = rangeEnd;
-  } else {
-    // Subtract rangeBegin from rangeEnd
-    auto joinOp = rewriter.create<JoinOp>(
-        op->getLoc(), mlir::ValueRange{rangeBegin, rangeEnd},
-        rewriter.getAttr<JoinPredicatesAttr>(
-            llvm::ArrayRef<JoinPredicateAttr>{}));
-    auto projOp = rewriter.create<ProjectOp>(
-        op->getLoc(), getI64RelationType(op->getContext()), joinOp);
-
-    auto &block = projOp.createProjectionsBlock();
-    mlir::OpBuilder::InsertionGuard guard{rewriter};
-    rewriter.setInsertionPointToStart(&block);
-
-    auto begin =
-        rewriter.create<ExtractOp>(op->getLoc(), 0, block.getArgument(0));
-    auto end =
-        rewriter.create<ExtractOp>(op->getLoc(), 1, block.getArgument(0));
-    auto res = rewriter.create<mlir::arith::SubIOp>(op->getLoc(), end, begin);
-    rewriter.create<ProjectReturnOp>(op->getLoc(), mlir::ValueRange{res});
-
-    iters = projOp;
   }
 
   // The relational version of this op can only have a single output value.
@@ -936,24 +917,25 @@ convertFor(mlir::Operation *op, mlir::ValueRange adaptorInitArgs,
     auto result = op->getResult(i);
     if (result.use_empty()) {
       // Not used. Take init arg as a dummy value.
-      resultValues.push_back(adaptorInitArgs[i]);
+      resultValues.push_back(adaptor.getInitArgs()[i]);
       continue;
     }
 
     // We are adding the iteration count variable as a first argument, so offset
     // the result index accordingly.
     std::int64_t resultIdx = i + 1;
-    auto resultType = adaptorInitArgs[i].getType();
+    auto resultType = adaptor.getInitArgs()[i].getType();
     auto forOp = rewriter.create<ForOp>(op->getLoc(), resultType, initArgs,
                                         iters, resultIdx);
     // body block
-    rewriter.cloneRegionBefore(body, forOp.getBody(), forOp.getBody().begin());
+    rewriter.cloneRegionBefore(op.getBody(), forOp.getBody(),
+                               forOp.getBody().begin());
     rewriter.applySignatureConversion(&forOp.getBody().front(),
                                       *blockSignature);
 
     // until block
-    if (!until.empty()) {
-      rewriter.cloneRegionBefore(until, forOp.getUntil(),
+    if (!op.getUntil().empty()) {
+      rewriter.cloneRegionBefore(op.getUntil(), forOp.getUntil(),
                                  forOp.getUntil().begin());
       rewriter.applySignatureConversion(&forOp.getUntil().front(),
                                         *blockSignature);
@@ -964,28 +946,6 @@ convertFor(mlir::Operation *op, mlir::ValueRange adaptorInitArgs,
 
   rewriter.replaceOp(op, resultValues);
   return mlir::success();
-}
-
-template <>
-mlir::LogicalResult OpConversion<graphalg::ForConstOp>::matchAndRewrite(
-    graphalg::ForConstOp op, OpAdaptor adaptor,
-    mlir::ConversionPatternRewriter &rewriter) const {
-  return convertFor(op, adaptor.getInitArgs(), adaptor.getRangeBegin(),
-                    adaptor.getRangeEnd(), op.getBody(), op.getUntil(),
-                    typeConverter, rewriter);
-}
-
-template <>
-mlir::LogicalResult OpConversion<graphalg::ForDimOp>::matchAndRewrite(
-    graphalg::ForDimOp op, OpAdaptor adaptor,
-    mlir::ConversionPatternRewriter &rewriter) const {
-  auto ctx = op.getContext();
-  auto rangeBegin =
-      rewriter.create<ConstantOp>(op.getLoc(), rewriter.getI64IntegerAttr(0));
-  auto rangeEnd = createDimInt(op.getLoc(), op.getDim(), rewriter);
-
-  return convertFor(op, adaptor.getInitArgs(), rangeBegin, rangeEnd,
-                    op.getBody(), op.getUntil(), typeConverter, rewriter);
 }
 
 template <>
@@ -1481,11 +1441,10 @@ void GraphAlgToRel::runOnOperation() {
       OpConversion<graphalg::TransposeOp>, OpConversion<graphalg::BroadcastOp>,
       OpConversion<graphalg::ConstantMatrixOp>,
       OpConversion<graphalg::DeferredReduceOp>, OpConversion<graphalg::DiagOp>,
-      OpConversion<graphalg::ForConstOp>, OpConversion<graphalg::ForDimOp>,
-      OpConversion<graphalg::YieldOp>, OpConversion<graphalg::MatMulJoinOp>,
-      OpConversion<graphalg::PickAnyOp>, OpConversion<graphalg::TrilOp>,
-      OpConversion<graphalg::UnionOp>, OpConversion<graphalg::CastDimOp>>(
-      matrixTypeConverter, &getContext());
+      OpConversion<graphalg::ForOp>, OpConversion<graphalg::YieldOp>,
+      OpConversion<graphalg::MatMulJoinOp>, OpConversion<graphalg::PickAnyOp>,
+      OpConversion<graphalg::TrilOp>, OpConversion<graphalg::UnionOp>,
+      OpConversion<graphalg::CastDimOp>>(matrixTypeConverter, &getContext());
   patterns.add<ApplyOpConversion>(semiringTypeConverter, matrixTypeConverter,
                                   &getContext());
 

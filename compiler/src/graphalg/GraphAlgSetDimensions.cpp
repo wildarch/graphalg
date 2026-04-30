@@ -364,7 +364,6 @@ void GraphAlgSetDimensions::runOnOperation() {
       doesNotUseAbstractDimensions);
   target.addDynamicallyLegalOp<mlir::func::FuncOp>(doesNotHaveAbstractInputs);
   target.addIllegalOp<CastDimOp>();
-  target.addIllegalOp<ForDimOp>();
 
   mlir::RewritePatternSet patterns(&getContext());
 

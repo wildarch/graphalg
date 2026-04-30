@@ -149,17 +149,17 @@ mlir::LogicalResult OpConversion<ConstantMatrixOp>::matchAndRewrite(
   return mlir::success();
 }
 
-// Unrolls a single iteration of the loop body.
+// Unroll one iteration of the loop.
 static mlir::LogicalResult
-unrollLoopBody(mlir::Operation *loopOp, mlir::Block &body,
-               const llvm::APInt &iter, mlir::ValueRange iterArgs,
+unrollLoopBody(ForOp forOp, std::uint64_t iter, mlir::ValueRange iterArgs,
                llvm::SmallVectorImpl<mlir::Value> &results,
                mlir::OpBuilder &builder) {
   mlir::IRMapping mapping;
 
   // Map iter var to a constant.
-  auto zeroOp = builder.create<ConstantOp>(
-      loopOp->getLoc(), mlir::IntegerAttr::get(builder.getI64Type(), iter));
+  auto zeroOp = builder.create<ConstantOp>(forOp.getLoc(),
+                                           builder.getI64IntegerAttr(iter));
+  auto &body = forOp.getBody().front();
   mapping.map(body.getArgument(0), zeroOp);
 
   // Map the remainder of the body arguments to the init args.
@@ -184,68 +184,23 @@ unrollLoopBody(mlir::Operation *loopOp, mlir::Block &body,
     mapping.map(&oldOp, newOp);
   }
 
-  return loopOp->emitOpError("does not have a terminator ")
+  return forOp.emitOpError("does not have a terminator ")
          << YieldOp::getOperationName() << ", so cannot be inlined";
 }
 
-static mlir::LogicalResult unrollForDimOne(ForDimOp op,
-                                           mlir::PatternRewriter &rewriter) {
-  // Well-formed GraphAlg programs do not use dimension symbols inside
-  // functions that do not have this dimension symbol as an argument (but this
-  // is not currently enforced by verifiers). Inside of an apply all
-  // dimensions are one, so this should cover all well-formed programs.
-  if (!op.getDim().isOne()) {
-    // We need a constant size to be able to do loop unrolling.
-    return op->emitOpError("is contained in an ")
-           << ApplyInlineOp::getOperationName()
-           << ", but contains a non-1 dimension symbol reference";
-  }
-
-  // Inline the body
-  llvm::APInt iter(64, std::int64_t(0));
-  llvm::SmallVector<mlir::Value> resultValues;
-  if (mlir::failed(unrollLoopBody(op, op.getBody().front(), iter,
-                                  op.getInitArgs(), resultValues, rewriter))) {
-    return mlir::failure();
-  }
-
-  rewriter.replaceOp(op, resultValues);
-  return mlir::success();
-}
-
-static std::optional<llvm::APInt> tryGetConstantRangeValue(mlir::Value v) {
-  auto litOp = v.getDefiningOp<LiteralOp>();
-  if (!litOp) {
-    return std::nullopt;
-  }
-
-  if (auto intAttr = llvm::dyn_cast<mlir::IntegerAttr>(litOp.getValue())) {
-    return intAttr.getValue();
-  }
-
-  return std::nullopt;
-}
-
-static mlir::LogicalResult unrollForConst(ForConstOp op,
-                                          mlir::PatternRewriter &rewriter) {
-  auto begin = tryGetConstantRangeValue(op.getRangeBegin());
-  auto end = tryGetConstantRangeValue(op.getRangeEnd());
-  if (!begin || !end) {
-    // TODO: Handle loops where the bound is not yet constant.
-    // Ranges should be constant in GraphAlg, but that constant may be
-    // provided by the caller of a function, so we could encounter
-    // \c mlir::BlockArgument here in a valid program.
-    return op->emitOpError("does not have a constant range")
+static mlir::LogicalResult unrollFor(ForOp op,
+                                     mlir::PatternRewriter &rewriter) {
+  if (op.isDynamicRange() || op.getIters()->isAbstract()) {
+    return op.emitOpError("does not have a constant range")
            << ", so cannot be unrolled";
   }
 
   llvm::SmallVector<mlir::Value> iterArgs(op.getInitArgs());
 
-  auto one = llvm::APInt(begin->getBitWidth(), 1);
-  for (auto i = *begin; i.slt(*end); i = i + one) {
+  auto end = *op.getBegin() + op.getIters()->getConcreteDim();
+  for (auto i = *op.getBegin(); i < end; i++) {
     llvm::SmallVector<mlir::Value> results;
-    if (mlir::failed(unrollLoopBody(op, op.getBody().front(), i, iterArgs,
-                                    results, rewriter))) {
+    if (mlir::failed(unrollLoopBody(op, i, iterArgs, results, rewriter))) {
       return mlir::failure();
     }
 
@@ -457,8 +412,7 @@ void GraphAlgScalarizeApply::runOnOperation() {
                   OpConversion<LiteralOp>, OpConversion<ApplyOp>>(
       typeConverter, &getContext());
   // Simplifications into ops that can be converted using rules above.
-  conversions.add(unrollForDimOne);
-  conversions.add(unrollForConst);
+  conversions.add(unrollFor);
   conversions.add(convertMask);
   conversions.add(convertMatMul);
   conversions.add(convertNeg);

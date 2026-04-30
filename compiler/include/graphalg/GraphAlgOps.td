@@ -467,87 +467,10 @@ def ForOp : Core_Op<"for", [
     }];
 }
 
-// Not core according to spec, but we don't want to unroll in the general case.
-def ForConstOp : Core_Op<"for_const", [
-        Pure,
-        AllTypesMatch<["rangeBegin", "rangeEnd"]>,
-        DeclareOpInterfaceMethods<RegionBranchOpInterface, ["getEntrySuccessorOperands"]>]> {
-    let summary = "For loop with constant bounds";
-
-    let description = [{
-        A loop iterating over the integer range starting at `rangeBegin`
-        (inclusive) and ending at `rangeEnd` (exclusive).
-        The `body` region is executed once for every value in the integer range
-        (that value is passed as the first block argument).
-        At the first iteration of the loop, the other block arguments take the
-        values of `initArgs`. For subsequent iterations, results from the
-        previous iteration (produced by `YieldOp`) are taken instead.
-        The `until` region, if present, is executed after `body`, and produces a
-        single boolean scalar indicating whether the loop should terminate
-        early.
-
-        In more imperative terms, `initArgs` can be seen as the set of variables
-        that are updated in the loop body.
-        Within the loop body, those variables can be accessed through the block
-        arguments, and their updated values are set through `YieldOp`.
-        Finally, `results` represents the new state of those variables after the
-        loop terminates.
-    }];
-
-    let arguments = (ins
-        Variadic<Matrix>:$initArgs,
-        I64Scalar:$rangeBegin,
-        I64Scalar:$rangeEnd);
-
-    let results = (outs Variadic<Matrix>:$results);
-
-    let regions = (region SizedRegion<1>:$body, MaxSizedRegion<1>:$until);
-
-    let assemblyFormat = [{
-        `range` `(`
-            $rangeBegin `,`
-            $rangeEnd
-        `)` `:` type($rangeEnd)
-        `init` `(` $initArgs `)` `:` type($initArgs) `->` type($results) attr-dict
-        `body` $body
-        `until` $until
-    }];
-
-    let hasRegionVerifier = 1;
-}
-
-def ForDimOp : Core_Op<"for_dim", [
-        Pure,
-        DeclareOpInterfaceMethods<RegionBranchOpInterface, ["getEntrySuccessorOperands"]>]> {
-    let summary = "For loop over a matrix dimension";
-
-    let description = [{
-        A loop iterating over the half-open range [0..`dim`).
-
-        This op is otherwise equivalent to `ForConstOp`.
-    }];
-
-    let arguments = (ins Variadic<Matrix>:$initArgs, DimAttr:$dim);
-
-    let results = (outs Variadic<Matrix>:$results);
-
-    let regions = (region SizedRegion<1>:$body, MaxSizedRegion<1>:$until);
-
-    let assemblyFormat = [{
-        `range` `(` custom<BareAttr>($dim) `)`
-        `init` `(` $initArgs `)` `:` type($initArgs) `->` type($results) attr-dict
-        `body` $body
-        `until` $until
-    }];
-
-    let hasRegionVerifier = 1;
-    let hasCanonicalizer = 1;
-}
-
 def YieldOp : Core_Op<"yield", [
         Pure,
         Terminator,
-        ParentOneOf<["ForOp", "ForConstOp", "ForDimOp"]>,
+        HasParent<"ForOp">,
         DeclareOpInterfaceMethods<RegionBranchTerminatorOpInterface>]> {
     let summary = "Yield from a loop body";
 
