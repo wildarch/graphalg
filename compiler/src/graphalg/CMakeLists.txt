@@ -37,6 +37,7 @@ add_library(GraphAlgPasses
     GraphAlgLoopAggregate.cpp
     GraphAlgPrepareInlinePass.cpp
     GraphAlgScalarizeApply.cpp
+    GraphAlgSetConstArg.cpp
     GraphAlgSetDimensions.cpp
     GraphAlgSplitAggregate.cpp
     GraphAlgToCore.cpp

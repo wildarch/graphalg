@@ -1,7 +1,7 @@
 // RUN: split-file %s %t
 // RUN: graphalg-translate --import-graphalg %t/input.gr > %t/parsed.mlir
-// RUN: graphalg-opt --graphalg-to-core-pipeline --graphalg-set-dimensions='func=PR args=50x50' %t/parsed.mlir > %t/exec.mlir
-// RUN: graphalg-exec %t/exec.mlir PR %t/graph.m | diff - %t/output.m
+// RUN: graphalg-opt --graphalg-set-const-arg='func=PR argNum=1 value=10' --graphalg-to-core-pipeline --graphalg-set-dimensions='func=PR args=50x50,1x1' %t/parsed.mlir > %t/exec.mlir
+// RUN: graphalg-exec %t/exec.mlir PR %t/graph.m %t/iters.m | diff - %t/output.m
 
 //--- graph.m
 0 18
@@ -251,14 +251,16 @@
 49 27
 49 46
 
+//--- iters.m
+0 0 10
+
 //--- input.gr
 func withDamping(degree:int, damping:real) -> real {
     return cast<real>(degree) / damping;
 }
 
-func PR(graph: Matrix<s1, s1, bool>) -> Vector<s1, real> {
+func PR(graph: Matrix<s, s, bool>, iterations:int) -> Vector<s, real> {
     damping = real(0.85);
-    iterations = int(10);
     n = graph.nrows;
     teleport = (real(1.0) - damping) / cast<real>(n);
     rdiff = real(1.0);
