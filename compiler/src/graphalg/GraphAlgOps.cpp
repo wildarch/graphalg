@@ -398,66 +398,6 @@ mlir::LogicalResult ConstantMatrixOp::verify() {
   return mlir::success();
 }
 
-mlir::LogicalResult verifyLoop(mlir::Operation *op, mlir::ValueRange initArgs,
-                               mlir::Region &bodyRegion,
-                               mlir::Region &untilRegion) {
-  llvm::SmallVector<mlir::Type> initArgTypes;
-  for (auto arg : initArgs) {
-    initArgTypes.emplace_back(arg.getType());
-  }
-
-  if (op->getResultTypes() != initArgTypes) {
-    return op->emitOpError("result types ")
-           << op->getResultTypes() << " do not match init args "
-           << initArgTypes;
-  }
-
-  // Block arguments must start with an iteration counter
-  auto *ctx = op->getContext();
-  auto iterType = MatrixType::scalarOf(SemiringTypes::forInt(ctx));
-  for (auto &region : op->getRegions()) {
-    if (region.empty()) {
-      continue;
-    }
-
-    mlir::TypeRange argTypes = region.getArgumentTypes();
-    if (argTypes.empty() || argTypes.front() != iterType) {
-      return op->emitOpError("region types ")
-             << argTypes << "do not include the iteration variable";
-    }
-  }
-
-  // Body must have YieldOp as terminator
-  auto &body = bodyRegion.front();
-  if (!body.mightHaveTerminator()) {
-    return op->emitOpError("body region does not have a terminator");
-  }
-  auto bodyYield = llvm::dyn_cast_if_present<YieldOp>(body.getTerminator());
-  if (!bodyYield) {
-    return op->emitOpError("body region is not terminated with a YieldOp");
-  }
-
-  // If there is an until block, it should return a boolean.
-  if (!untilRegion.empty()) {
-    auto &until = untilRegion.front();
-    if (!until.mightHaveTerminator()) {
-      return op->emitOpError("until region does not have a terminator");
-    }
-    auto untilYield = llvm::dyn_cast_if_present<YieldOp>(until.getTerminator());
-    if (!untilYield) {
-      return op->emitOpError("until region is not terminated with a YieldOp");
-    }
-
-    auto expectedType = MatrixType::scalarOf(SemiringTypes::forBool(ctx));
-    if (untilYield->getOperandTypes() != mlir::TypeRange{expectedType}) {
-      return op->emitOpError("until block does not return a bool scalar: ")
-             << untilYield->getOperandTypes();
-    }
-  }
-
-  return mlir::success();
-}
-
 void getLoopSuccessorRegions(
     mlir::Operation *op, mlir::Region &body, mlir::Region &until,
     mlir::RegionBranchPoint point,
@@ -505,12 +445,81 @@ mlir::LogicalResult BroadcastOp::verify() {
   return mlir::success();
 }
 
-// === ForConstOp ===
-mlir::LogicalResult ForConstOp::verifyRegions() {
-  return verifyLoop(getOperation(), getInitArgs(), getBody(), getUntil());
+// === ForOp ===
+mlir::LogicalResult ForOp::verify() {
+  if (getDynBegin() && getBegin()) {
+    return emitOpError("begin and dyn_begin are mutually exclusive");
+  } else if (!getDynBegin() && !getBegin()) {
+    return emitOpError("no loop start: must have 'begin' or 'dyn_begin'");
+  }
+
+  if (getDynEnd() && getIters()) {
+    return emitOpError("begin and iters are mutually exclusive");
+  } else if (!getDynEnd() && !getIters()) {
+    return emitOpError("no loop end: must have 'iters' or 'dyn_end'");
+  }
+
+  return mlir::success();
 }
 
-void ForConstOp::getSuccessorRegions(
+mlir::LogicalResult ForOp::verifyRegions() {
+  llvm::SmallVector<mlir::Type> initArgTypes;
+  for (auto arg : getInitArgs()) {
+    initArgTypes.emplace_back(arg.getType());
+  }
+
+  if (getResultTypes() != initArgTypes) {
+    return emitOpError("result types ")
+           << getResultTypes() << " do not match init args " << initArgTypes;
+  }
+
+  // Block arguments must start with an iteration counter
+  auto *ctx = getContext();
+  auto iterType = MatrixType::scalarOf(SemiringTypes::forInt(ctx));
+  for (auto &region : getOperation()->getRegions()) {
+    if (region.empty()) {
+      continue;
+    }
+
+    mlir::TypeRange argTypes = region.getArgumentTypes();
+    if (argTypes.empty() || argTypes.front() != iterType) {
+      return emitOpError("region types ")
+             << argTypes << "do not include the iteration variable";
+    }
+  }
+
+  // Body must have YieldOp as terminator
+  auto &body = getBody().front();
+  if (!body.mightHaveTerminator()) {
+    return emitOpError("body region does not have a terminator");
+  }
+  auto bodyYield = llvm::dyn_cast_if_present<YieldOp>(body.getTerminator());
+  if (!bodyYield) {
+    return emitOpError("body region is not terminated with a YieldOp");
+  }
+
+  // If there is an until block, it should return a boolean.
+  if (!getUntil().empty()) {
+    auto &until = getUntil().front();
+    if (!until.mightHaveTerminator()) {
+      return emitOpError("until region does not have a terminator");
+    }
+    auto untilYield = llvm::dyn_cast_if_present<YieldOp>(until.getTerminator());
+    if (!untilYield) {
+      return emitOpError("until region is not terminated with a YieldOp");
+    }
+
+    auto expectedType = MatrixType::scalarOf(SemiringTypes::forBool(ctx));
+    if (untilYield->getOperandTypes() != mlir::TypeRange{expectedType}) {
+      return emitOpError("until block does not return a bool scalar: ")
+             << untilYield->getOperandTypes();
+    }
+  }
+
+  return mlir::success();
+}
+
+void ForOp::getSuccessorRegions(
     mlir::RegionBranchPoint point,
     llvm::SmallVectorImpl<mlir::RegionSuccessor> &regions) {
   getLoopSuccessorRegions(getOperation(), getBody(), getUntil(), point,
@@ -518,26 +527,11 @@ void ForConstOp::getSuccessorRegions(
 }
 
 mlir::OperandRange
-ForConstOp::getEntrySuccessorOperands(mlir::RegionBranchPoint point) {
+ForOp::getEntrySuccessorOperands(mlir::RegionBranchPoint point) {
   return getInitArgs();
 }
 
-// === ForDimOp ===
-mlir::LogicalResult ForDimOp::verifyRegions() {
-  return verifyLoop(getOperation(), getInitArgs(), getBody(), getUntil());
-}
-
-void ForDimOp::getSuccessorRegions(
-    mlir::RegionBranchPoint point,
-    llvm::SmallVectorImpl<mlir::RegionSuccessor> &regions) {
-  getLoopSuccessorRegions(getOperation(), getBody(), getUntil(), point,
-                          regions);
-}
-
-mlir::OperandRange
-ForDimOp::getEntrySuccessorOperands(mlir::RegionBranchPoint point) {
-  return getInitArgs();
-}
+bool ForOp::isDynamicRange() { return getDynBegin() || getDynEnd(); }
 
 // === YieldOp ===
 mlir::MutableOperandRange

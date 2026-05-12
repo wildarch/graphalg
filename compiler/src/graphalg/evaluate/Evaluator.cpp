@@ -35,7 +35,7 @@ private:
   mlir::LogicalResult evaluate(ReduceOp op);
   mlir::LogicalResult evaluate(BroadcastOp op);
   mlir::LogicalResult evaluate(ConstantMatrixOp op);
-  mlir::LogicalResult evaluate(ForConstOp op);
+  mlir::LogicalResult evaluate(ForOp op);
   mlir::LogicalResult evaluate(ApplyOp op);
   mlir::LogicalResult evaluate(PickAnyOp op);
   mlir::LogicalResult evaluate(TrilOp op);
@@ -187,12 +187,19 @@ mlir::LogicalResult Evaluator::evaluate(ConstantMatrixOp op) {
   return mlir::success();
 }
 
-mlir::LogicalResult Evaluator::evaluate(ForConstOp op) {
-  MatrixAttrReader rangeBeginMat(_values[op.getRangeBegin()]);
-  MatrixAttrReader rangeEndMat(_values[op.getRangeEnd()]);
-  auto rangeBegin =
-      llvm::cast<mlir::IntegerAttr>(rangeBeginMat.at(0, 0)).getInt();
-  auto rangeEnd = llvm::cast<mlir::IntegerAttr>(rangeEndMat.at(0, 0)).getInt();
+mlir::LogicalResult Evaluator::evaluate(ForOp op) {
+  auto begin = op.getBegin();
+  if (!begin) {
+    return op.emitOpError("loop begin is not constant");
+  }
+
+  auto iters = op.getIters();
+  if (!iters || iters->isAbstract()) {
+    return op.emitOpError("number of loop iterations is not constant");
+  }
+
+  auto rangeBegin = *begin;
+  auto rangeEnd = rangeBegin + iters->getConcreteDim();
 
   auto &body = op.getBody().front();
   auto *ctx = op.getContext();
@@ -332,7 +339,7 @@ mlir::LogicalResult Evaluator::evaluate(mlir::Operation *op) {
   return llvm::TypeSwitch<mlir::Operation *, mlir::LogicalResult>(op)
 #define GA_CASE(Op) .Case<Op>([&](Op op) { return evaluate(op); })
       GA_CASE(TransposeOp) GA_CASE(DiagOp) GA_CASE(MatMulOp) GA_CASE(ReduceOp)
-          GA_CASE(BroadcastOp) GA_CASE(ConstantMatrixOp) GA_CASE(ForConstOp)
+          GA_CASE(BroadcastOp) GA_CASE(ConstantMatrixOp) GA_CASE(ForOp)
               GA_CASE(ApplyOp) GA_CASE(PickAnyOp) GA_CASE(TrilOp)
 #undef GA_CASE
                   .Default([](mlir::Operation *op) {

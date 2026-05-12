@@ -1,6 +1,7 @@
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/TypeSwitch.h>
 #include <mlir/IR/Builders.h>
+#include <mlir/IR/BuiltinTypes.h>
 #include <mlir/IR/DialectImplementation.h>
 #include <mlir/IR/OpImplementation.h>
 
@@ -16,6 +17,11 @@ bool isColumnType(mlir::Type t) {
   // Allow i1, i64, f64, index
   return t.isSignlessInteger(1) || t.isSignlessInteger(64) || t.isF64() ||
          t.isIndex();
+}
+
+RelationType getI64RelationType(mlir::MLIRContext *ctx) {
+  return RelationType::get(
+      ctx, mlir::ArrayRef<mlir::Type>{mlir::IntegerType::get(ctx, 64)});
 }
 
 // Need to define this here to avoid depending on IPRTypes in

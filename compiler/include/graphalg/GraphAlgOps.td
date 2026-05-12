@@ -403,16 +403,22 @@ def BroadcastOp : Core_Op<"broadcast", [
     let hasVerifier = 1;
 }
 
-// Not core according to spec, but we don't want to unroll in the general case.
-def ForConstOp : Core_Op<"for_const", [
+def ForOp : Core_Op<"for", [
         Pure,
-        AllTypesMatch<["rangeBegin", "rangeEnd"]>,
+        AttrSizedOperandSegments,
         DeclareOpInterfaceMethods<RegionBranchOpInterface, ["getEntrySuccessorOperands"]>]> {
-    let summary = "For loop with constant bounds";
+    let summary = "For loop with dynamic bounds";
 
     let description = [{
-        A loop iterating over the integer range starting at `rangeBegin`
-        (inclusive) and ending at `rangeEnd` (exclusive).
+        A loop iterating over one of three ranges:
+        1) `dynBegin` (inclusive) to `dynEnd` (exclusive)
+        2) `begin` to `begin` + `iters`, where `iters` is an integer
+        3) `begin` to `begin` + `iters`, where `iters` is a matrix dimension
+
+        Only instances with range types 2 or 3 are considered part of GraphAlg
+        Core. Constant propagation is expected to transform range type 1 into
+        either 2 or 3.
+
         The `body` region is executed once for every value in the integer range
         (that value is passed as the first block argument).
         At the first iteration of the loop, the other block arguments take the
@@ -432,58 +438,39 @@ def ForConstOp : Core_Op<"for_const", [
 
     let arguments = (ins
         Variadic<Matrix>:$initArgs,
-        I64Scalar:$rangeBegin,
-        I64Scalar:$rangeEnd);
+        Optional<I64Scalar>:$dynBegin,
+        Optional<I64Scalar>:$dynEnd,
+        OptionalAttr<I64Attr>:$begin,
+        OptionalAttr<DimAttr>:$iters);
 
     let results = (outs Variadic<Matrix>:$results);
 
     let regions = (region SizedRegion<1>:$body, MaxSizedRegion<1>:$until);
 
     let assemblyFormat = [{
-        `range` `(`
-            $rangeBegin `,`
-            $rangeEnd
-        `)` `:` type($rangeEnd)
+        (`dyn_begin` `` `=` `` $dynBegin^)?
+        (`dyn_end` `` `=` `` $dynEnd^)?
+        (`begin` `` `=` `` $begin^)?
+        (`iters` `` `=` `` $iters^)?
         `init` `(` $initArgs `)` `:` type($initArgs) `->` type($results) attr-dict
         `body` $body
         `until` $until
     }];
 
+    let hasVerifier = 1;
     let hasRegionVerifier = 1;
-}
+    let hasFolder = 1;
 
-def ForDimOp : Core_Op<"for_dim", [
-        Pure,
-        DeclareOpInterfaceMethods<RegionBranchOpInterface, ["getEntrySuccessorOperands"]>]> {
-    let summary = "For loop over a matrix dimension";
-
-    let description = [{
-        A loop iterating over the half-open range [0..`dim`).
-
-        This op is otherwise equivalent to `ForConstOp`.
+    let extraClassDeclaration = [{
+        /** Whether at least one of `dyn_begin` and `dyn_end` is set. */
+        bool isDynamicRange();
     }];
-
-    let arguments = (ins Variadic<Matrix>:$initArgs, DimAttr:$dim);
-
-    let results = (outs Variadic<Matrix>:$results);
-
-    let regions = (region SizedRegion<1>:$body, MaxSizedRegion<1>:$until);
-
-    let assemblyFormat = [{
-        `range` `(` custom<BareAttr>($dim) `)`
-        `init` `(` $initArgs `)` `:` type($initArgs) `->` type($results) attr-dict
-        `body` $body
-        `until` $until
-    }];
-
-    let hasRegionVerifier = 1;
-    let hasCanonicalizer = 1;
 }
 
 def YieldOp : Core_Op<"yield", [
         Pure,
         Terminator,
-        ParentOneOf<["ForConstOp", "ForDimOp"]>,
+        HasParent<"ForOp">,
         DeclareOpInterfaceMethods<RegionBranchTerminatorOpInterface>]> {
     let summary = "Yield from a loop body";
 

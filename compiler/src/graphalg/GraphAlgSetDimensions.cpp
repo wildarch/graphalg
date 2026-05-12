@@ -125,20 +125,6 @@ public:
                   mlir::ConversionPatternRewriter &rewriter) const override;
 };
 
-/** Template for rewrites (without type conversion). */
-template <typename T>
-class DimOpRewritePattern : public mlir::OpRewritePattern<T> {
-private:
-  const DimMapper &_mapper;
-
-  mlir::LogicalResult
-  matchAndRewrite(T op, mlir::PatternRewriter &rewriter) const override;
-
-public:
-  DimOpRewritePattern(const DimMapper &mapper, mlir::MLIRContext *ctx)
-      : mlir::OpRewritePattern<T>(ctx), _mapper(mapper) {}
-};
-
 } // namespace
 
 mlir::FailureOr<DimMapper>
@@ -309,31 +295,33 @@ mlir::LogicalResult DimConversionPattern::matchAndRewrite(
   return mlir::success();
 }
 
-template <>
-mlir::LogicalResult DimOpRewritePattern<CastDimOp>::matchAndRewrite(
-    CastDimOp op, mlir::PatternRewriter &rewriter) const {
-  auto dim = _mapper.convertAttr(op.getInput());
-  if (!dim) {
-    return mlir::failure();
+static mlir::LogicalResult updateDim(ForOp op, DimMapper &mapper) {
+  if (!op.getIters() || !op.getIters()->isAbstract()) {
+    // No update needed
+    return mlir::success();
   }
 
-  // The folder on CastDimOp should turn this into a constant.
-  auto newOp = rewriter.createOrFold<CastDimOp>(op->getLoc(), dim);
-  rewriter.replaceOp(op, newOp);
+  auto dim = mapper.convertAttr(*op.getIters());
+  if (!dim) {
+    return op.emitOpError("no mapping for ") << *op.getIters();
+  }
 
+  op.setItersAttr(dim);
   return mlir::success();
 }
 
-template <>
-mlir::LogicalResult DimOpRewritePattern<ForDimOp>::matchAndRewrite(
-    ForDimOp op, mlir::PatternRewriter &rewriter) const {
-  auto dim = _mapper.convertAttr(op.getDim());
-  if (!dim) {
-    return mlir::failure();
+static mlir::LogicalResult updateDim(CastDimOp op, DimMapper &mapper) {
+  if (!op.getInput().isAbstract()) {
+    // No update needed
+    return mlir::success();
   }
 
-  rewriter.modifyOpInPlace(op, [&]() { op.setDimAttr(dim); });
+  auto dim = mapper.convertAttr(op.getInput());
+  if (!dim) {
+    return op.emitOpError("no mapping for ") << op.getInput();
+  }
 
+  op.setInputAttr(dim);
   return mlir::success();
 }
 
@@ -356,6 +344,19 @@ void GraphAlgSetDimensions::runOnOperation() {
     return signalPassFailure();
   }
 
+  // Update direct references to dimensions.
+  bool failedDirectUpdate = false;
+  func->walk([&](ForOp op) {
+    if (mlir::failed(updateDim(op, *dimMapper))) {
+      failedDirectUpdate = true;
+    }
+  });
+  func->walk([&](CastDimOp op) {
+    if (mlir::failed(updateDim(op, *dimMapper))) {
+      failedDirectUpdate = true;
+    }
+  });
+
   mlir::ConversionTarget target(getContext());
   target.addDynamicallyLegalDialect<GraphAlgDialect>(
       doesNotUseAbstractDimensions);
@@ -363,7 +364,6 @@ void GraphAlgSetDimensions::runOnOperation() {
       doesNotUseAbstractDimensions);
   target.addDynamicallyLegalOp<mlir::func::FuncOp>(doesNotHaveAbstractInputs);
   target.addIllegalOp<CastDimOp>();
-  target.addIllegalOp<ForDimOp>();
 
   mlir::RewritePatternSet patterns(&getContext());
 
@@ -373,12 +373,6 @@ void GraphAlgSetDimensions::runOnOperation() {
 
   // Convert all result types and block argument types.
   patterns.add<DimConversionPattern>(typeConverter, &getContext());
-
-  // Convert ops that have a special dependency on DimAttr.
-  patterns.add<DimOpRewritePattern<CastDimOp>, DimOpRewritePattern<ForDimOp>>(
-      *dimMapper, &getContext());
-  // Use the canonicalization pattern to rewrite ForDimOp into ForConstOp.
-  ForDimOp::getCanonicalizationPatterns(patterns, &getContext());
 
   if (mlir::failed(
           mlir::applyPartialConversion(func, target, std::move(patterns)))) {

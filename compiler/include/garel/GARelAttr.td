@@ -38,6 +38,7 @@ def AggregateFunc : I64EnumAttr<
         I64EnumAttrCase<"MAX", 2>,
         I64EnumAttrCase<"LOR", 3>, /* Logical OR (over i1) */
         I64EnumAttrCase<"ARGMIN", 4>,
+        I64EnumAttrCase<"COUNT", 5>,
     ]
 > {
     let cppNamespace = "::garel";
@@ -49,7 +50,7 @@ def Aggregator : GARel_Attr<"Aggregator", "aggregator"> {
 
     let parameters = (ins
         "AggregateFunc":$func,
-        ArrayRefParameter<"ColumnIdx">:$inputs);
+        OptionalArrayRefParameter<"ColumnIdx">:$inputs);
 
     let assemblyFormat = [{
         `<` $func $inputs `>`

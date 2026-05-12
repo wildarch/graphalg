@@ -713,14 +713,18 @@ mlir::ParseResult Parser::parseStmtFor() {
   mlir::Region *untilRegion;
   mlir::ValueRange results;
   if (range.dim) {
-    auto forOp = _builder.create<ForDimOp>(loc, varTypes, initArgs, range.dim);
+    auto begin = _builder.getI64IntegerAttr(0);
+    auto forOp =
+        _builder.create<ForOp>(loc, varTypes, initArgs, /*dynBegin=*/nullptr,
+                               /*dynEnd=*/nullptr, begin, range.dim);
     bodyRegion = &forOp.getBody();
     untilRegion = &forOp.getUntil();
     results = forOp->getResults();
   } else {
     assert(range.begin && range.end);
-    auto forOp = _builder.create<ForConstOp>(loc, varTypes, initArgs,
-                                             range.begin, range.end);
+    auto forOp = _builder.create<ForOp>(
+        loc, varTypes, initArgs, /*dynBegin=*/range.begin, /*dynEnd=*/range.end,
+        /*begin=*/nullptr, /*end=*/nullptr);
     bodyRegion = &forOp.getBody();
     untilRegion = &forOp.getUntil();
     results = forOp->getResults();
@@ -827,7 +831,7 @@ mlir::ParseResult Parser::parseStmtReturn() {
 
   // Check if return is inside a loop
   auto *parentOp = _builder.getInsertionBlock()->getParentOp();
-  if (llvm::isa<ForConstOp, ForDimOp>(parentOp)) {
+  if (llvm::isa<ForOp>(parentOp)) {
     return mlir::emitError(loc)
            << "return statement inside a loop is not allowed";
   }

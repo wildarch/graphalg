@@ -24,23 +24,32 @@ mlir::Type AggregatorAttr::getResultType(mlir::Type inputRel) {
   case AggregateFunc::ARGMIN:
     // NOTE: argmin(arg, val) also uses first input column as output type.
     return llvm::cast<RelationType>(inputRel).getColumns()[getInputs()[0]];
+  case AggregateFunc::COUNT:
+    return mlir::IntegerType::get(inputRel.getContext(), 64);
+  }
+}
+
+static std::size_t expectedNumInputs(AggregateFunc f) {
+  switch (f) {
+  case AggregateFunc::SUM:
+  case AggregateFunc::MIN:
+  case AggregateFunc::MAX:
+  case AggregateFunc::LOR:
+    return 1;
+  case AggregateFunc::ARGMIN:
+    return 2;
+  case AggregateFunc::COUNT:
+    return 0;
   }
 }
 
 mlir::LogicalResult
 AggregatorAttr::verify(llvm::function_ref<mlir::InFlightDiagnostic()> emitError,
                        AggregateFunc func, llvm::ArrayRef<ColumnIdx> inputs) {
-  if (func == AggregateFunc::ARGMIN) {
-    if (inputs.size() != 2) {
-      return emitError() << stringifyAggregateFunc(func)
-                         << " expects exactly two inputs (arg, val), got "
-                         << inputs.size();
-    }
-  } else {
-    if (inputs.size() != 1) {
-      return emitError() << stringifyAggregateFunc(func)
-                         << " expects exactly one input, got " << inputs.size();
-    }
+  if (inputs.size() != expectedNumInputs(func)) {
+    return emitError() << stringifyAggregateFunc(func) << " expects exactly "
+                       << expectedNumInputs(func) << " inputs, got "
+                       << inputs.size();
   }
 
   return mlir::success();

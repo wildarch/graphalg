@@ -28,19 +28,10 @@ class GraphAlgLoopAggregate
 // If the loop body ends with an aggregation op, ensure the init arg is also an
 // aggregation. Later on in the AvantGraph query pipeline, this will signal to
 // the optimizer that the iteration state can be kept as an aggregate table.
-static void addInitReduce(mlir::Operation *op, mlir::IRRewriter &rewriter) {
-  mlir::Block *body;
-  llvm::SmallVector<mlir::Value> newInitArgs;
-  if (auto constOp = llvm::dyn_cast<ForConstOp>(op)) {
-    body = &constOp.getBody().front();
-    newInitArgs = constOp.getInitArgs();
-  } else {
-    auto dimOp = llvm::cast<ForDimOp>(op);
-    body = &dimOp.getBody().front();
-    newInitArgs = dimOp.getInitArgs();
-  }
+static void addInitReduce(ForOp op, mlir::IRRewriter &rewriter) {
+  llvm::SmallVector<mlir::Value> newInitArgs(op.getInitArgs());
 
-  auto yieldOp = llvm::cast<YieldOp>(body->getTerminator());
+  auto yieldOp = llvm::cast<YieldOp>(op.getBody().front().getTerminator());
   for (auto [i, iterResult] : llvm::enumerate(yieldOp.getInputs())) {
     auto iterLastOp = iterResult.getDefiningOp();
     if (llvm::isa_and_present<PickAnyOp, DeferredReduceOp>(iterLastOp)) {
@@ -50,20 +41,13 @@ static void addInitReduce(mlir::Operation *op, mlir::IRRewriter &rewriter) {
     }
   }
 
-  rewriter.modifyOpInPlace(op, [&]() {
-    if (auto constOp = llvm::dyn_cast<ForConstOp>(op)) {
-      constOp.getInitArgsMutable().assign(newInitArgs);
-    } else {
-      auto dimOp = llvm::cast<ForDimOp>(op);
-      dimOp.getInitArgsMutable().assign(newInitArgs);
-    }
-  });
+  rewriter.modifyOpInPlace(
+      op, [&]() { op.getInitArgsMutable().assign(newInitArgs); });
 }
 
 void GraphAlgLoopAggregate::runOnOperation() {
-  llvm::SmallVector<mlir::Operation *> loopOps;
-  getOperation()->walk([&](ForConstOp op) { loopOps.emplace_back(op); });
-  getOperation()->walk([&](ForDimOp op) { loopOps.emplace_back(op); });
+  llvm::SmallVector<ForOp> loopOps;
+  getOperation()->walk([&](ForOp op) { loopOps.emplace_back(op); });
 
   mlir::IRRewriter rewriter(&getContext());
   for (auto op : loopOps) {

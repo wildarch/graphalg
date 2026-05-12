@@ -254,6 +254,8 @@ void GraphAlgToCore::runOnOperation() {
   target.addIllegalDialect<graphalg::GraphAlgDialect>();
   target.addDynamicallyLegalDialect<graphalg::GraphAlgDialect>(
       [](mlir::Operation *op) { return op->hasTrait<IsCore>(); });
+  target.addDynamicallyLegalOp<ForOp>(
+      [](ForOp op) { return !op.isDynamicRange(); });
 
   mlir::RewritePatternSet patterns(&getContext());
   patterns.add(convertVecMatMul);
@@ -265,6 +267,20 @@ void GraphAlgToCore::runOnOperation() {
   patterns.add(convertMask);
   patterns.add(convertTriu);
   patterns.add(convertLiteral);
+
+  // Conversion will give very unclear errors about dynamic range for loops, so
+  // do our own analysis first.
+  bool haveDynamicRangeLoops = false;
+  getOperation()->walk([&](ForOp op) {
+    if (op.isDynamicRange()) {
+      op.emitOpError("loop bound must be a constant in GraphAlg Core");
+      haveDynamicRangeLoops = true;
+    }
+  });
+
+  if (haveDynamicRangeLoops) {
+    return signalPassFailure();
+  }
 
   if (mlir::failed(mlir::applyFullConversion(getOperation(), target,
                                              std::move(patterns)))) {

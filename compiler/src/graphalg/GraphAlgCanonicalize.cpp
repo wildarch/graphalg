@@ -242,35 +242,39 @@ mlir::OpFoldResult BroadcastOp::fold(FoldAdaptor adaptor) {
   return nullptr;
 }
 
-static mlir::LogicalResult forDimConst(ForDimOp op,
-                                       mlir::PatternRewriter &rewriter) {
-  if (!op.getDim().isConcrete()) {
-    return mlir::failure();
+mlir::LogicalResult
+ForOp::fold(FoldAdaptor adaptor,
+            ::llvm::SmallVectorImpl<::mlir::OpFoldResult> &results) {
+  if (!getBegin() && adaptor.getDynBegin()) {
+    // Can infer a constant begin to the range.
+    auto begin = llvm::cast<mlir::IntegerAttr>(adaptor.getDynBegin());
+    setBeginAttr(begin);
+    getDynBeginMutable().clear();
+    return mlir::success();
   }
 
-  // The number of iterations is known, so we can replace with a ForConstOp.
-  auto end = op.getDim().getConcreteDim();
+  if (!getIters() && getBegin() && adaptor.getDynEnd()) {
+    // Can infer a constant number of iterations.
+    auto begin = *getBegin();
+    auto end = llvm::cast<mlir::IntegerAttr>(adaptor.getDynEnd())
+                   .getValue()
+                   .getZExtValue();
+    // If end < begin, drop to 0 iterations.
+    std::size_t iters = 0;
+    if (begin < end) {
+      iters = end - begin;
+    }
 
-  // Range from 0 to dim.
-  auto intType =
-      MatrixType::scalarOf(SemiringTypes::forInt(rewriter.getContext()));
-  auto beginOp = rewriter.create<ConstantMatrixOp>(
-      op->getLoc(), intType, rewriter.getI64IntegerAttr(0));
-  auto endOp = rewriter.create<ConstantMatrixOp>(
-      op->getLoc(), intType, rewriter.getI64IntegerAttr(end));
+    // NOTE: number of iterations is encoded as a DimAttr.
+    auto dim = DimAttr::getConcrete(getContext(), iters);
+    setItersAttr(dim);
+    getDynEndMutable().clear();
+    return mlir::success();
+  }
 
-  auto forConstOp = rewriter.create<ForConstOp>(
-      op->getLoc(), op->getResultTypes(), op.getInitArgs(), beginOp, endOp);
-  rewriter.inlineRegionBefore(op.getBody(), forConstOp.getBody(),
-                              forConstOp.getBody().begin());
-  rewriter.replaceOp(op, forConstOp);
+  // TODO: Fold if iters=0
 
-  return mlir::success();
-}
-
-void ForDimOp::getCanonicalizationPatterns(mlir::RewritePatternSet &patterns,
-                                           mlir::MLIRContext *context) {
-  patterns.add(forDimConst);
+  return mlir::failure();
 }
 
 mlir::OpFoldResult PickAnyOp::fold(FoldAdaptor adaptor) {

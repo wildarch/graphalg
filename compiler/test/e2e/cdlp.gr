@@ -1,7 +1,7 @@
 // RUN: split-file %s %t
 // RUN: graphalg-translate --import-graphalg %t/input.gr > %t/parsed.mlir
-// RUN: graphalg-opt --graphalg-to-core-pipeline --graphalg-set-dimensions='func=CDLP args=8x8' %t/parsed.mlir > %t/exec.mlir
-// RUN: graphalg-exec %t/exec.mlir CDLP %t/graph.m | diff - %t/output.m
+// RUN: graphalg-opt --graphalg-set-const-arg='func=CDLP argNum=1 value=5' --graphalg-to-core-pipeline --graphalg-set-dimensions='func=CDLP args=8x8,1x1' %t/parsed.mlir > %t/exec.mlir
+// RUN: graphalg-exec %t/exec.mlir CDLP %t/graph.m %t/iters.m | diff - %t/output.m
 
 //--- graph.m
 0 1
@@ -23,14 +23,16 @@
 6 7
 7 5
 
+//--- iters.m
+0 0 5
+
 //--- input.gr
 func isMax(v: int, max: trop_max_int) -> bool {
   return (cast<trop_max_int>(v) == max)
       * (v != zero(int));
 }
 
-func CDLP(graph: Matrix<s, s, bool>) -> Matrix<s, s, bool> {
-    iterations = int(5);
+func CDLP(graph: Matrix<s, s, bool>, iterations:int) -> Matrix<s, s, bool> {
     id = Vector<bool>(graph.nrows);
     id[:] = bool(true);
     L = diag(id);

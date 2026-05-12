@@ -143,7 +143,7 @@ def ForOp : GARel_Op<"for", [InferTypeOpAdaptor]> {
 
     let arguments = (ins
         Variadic<Relation>:$init,
-        I64Attr:$iters,
+        I64Relation:$iters,
         I64Attr:$resultIdx);
 
     let regions = (region

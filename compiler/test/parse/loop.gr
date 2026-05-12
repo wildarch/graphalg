@@ -6,7 +6,7 @@ func ForConst() -> int {
     a = int(42);
     // CHECK: %[[#BEGIN:]] = graphalg.literal 1
     // CHECK: %[[#END:]] = graphalg.literal 10
-    // CHECK: %[[#LOOP:]] = graphalg.for_const range(%[[#BEGIN]], %[[#END]])
+    // CHECK: %[[#LOOP:]] = graphalg.for dyn_begin=%[[#BEGIN]] dyn_end=%[[#END]]
     // CHECK:     init(%[[#INIT]])
     // CHECK:     -> !graphalg.mat<1 x 1 x i64> body {
     // CHECK: ^bb0(%arg0: !graphalg.mat<1 x 1 x i64>,
@@ -26,7 +26,7 @@ func ForConst() -> int {
 func ForDim(m:Matrix<s, s, int>) -> int {
     // CHECK: %[[#INIT:]] = graphalg.literal 42
     a = int(42);
-    // CHECK: %[[#LOOP:]] = graphalg.for_dim range(#dim)
+    // CHECK: %[[#LOOP:]] = graphalg.for begin=0 iters=#dim
     // CHECK:     init(%[[#INIT]])
     // CHECK:     -> !graphalg.mat<1 x 1 x i64> body {
     // CHECK: ^bb0(%arg1: !graphalg.mat<1 x 1 x i64>,

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <mlir/IR/MLIRContext.h>
 #include <mlir/IR/Types.h>
 
 #include "garel/GARelAttr.h"
@@ -10,5 +11,7 @@
 namespace garel {
 
 bool isColumnType(mlir::Type t);
+
+RelationType getI64RelationType(mlir::MLIRContext *ctx);
 
 } // namespace garel

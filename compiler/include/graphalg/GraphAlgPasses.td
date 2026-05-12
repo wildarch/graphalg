@@ -3,6 +3,16 @@
 
 include "mlir/Pass/PassBase.td"
 
+def GraphAlgSetConstArg : Pass<"graphalg-set-const-arg", "::mlir::ModuleOp"> {
+    let summary = "Propagate a constant integer argument into a function";
+
+    let options = [
+        Option<"functionName", "func", "std::string", /*default=*/"\"\"", "Name of the function to call">,
+        Option<"argumentNumber", "argNum", "int", /*default=*/"-1", "The argument number that is constant">,
+        Option<"value", "value", "std::int64_t", /*default=*/"0", "The value to propagate">,
+    ];
+}
+
 def GraphAlgPrepareInline : Pass<"graphalg-prepare-inline", "::mlir::ModuleOp"> {
     let summary = "Prepares the IR for function inlining";
 

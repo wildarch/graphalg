@@ -34,4 +34,10 @@ def Tuple : GARel_Type<"Tuple", "tuple"> {
 
 def ColumnType : Type<CPred<"::garel::isColumnType($_self)">, "column type">;
 
+def I64Relation : Type<
+        CPred<"::garel::getI64RelationType($_self.getContext()) == $_self">,
+        "relation with a single i64 column",
+        "RelationType">,
+    BuildableType<"::garel::getI64RelationType($_builder.getContext())">;
+
 #endif // GAREL_TYPES
