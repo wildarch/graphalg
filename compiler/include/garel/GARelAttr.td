@@ -53,7 +53,7 @@ def Aggregator : GARel_Attr<"Aggregator", "aggregator"> {
         OptionalArrayRefParameter<"ColumnIdx">:$inputs);
 
     let assemblyFormat = [{
-        `<` $func $inputs `>`
+        `<` $func (`>`) : ($inputs^ `>`)?
     }];
 
     let genVerifyDecl = 1;

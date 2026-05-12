@@ -31,5 +31,5 @@ int main(int argc, char *argv[]) {
       });
 
   return failed(
-      mlir::mlirTranslateMain(argc, argv, "Graphalg Translation Testing Tool"));
+      mlir::mlirTranslateMain(argc, argv, "Graphalg translation testing tool"));
 }
