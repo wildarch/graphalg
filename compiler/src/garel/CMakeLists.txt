@@ -35,3 +35,13 @@ target_link_libraries(
     GARelIR
     MLIRPass
 )
+
+add_library(GARelSQL
+    GARelSQL.cpp
+)
+target_link_libraries(
+    GARelSQL
+    PRIVATE
+    GraphAlgIR
+    GARelIR
+)

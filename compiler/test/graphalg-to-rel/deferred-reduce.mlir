@@ -70,7 +70,7 @@ func.func @ReduceMultiple(
     %arg0 : !graphalg.mat<1 x 43 x i64>,
     %arg1 : !graphalg.mat<42 x 1 x i64>)
     -> !graphalg.mat<1 x 1 x i64> {
-  // CHECK: %[[#UNION:]] = garel.union %arg0, %arg1 : !garel.rel<index, i64>, !garel.rel<index, i64>
+  // CHECK: %[[#UNION:]] = garel.union %arg0, %arg1 : <index, i64>
   // CHECK: %[[#AGG:]] = garel.aggregate %0 : <index, i64> group_by=[] aggregators=[<SUM 1>]
   %0 = graphalg.deferred_reduce %arg0, %arg1 : !graphalg.mat<1 x 43 x i64>, !graphalg.mat<42 x 1 x i64> -> <1 x 1 x i64>
   return %0 : !graphalg.mat<1 x 1 x i64>

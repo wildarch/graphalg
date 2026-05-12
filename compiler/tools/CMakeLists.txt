@@ -44,3 +44,12 @@ if (GRAPHALG_ENABLE_FUZZER)
     target_compile_options(fuzz-parser PRIVATE -fsanitize=fuzzer)
     target_link_options(fuzz-parser PRIVATE -fsanitize=fuzzer)
 endif ()
+
+add_executable(garel-translate garel-translate.cpp)
+target_link_libraries(garel-translate PRIVATE
+    ${llvm_libs}
+    GARelSQL
+    GraphAlgIR
+    MLIRTranslateLib
+    MLIRFuncDialect
+)
