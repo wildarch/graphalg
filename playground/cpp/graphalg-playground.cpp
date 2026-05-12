@@ -25,6 +25,7 @@
 #include "graphalg/GraphAlgAttr.h"
 #include "graphalg/GraphAlgDialect.h"
 #include "graphalg/GraphAlgPasses.h"
+#include "graphalg/GraphAlgSetConstArg.h"
 #include "graphalg/GraphAlgTypes.h"
 #include "graphalg/SemiringTypes.h"
 #include "graphalg/evaluate/Evaluator.h"
@@ -205,6 +206,31 @@ bool Playground::evaluate() {
   }
 
   _argBuilders.clear();
+
+  // Inline constant arguments.
+  llvm::SmallVector<mlir::TypedAttr> constArgs;
+  for (auto arg : args) {
+    graphalg::MatrixAttrReader reader(arg);
+    if (reader.nRows() == 1 && reader.nCols() == 1) {
+      constArgs.push_back(reader.at(0, 0));
+    } else {
+      // Not constant
+      constArgs.push_back(mlir::TypedAttr());
+    }
+  }
+
+  if (mlir::failed(graphalg::setConstantArguments(_funcOp, constArgs))) {
+    return false;
+  }
+
+  // Verify that loop bounds are OK now.
+  mlir::PassManager pm(&_ctx);
+  pm.addPass(mlir::createCanonicalizerPass()); // To propagate constants
+  pm.addPass(graphalg::createGraphAlgVerifyLoopBounds());
+  if (mlir::failed(pm.run(_funcOp))) {
+    return false;
+  }
+
   _result = graphalg::evaluate(_funcOp, args);
   if (!_result) {
     return false;

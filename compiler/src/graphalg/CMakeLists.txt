@@ -43,6 +43,7 @@ add_library(GraphAlgPasses
     GraphAlgToCore.cpp
     GraphAlgToCorePipeline.cpp
     GraphAlgVerifyDimensions.cpp
+    GraphAlgVerifyLoopBounds.cpp
 )
 add_dependencies(GraphAlgPasses MLIRGraphAlgPassesIncGen)
 target_link_libraries(

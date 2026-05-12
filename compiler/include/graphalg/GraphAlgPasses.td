@@ -33,6 +33,18 @@ def GraphAlgToCore : Pass<"graphalg-to-core", "::mlir::func::FuncOp"> {
     let summary = "Desugar GraphAlg IR into the Core operations";
 }
 
+def GraphAlgVerifyLoopBounds : Pass<"graphalg-verify-loop-bounds", "::mlir::func::FuncOp"> {
+    let summary = "Verifies that loops do not use dynamic ranges";
+
+    let description = [{
+        ForOps can specify dynamic loop bounds that depend on arbitrary values
+        in the program. This is useful during parsing, and it allows using
+        parameters that will later be inlined as constants. GraphAlg Core,
+        however, requires that loop bounds are either a constant integer value
+        or the dimensions of a matrix. This pass enforces that requirement.
+    }];
+}
+
 def GraphAlgExplicateSparsity : Pass<"graphalg-explicate-sparsity", "mlir::func::FuncOp"> {
     let summary = "Makes explicit the sparsity of matrices";
 }
