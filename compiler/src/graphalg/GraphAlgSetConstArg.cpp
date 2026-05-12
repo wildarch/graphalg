@@ -1,11 +1,13 @@
+#include <llvm/ADT/SmallVector.h>
+#include <llvm/Support/Casting.h>
+#include <mlir/IR/BuiltinAttributeInterfaces.h>
 #include <mlir/IR/PatternMatch.h>
 #include <mlir/Pass/Pass.h>
+#include <mlir/Support/LLVM.h>
 #include <mlir/Transforms/DialectConversion.h>
 
-#include "graphalg/GraphAlgOps.h"
 #include "graphalg/GraphAlgPasses.h"
-#include "graphalg/GraphAlgTypes.h"
-#include "graphalg/SemiringTypes.h"
+#include "graphalg/GraphAlgSetConstArg.h"
 
 namespace graphalg {
 
@@ -59,12 +61,48 @@ void GraphAlgSetConstArg::runOnOperation() {
     return signalPassFailure();
   }
 
-  mlir::IRRewriter rewriter(func);
+  llvm::SmallVector<mlir::TypedAttr> values(numArgs);
+  values[argumentNumber] =
+      mlir::IntegerAttr::get(mlir::IntegerType::get(&getContext(), 64), value);
+  if (mlir::failed(setConstantArguments(func, values))) {
+    signalPassFailure();
+  }
+}
+
+mlir::LogicalResult
+setConstantArguments(mlir::func::FuncOp op,
+                     llvm::ArrayRef<mlir::TypedAttr> values) {
+  auto &body = op.getBody().front();
+  auto numArgs = body.getNumArguments();
+  if (values.size() != numArgs) {
+    return op.emitOpError("expected a function with ")
+           << values.size() << " parameters, but only has " << numArgs;
+  }
+
+  mlir::IRRewriter rewriter(op);
   rewriter.setInsertionPointToStart(&body);
-  auto constOp = rewriter.create<ConstantMatrixOp>(
-      func.getLoc(), MatrixType::scalarOf(SemiringTypes::forInt(&getContext())),
-      rewriter.getI64IntegerAttr(value));
-  rewriter.replaceAllUsesWith(body.getArgument(argumentNumber), constOp);
+
+  for (auto i : llvm::seq(numArgs)) {
+    auto val = values[i];
+    if (!val) {
+      // Not constant
+      continue;
+    }
+
+    auto arg = body.getArgument(i);
+    auto type = llvm::dyn_cast<MatrixType>(arg.getType());
+    if (!type || !type.isScalar()) {
+      return op.emitOpError("argument ") << i << " is not a scalar matrix";
+    } else if (type.getSemiring() != val.getType()) {
+      return op.emitOpError("cannot inline value of type ")
+             << val.getType() << " into argument " << i << " of type " << type;
+    }
+
+    auto constOp = rewriter.create<ConstantMatrixOp>(op.getLoc(), type, val);
+    rewriter.replaceAllUsesWith(body.getArgument(i), constOp);
+  }
+
+  return mlir::success();
 }
 
 } // namespace graphalg
