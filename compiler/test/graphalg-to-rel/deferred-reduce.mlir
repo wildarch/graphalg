@@ -66,14 +66,28 @@ func.func @ReduceScalarScalar(%arg0: !graphalg.mat<1 x 1 x i64>) -> !graphalg.ma
 }
 
 // CHECK-LABEL: @ReduceMultiple
-func.func @ReduceMultiple(
+func.func @ReduceMultipleScalar(
     %arg0 : !graphalg.mat<1 x 43 x i64>,
     %arg1 : !graphalg.mat<42 x 1 x i64>)
     -> !graphalg.mat<1 x 1 x i64> {
-  // CHECK: %[[#UNION:]] = garel.union %arg0, %arg1 : <index, i64>
-  // CHECK: %[[#AGG:]] = garel.aggregate %0 : <index, i64> group_by=[] aggregators=[<SUM 1>]
+  // CHECK: %[[#REMAP0:]] = garel.remap %arg0 : <index, i64> [1]
+  // CHECK: %[[#REMAP1:]] = garel.remap %arg1 : <index, i64> [1]
+  // CHECK: %[[#UNION:]] = garel.union %[[#REMAP0]], %[[#REMAP1]] : <i64>
+  // CHECK: %[[#AGG:]] = garel.aggregate %[[#UNION]] : <i64> group_by=[] aggregators=[<SUM 0>]
   %0 = graphalg.deferred_reduce %arg0, %arg1 : !graphalg.mat<1 x 43 x i64>, !graphalg.mat<42 x 1 x i64> -> <1 x 1 x i64>
   return %0 : !graphalg.mat<1 x 1 x i64>
+}
+
+// CHECK-LABEL: @ReduceMultipleVec
+func.func @ReduceMultipleVec(
+    %arg0 : !graphalg.mat<1 x 42 x i64>,
+    %arg1 : !graphalg.mat<43 x 42 x i64>)
+    -> !graphalg.mat<1 x 42 x i64> {
+  // CHECK: %[[#REMAP:]] = garel.remap %arg1 : <index, index, i64> [1, 2]
+  // CHECK: %[[#UNION:]] = garel.union %arg0, %[[#REMAP]] : <index, i64>
+  // CHECK: %[[#AGG:]] = garel.aggregate %[[#UNION]] : <index, i64> group_by=[0] aggregators=[<SUM 1>]
+  %0 = graphalg.deferred_reduce %arg0, %arg1 : !graphalg.mat<1 x 42 x i64>, !graphalg.mat<43 x 42 x i64> -> <1 x 42 x i64>
+  return %0 : !graphalg.mat<1 x 42 x i64>
 }
 
 // === Semirings
