@@ -13,6 +13,8 @@
 #include "garel/GARelAttr.h"
 #include "garel/GARelOps.h"
 #include "garel/GARelTypes.h"
+#include "mlir/IR/BuiltinAttributes.h"
+#include "mlir/IR/Location.h"
 
 namespace garel {
 
@@ -46,6 +48,8 @@ private:
   mlir::LogicalResult translate(mlir::arith::MulIOp op);
   mlir::LogicalResult translate(mlir::arith::MulFOp op);
 
+  mlir::LogicalResult translateConstant(mlir::Location loc,
+                                        mlir::Attribute attr);
   mlir::LogicalResult translateAdd(mlir::Operation *op);
   mlir::LogicalResult translateMul(mlir::Operation *op);
 
@@ -186,8 +190,35 @@ mlir::LogicalResult SQLTranslator::translate(ForOp op) {
   return mlir::success();
 }
 
+mlir::LogicalResult SQLTranslator::translateConstant(mlir::Location loc,
+                                                     mlir::Attribute attr) {
+  if (auto boolAttr = llvm::dyn_cast<mlir::BoolAttr>(attr)) {
+    _os << (boolAttr.getValue() ? "true" : "false");
+  } else if (auto intAttr = llvm::dyn_cast<mlir::IntegerAttr>(attr)) {
+    _os << intAttr.getValue();
+  } else if (auto floatAttr = llvm::dyn_cast<mlir::FloatAttr>(attr)) {
+    auto value = floatAttr.getValue();
+    if (value.isNegInfinity()) {
+      _os << "'-Infinity'";
+    } else if (value.isPosInfinity()) {
+      _os << "'Infinity'";
+    } else {
+      _os << value;
+    }
+  } else {
+    return mlir::emitError(loc) << "cannot convert constant " << attr;
+  }
+
+  return mlir::success();
+}
+
 mlir::LogicalResult SQLTranslator::translate(ConstantOp op) {
-  _os << "(SELECT " << op.getValue() << " AS c0)";
+  _os << "(SELECT ";
+  if (mlir::failed(translateConstant(op.getLoc(), op.getValue()))) {
+    return mlir::failure();
+  }
+
+  _os << " AS c0)";
   return mlir::success();
 }
 
@@ -340,8 +371,7 @@ mlir::LogicalResult SQLTranslator::translate(mlir::arith::SelectOp op) {
 }
 
 mlir::LogicalResult SQLTranslator::translate(mlir::arith::ConstantOp op) {
-  _os << op.getValue();
-  return mlir::success();
+  return translateConstant(op.getLoc(), op.getValue());
 }
 
 mlir::LogicalResult SQLTranslator::translateAdd(mlir::Operation *op) {
