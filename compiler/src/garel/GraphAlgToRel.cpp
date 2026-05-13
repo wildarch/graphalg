@@ -852,31 +852,61 @@ template <>
 mlir::LogicalResult OpConversion<graphalg::DeferredReduceOp>::matchAndRewrite(
     graphalg::DeferredReduceOp op, OpAdaptor adaptor,
     mlir::ConversionPatternRewriter &rewriter) const {
-  MatrixAdaptor input(op.getInputs()[0], adaptor.getInputs()[0]);
   MatrixAdaptor output(op, typeConverter->convertType(op.getType()));
+
+  // Do we have row and column universally for all inputs?
+  llvm::SmallVector<MatrixAdaptor> inputAdaptors;
+  bool haveRowColumn = true;
+  bool haveColColumn = true;
+  for (auto [matrix, rel] :
+       llvm::zip_equal(op.getInputs(), adaptor.getInputs())) {
+    auto &adaptor = inputAdaptors.emplace_back(matrix, rel);
+    haveRowColumn &= adaptor.hasRowColumn();
+    haveColColumn &= adaptor.hasColColumn();
+  }
+
+  // Drop row/col columns if they are not universal in order to unify the types
+  // of all inputs, as required to build UnionOp.
+  llvm::SmallVector<mlir::Value> inputs;
+  for (auto &input : inputAdaptors) {
+    llvm::SmallVector<ColumnIdx, 3> remap;
+    if (haveRowColumn) {
+      remap.push_back(input.rowColumn());
+    }
+
+    if (haveColColumn) {
+      remap.push_back(input.colColumn());
+    }
+
+    remap.push_back(input.valColumn());
+    inputs.push_back(
+        rewriter.createOrFold<RemapOp>(op.getLoc(), input.relation(), remap));
+  }
+
+  auto unionOp = rewriter.createOrFold<UnionOp>(op.getLoc(), inputs);
 
   // Group by keys
   llvm::SmallVector<ColumnIdx, 2> groupBy;
   if (output.hasRowColumn()) {
-    groupBy.push_back(input.rowColumn());
+    // Always column 0
+    groupBy.push_back(0);
   }
 
   if (output.hasColColumn()) {
-    groupBy.push_back(input.colColumn());
+    // Follows row column
+    std::size_t colIdx = haveRowColumn ? 1 : 0;
+    groupBy.push_back(colIdx);
   }
 
   // Aggregators
-  auto aggregator =
-      createAggregator(op, input.semiring(), input.valColumn(), rewriter);
+  // Follows row and col columns
+  auto valIdx = haveRowColumn + haveColColumn;
+  auto aggregator = createAggregator(op, output.semiring(), valIdx, rewriter);
   if (mlir::failed(aggregator)) {
     return mlir::failure();
   }
 
   std::array<AggregatorAttr, 1> aggregators{*aggregator};
-
-  // union the inputs and then aggregate.
-  auto unionOp =
-      rewriter.createOrFold<UnionOp>(op.getLoc(), adaptor.getInputs());
   rewriter.replaceOpWithNewOp<AggregateOp>(op, unionOp, groupBy, aggregators);
   return mlir::success();
 }

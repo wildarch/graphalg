@@ -15,6 +15,7 @@
 #include "garel/GARelTypes.h"
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/Location.h"
+#include "llvm/ADT/StringRef.h"
 
 namespace garel {
 
@@ -55,6 +56,8 @@ private:
   mlir::LogicalResult translate(mlir::arith::AddFOp op);
   mlir::LogicalResult translate(mlir::arith::MulIOp op);
   mlir::LogicalResult translate(mlir::arith::MulFOp op);
+  mlir::LogicalResult translate(mlir::arith::AndIOp op);
+  mlir::LogicalResult translate(mlir::arith::CmpIOp op);
 
   mlir::LogicalResult translateConstant(mlir::Location loc,
                                         mlir::Attribute attr);
@@ -155,6 +158,8 @@ mlir::LogicalResult SQLTranslator::translate(mlir::Operation *op) {
   CASE(mlir::arith::AddFOp)
   CASE(mlir::arith::MulIOp)
   CASE(mlir::arith::MulFOp)
+  CASE(mlir::arith::AndIOp)
+  CASE(mlir::arith::CmpIOp)
 #undef CASE
 
   return op->emitOpError("no SQL translation defined for this op");
@@ -201,10 +206,6 @@ mlir::LogicalResult SQLTranslator::translate(ForOp op) {
     newStateTables.push_back(temp);
   }
 
-  if (!op.getUntil().empty()) {
-    return op.emitOpError("'until' not implemented");
-  }
-
   // TODO: convergence check?
   // Swap to new tables
   for (auto [table, newTable] : llvm::zip_equal(stateTables, newStateTables)) {
@@ -213,6 +214,22 @@ mlir::LogicalResult SQLTranslator::translate(ForOp op) {
     indent();
     _os << "conn.execute(\"ALTER TABLE " << newTable << " RENAME TO " << table
         << "\")\n";
+  }
+
+  if (!op.getUntil().empty()) {
+    indent();
+    _os << "until, = conn.sql(\"\"\"";
+    if (mlir::failed(translate(op.getIters()))) {
+      return mlir::failure();
+    }
+    _os << "\"\"\").fetchone()\n";
+
+    indent();
+    _os << "if until:\n";
+    _indentLevel++;
+    indent();
+    _os << "break\n";
+    _indentLevel--;
   }
 
   _indentLevel--;
@@ -255,6 +272,23 @@ mlir::LogicalResult SQLTranslator::translate(ConstantOp op) {
   return mlir::success();
 }
 
+static llvm::StringLiteral translateAggregateFunc(AggregateFunc f) {
+  switch (f) {
+  case AggregateFunc::SUM:
+    return "SUM";
+  case AggregateFunc::MIN:
+    return "MIN";
+  case AggregateFunc::MAX:
+    return "MAX";
+  case AggregateFunc::LOR:
+    return "BOOL_OR";
+  case AggregateFunc::ARGMIN:
+    return "ARG_MIN";
+  case AggregateFunc::COUNT:
+    return "COUNT";
+  }
+}
+
 mlir::LogicalResult SQLTranslator::translate(AggregateOp op) {
   _os << "(SELECT ";
   std::size_t colOut = 0;
@@ -271,7 +305,7 @@ mlir::LogicalResult SQLTranslator::translate(AggregateOp op) {
       _os << ", ";
     }
 
-    _os << stringifyAggregateFunc(agg.getFunc()) << "(";
+    _os << translateAggregateFunc(agg.getFunc()) << "(";
     llvm::interleaveComma(agg.getInputs(), _os,
                           [&](ColumnIdx idx) { _os << "c" << idx; });
     _os << ") AS c" << colOut++;
@@ -445,6 +479,54 @@ mlir::LogicalResult SQLTranslator::translate(mlir::arith::MulIOp op) {
 }
 mlir::LogicalResult SQLTranslator::translate(mlir::arith::MulFOp op) {
   return translateMul(op);
+}
+
+mlir::LogicalResult SQLTranslator::translate(mlir::arith::AndIOp op) {
+  _os << "(";
+  if (mlir::failed(translate(op->getOperand(0)))) {
+    return mlir::failure();
+  }
+  _os << " AND ";
+  if (mlir::failed(translate(op->getOperand(1)))) {
+    return mlir::failure();
+  }
+  _os << ")";
+  return mlir::success();
+}
+
+static llvm::StringLiteral translatePredicate(mlir::arith::CmpIPredicate pred) {
+  switch (pred) {
+  case mlir::arith::CmpIPredicate::eq:
+    return "=";
+  case mlir::arith::CmpIPredicate::ne:
+    return "<>";
+  case mlir::arith::CmpIPredicate::slt:
+  case mlir::arith::CmpIPredicate::ult:
+    return "<";
+  case mlir::arith::CmpIPredicate::sle:
+  case mlir::arith::CmpIPredicate::ule:
+    return "<=";
+  case mlir::arith::CmpIPredicate::sgt:
+  case mlir::arith::CmpIPredicate::ugt:
+    return ">";
+  case mlir::arith::CmpIPredicate::sge:
+  case mlir::arith::CmpIPredicate::uge:
+    return ">=";
+  }
+}
+
+mlir::LogicalResult SQLTranslator::translate(mlir::arith::CmpIOp op) {
+  _os << "(";
+  if (mlir::failed(translate(op->getOperand(0)))) {
+    return mlir::failure();
+  }
+  _os << " " << translatePredicate(op.getPredicate()) << " ";
+
+  if (mlir::failed(translate(op->getOperand(1)))) {
+    return mlir::failure();
+  }
+  _os << ")";
+  return mlir::success();
 }
 
 mlir::LogicalResult translateToSQL(mlir::Operation *op, llvm::raw_ostream &os) {
