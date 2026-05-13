@@ -23,8 +23,16 @@ namespace {
 class SQLTranslator {
 private:
   llvm::raw_ostream &_os;
+  std::size_t _indentLevel = 0;
+
   llvm::DenseMap<mlir::Value, std::string> _valMap;
   std::size_t _tempCount;
+
+  void indent() {
+    for (auto i : llvm::seq(_indentLevel)) {
+      _os << "  ";
+    }
+  }
 
   std::string newTemp() {
     return std::string("temp") + std::to_string(_tempCount++);
@@ -78,19 +86,23 @@ mlir::LogicalResult SQLTranslator::translate(mlir::ModuleOp op) {
 
 mlir::LogicalResult SQLTranslator::translate(mlir::func::FuncOp op) {
   auto name = op.getSymName();
-  _os << "def " << name << "(";
+  _os << "def " << name << "(conn";
   for (auto [i, arg] : llvm::enumerate(op.getBody().getArguments())) {
     auto varName = std::string("farg") + std::to_string(i);
     _valMap[arg] = varName;
-
-    if (i != 0) {
-      _os << ", ";
-    }
-
+    _os << ", ";
     _os << varName;
   }
 
   _os << "):\n";
+  _indentLevel++;
+
+  // Visit loops first, as they cannot be done with pure SQL
+  for (auto op : op.getOps<ForOp>()) {
+    if (mlir::failed(translate(op))) {
+      return mlir::failure();
+    }
+  }
 
   auto retOp =
       llvm::cast<mlir::func::ReturnOp>(op.getBody().front().getTerminator());
@@ -98,7 +110,15 @@ mlir::LogicalResult SQLTranslator::translate(mlir::func::FuncOp op) {
     return retOp.emitOpError("expected a single return value");
   }
 
-  return translate(retOp.getOperand(0));
+  indent();
+  _os << "return conn.sql(\"\"\"";
+  if (mlir::failed(translate(retOp.getOperand(0)))) {
+    return mlir::failure();
+  }
+
+  _os << "\"\"\")\n";
+  _indentLevel--;
+  return mlir::success();
 }
 
 mlir::LogicalResult SQLTranslator::translate(mlir::Value val) {
@@ -146,32 +166,37 @@ mlir::LogicalResult SQLTranslator::translate(ForOp op) {
   llvm::SmallVector<std::string> stateTables;
   for (auto i : llvm::seq(op.getInit().size())) {
     auto temp = newTemp();
-    _os << "CREATE TABLE " << temp << " AS ";
+    indent();
+    _os << "conn.execute(\"\"\"CREATE TABLE " << temp << " AS ";
     if (mlir::failed(translate(op.getInit()[i]))) {
       return mlir::failure();
     }
-    _os << ";\n";
+    _os << "\"\"\")\n";
 
     stateTables.push_back(temp);
     _valMap[body.getArgument(i)] = temp;
   }
 
-  _os << "iters = ";
+  indent();
+  _os << "iters, = conn.sql(\"\"\"";
   if (mlir::failed(translate(op.getIters()))) {
     return mlir::failure();
   }
-  _os << "\n";
+  _os << "\"\"\").fetchone()\n";
 
-  _os << "for i in iters:\n";
+  indent();
+  _os << "for i in range(iters):\n";
+  _indentLevel++;
   auto yieldOp = llvm::cast<ForYieldOp>(op.getBody().front().getTerminator());
   llvm::SmallVector<std::string> newStateTables;
   for (auto i : llvm::seq(stateTables.size())) {
     auto temp = newTemp();
-    _os << "  CREATE TABLE " << temp << " AS (";
+    indent();
+    _os << "conn.execute(\"\"\"CREATE TABLE " << temp << " AS ";
     if (mlir::failed(translate(yieldOp.getInputs()[i]))) {
       return mlir::failure();
     }
-    _os << ");\n";
+    _os << "\"\"\")\n";
 
     newStateTables.push_back(temp);
   }
@@ -183,9 +208,17 @@ mlir::LogicalResult SQLTranslator::translate(ForOp op) {
   // TODO: convergence check?
   // Swap to new tables
   for (auto [table, newTable] : llvm::zip_equal(stateTables, newStateTables)) {
-    _os << "  DROP TABLE " << table << ";\n";
-    _os << "  ALTER TABLE " << newTable << " RENAME TO " << table << ";\n";
+    indent();
+    _os << "conn.execute(\"DROP TABLE " << table << "\")\n";
+    indent();
+    _os << "conn.execute(\"ALTER TABLE " << newTable << " RENAME TO " << table
+        << "\")\n";
   }
+
+  _indentLevel--;
+
+  // Bind result of the loop to state table.
+  _valMap[op] = stateTables[op.getResultIdx()];
 
   return mlir::success();
 }
@@ -203,7 +236,7 @@ mlir::LogicalResult SQLTranslator::translateConstant(mlir::Location loc,
     } else if (value.isPosInfinity()) {
       _os << "'Infinity'";
     } else {
-      _os << value;
+      _os << "CAST(" << value << " AS DOUBLE PRECISION)";
     }
   } else {
     return mlir::emitError(loc) << "cannot convert constant " << attr;
@@ -366,7 +399,7 @@ mlir::LogicalResult SQLTranslator::translate(mlir::arith::SelectOp op) {
     return mlir::failure();
   }
 
-  _os << ")";
+  _os << " END)";
   return mlir::success();
 }
 

@@ -1,0 +1,60 @@
+// RUN: split-file %s %t
+// RUN: graphalg-translate --import-graphalg %t/input.gr > %t/parsed.mlir
+// RUN: graphalg-opt %t/parsed.mlir --graphalg-to-core-pipeline --graphalg-verify-loop-bounds --graphalg-explicate-sparsity --graphalg-split-aggregate --graphalg-loop-aggregate --graphalg-to-rel > %t/rel.mlir
+// RUN: garel-translate --export-sql %t/rel.mlir > %t/sssp.py
+// RUN: touch %t/__init__.py
+// RUN: python3 %t/driver.py
+// RUN: diff %t/reference.csv %t/output.csv
+
+//--- edges.csv
+c0, c1, c2
+0, 1, 0.5
+0, 2, 5.0
+0, 3, 5.0
+1, 4, 0.5
+2, 3, 2.0
+4, 5, 0.5
+5, 2, 0.5
+5, 9, 23.0
+6, 0, 1.0
+6, 7, 3.2
+7, 9, 0.2
+8, 9, 0.1
+9, 6, 8.0
+
+//--- input.gr
+func SSSP(
+    graph: Matrix<s1, s1, trop_real>,
+    source: Vector<s1, bool>) -> Vector<s1, trop_real> {
+  v = cast<trop_real>(source);
+  for i in graph.nrows {
+    v += v * graph;
+  }
+  return v;
+}
+
+//--- driver.py
+from sssp import SSSP
+import duckdb
+from pathlib import Path
+
+dir = Path(__file__).parent
+conn = duckdb.connect()
+vertices = conn.sql("SELECT generate_series AS c0 FROM generate_series(0, 10)")
+edges = conn.read_csv(dir / 'edges.csv')
+source = conn.sql("SELECT 0 AS c0, true AS c1")
+
+res = SSSP(conn, edges, source, vertices)
+res.sort('c0').to_csv(str(dir / 'output.csv'))
+
+//--- reference.csv
+c0,c1
+0,0.0
+1,0.5
+2,2.0
+3,4.0
+4,1.0
+5,1.5
+6,32.5
+7,35.7
+9,24.5
