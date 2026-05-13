@@ -43,8 +43,11 @@ private:
   mlir::LogicalResult translate(mlir::arith::ConstantOp op);
   mlir::LogicalResult translate(mlir::arith::AddIOp op);
   mlir::LogicalResult translate(mlir::arith::AddFOp op);
+  mlir::LogicalResult translate(mlir::arith::MulIOp op);
+  mlir::LogicalResult translate(mlir::arith::MulFOp op);
 
   mlir::LogicalResult translateAdd(mlir::Operation *op);
+  mlir::LogicalResult translateMul(mlir::Operation *op);
 
 public:
   SQLTranslator(llvm::raw_ostream &os) : _os(os) {}
@@ -126,6 +129,8 @@ mlir::LogicalResult SQLTranslator::translate(mlir::Operation *op) {
   CASE(mlir::arith::ConstantOp)
   CASE(mlir::arith::AddIOp)
   CASE(mlir::arith::AddFOp)
+  CASE(mlir::arith::MulIOp)
+  CASE(mlir::arith::MulFOp)
 #undef CASE
 
   return op->emitOpError("no SQL translation defined for this op");
@@ -357,6 +362,26 @@ mlir::LogicalResult SQLTranslator::translate(mlir::arith::AddIOp op) {
 }
 mlir::LogicalResult SQLTranslator::translate(mlir::arith::AddFOp op) {
   return translateAdd(op);
+}
+
+mlir::LogicalResult SQLTranslator::translateMul(mlir::Operation *op) {
+  _os << "(";
+  if (mlir::failed(translate(op->getOperand(0)))) {
+    return mlir::failure();
+  }
+  _os << " * ";
+  if (mlir::failed(translate(op->getOperand(1)))) {
+    return mlir::failure();
+  }
+  _os << ")";
+  return mlir::success();
+}
+
+mlir::LogicalResult SQLTranslator::translate(mlir::arith::MulIOp op) {
+  return translateMul(op);
+}
+mlir::LogicalResult SQLTranslator::translate(mlir::arith::MulFOp op) {
+  return translateMul(op);
 }
 
 mlir::LogicalResult translateToSQL(mlir::Operation *op, llvm::raw_ostream &os) {
