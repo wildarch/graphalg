@@ -48,6 +48,7 @@ private:
   mlir::LogicalResult translate(ProjectOp op);
   mlir::LogicalResult translate(UnionOp op);
   mlir::LogicalResult translate(JoinOp op);
+  mlir::LogicalResult translate(RemapOp op);
 
   mlir::LogicalResult translate(ExtractOp op);
   mlir::LogicalResult translate(mlir::arith::SelectOp op);
@@ -151,6 +152,7 @@ mlir::LogicalResult SQLTranslator::translate(mlir::Operation *op) {
   CASE(ProjectOp)
   CASE(UnionOp)
   CASE(JoinOp)
+  CASE(RemapOp)
   CASE(ExtractOp)
   CASE(mlir::arith::SelectOp)
   CASE(mlir::arith::ConstantOp)
@@ -217,9 +219,16 @@ mlir::LogicalResult SQLTranslator::translate(ForOp op) {
   }
 
   if (!op.getUntil().empty()) {
+    auto &body = op.getUntil().front();
+    auto yieldOp = llvm::cast<ForYieldOp>(body.getTerminator());
+    // Map block arguments
+    for (auto i : llvm::seq(stateTables.size())) {
+      _valMap[body.getArgument(i)] = stateTables[i];
+    }
+
     indent();
     _os << "until, = conn.sql(\"\"\"";
-    if (mlir::failed(translate(op.getIters()))) {
+    if (mlir::failed(translate(yieldOp.getInputs()[0]))) {
       return mlir::failure();
     }
     _os << "\"\"\").fetchone()\n";
@@ -406,6 +415,27 @@ mlir::LogicalResult SQLTranslator::translate(JoinOp op) {
       _os << "i" << pred.getLhsRelIdx() << ".c" << pred.getLhsColIdx() << " = "
           << "i" << pred.getRhsRelIdx() << ".c" << pred.getRhsColIdx();
     }
+  }
+
+  _os << ")";
+  return mlir::success();
+}
+
+mlir::LogicalResult SQLTranslator::translate(RemapOp op) {
+  _os << "(SELECT ";
+
+  ColumnIdx outIdx = 0;
+  for (ColumnIdx inIdx : op.getRemap()) {
+    if (outIdx != 0) {
+      _os << ", ";
+    }
+
+    _os << "c" << inIdx << " AS c" << outIdx;
+  }
+
+  _os << " FROM ";
+  if (mlir::failed(translate(op.getInput()))) {
+    return mlir::failure();
   }
 
   _os << ")";
