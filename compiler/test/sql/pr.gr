@@ -1,0 +1,359 @@
+// RUN: split-file %s %t
+// RUN: graphalg-translate --import-graphalg %t/input.gr > %t/parsed.mlir
+// RUN: graphalg-opt %t/parsed.mlir --graphalg-to-core-pipeline --graphalg-verify-loop-bounds --graphalg-explicate-sparsity --graphalg-split-aggregate --graphalg-loop-aggregate --graphalg-to-rel > %t/rel.mlir
+// RUN: garel-translate --export-sql %t/rel.mlir > %t/pr.py
+// RUN: touch %t/__init__.py
+// RUN: python3 %t/driver.py
+// RUN: diff %t/reference.csv %t/output.csv
+
+//--- edges.csv
+c0,c1,c2
+0,18,true
+0,20,true
+0,21,true
+0,26,true
+0,30,true
+0,36,true
+0,44,true
+0,47,true
+1,2,true
+1,19,true
+1,38,true
+1,45,true
+2,5,true
+2,9,true
+2,31,true
+2,40,true
+2,44,true
+3,14,true
+4,14,true
+4,15,true
+4,17,true
+4,27,true
+4,46,true
+5,48,true
+6,5,true
+6,26,true
+6,42,true
+6,45,true
+7,4,true
+7,20,true
+7,28,true
+7,29,true
+7,31,true
+7,42,true
+8,15,true
+8,17,true
+8,20,true
+8,27,true
+8,29,true
+8,34,true
+8,39,true
+9,8,true
+9,12,true
+9,27,true
+9,28,true
+9,32,true
+10,2,true
+10,38,true
+11,46,true
+11,49,true
+12,6,true
+12,11,true
+12,16,true
+12,31,true
+12,47,true
+13,3,true
+13,19,true
+13,20,true
+13,34,true
+13,37,true
+13,39,true
+14,7,true
+14,23,true
+14,30,true
+14,34,true
+14,43,true
+16,4,true
+16,8,true
+16,10,true
+16,15,true
+16,25,true
+16,36,true
+17,0,true
+17,11,true
+17,27,true
+17,29,true
+17,43,true
+17,44,true
+17,46,true
+17,49,true
+18,9,true
+18,10,true
+18,12,true
+18,26,true
+18,37,true
+19,14,true
+19,24,true
+20,21,true
+20,26,true
+20,30,true
+20,31,true
+20,39,true
+21,18,true
+21,25,true
+21,26,true
+21,30,true
+22,21,true
+22,34,true
+22,35,true
+22,37,true
+22,39,true
+22,45,true
+22,46,true
+23,8,true
+23,12,true
+23,14,true
+23,33,true
+23,35,true
+23,49,true
+24,7,true
+24,23,true
+24,29,true
+24,33,true
+24,40,true
+24,46,true
+25,6,true
+25,30,true
+25,36,true
+25,39,true
+25,43,true
+25,46,true
+26,30,true
+26,32,true
+26,42,true
+27,7,true
+27,31,true
+27,41,true
+27,44,true
+28,0,true
+28,1,true
+28,11,true
+28,13,true
+28,15,true
+28,18,true
+28,19,true
+28,35,true
+29,8,true
+29,23,true
+29,33,true
+29,43,true
+30,10,true
+30,16,true
+30,31,true
+30,38,true
+30,45,true
+30,46,true
+31,1,true
+31,27,true
+31,28,true
+31,29,true
+31,30,true
+32,6,true
+32,7,true
+32,8,true
+32,9,true
+32,31,true
+32,33,true
+32,36,true
+33,25,true
+33,47,true
+34,2,true
+34,9,true
+34,16,true
+34,23,true
+34,25,true
+34,27,true
+34,32,true
+34,40,true
+35,19,true
+35,20,true
+35,28,true
+35,31,true
+35,45,true
+36,0,true
+36,4,true
+36,8,true
+36,12,true
+36,22,true
+36,23,true
+37,1,true
+37,21,true
+37,49,true
+38,5,true
+38,7,true
+38,19,true
+38,27,true
+38,29,true
+38,46,true
+38,47,true
+39,4,true
+39,6,true
+39,7,true
+39,10,true
+39,32,true
+39,33,true
+39,36,true
+39,48,true
+40,23,true
+40,42,true
+42,0,true
+42,1,true
+42,10,true
+42,14,true
+42,16,true
+42,28,true
+42,37,true
+42,46,true
+43,10,true
+43,12,true
+43,14,true
+44,4,true
+44,10,true
+44,11,true
+44,20,true
+44,23,true
+45,22,true
+45,23,true
+45,25,true
+45,30,true
+45,35,true
+45,40,true
+46,7,true
+46,13,true
+46,15,true
+46,27,true
+46,28,true
+46,33,true
+46,34,true
+46,39,true
+46,41,true
+46,45,true
+46,49,true
+47,7,true
+47,18,true
+47,29,true
+47,34,true
+47,37,true
+47,42,true
+47,49,true
+48,6,true
+48,7,true
+48,16,true
+48,17,true
+49,3,true
+49,27,true
+49,46,true
+
+//--- input.gr
+func withDamping(degree:int, damping:real) -> real {
+    return cast<real>(degree) / damping;
+}
+
+func PR(graph: Matrix<s, s, bool>) -> Vector<s, real> {
+    iterations = int(10);
+    damping = real(0.85);
+    n = graph.nrows;
+    teleport = (real(1.0) - damping) / cast<real>(n);
+    rdiff = real(1.0);
+
+    d_out = reduceRows(cast<int>(graph));
+
+    d = apply(withDamping, d_out, damping);
+
+    connected = reduceRows(graph);
+    sinks = Vector<bool>(n);
+    sinks<!connected>[:] = bool(true);
+
+    pr = Vector<real>(n);
+    pr[:] = real(1.0) / cast<real>(n);
+
+    for i in int(0):iterations {
+        sink_pr = Vector<real>(n);
+        sink_pr<sinks> = pr;
+        redist = (damping / cast<real>(n)) * reduce(sink_pr);
+
+        w = pr (./) d;
+
+        pr[:] = teleport + redist;
+        pr += cast<real>(graph).T * w;
+    }
+
+    return pr;
+}
+
+//--- driver.py
+from pr import PR
+import duckdb
+from pathlib import Path
+
+dir = Path(__file__).parent
+conn = duckdb.connect()
+vertices = conn.sql("SELECT generate_series AS c0 FROM generate_series(0, 49)")
+edges = conn.read_csv(dir / 'edges.csv')
+
+res = PR(conn, edges, vertices)
+conn.sql("SELECT c0, round(c1, 4) FROM res ORDER BY c0").to_csv(str(dir / 'output.csv'))
+
+//--- reference.csv
+c0,"round(c1, 4)"
+0,0.0123
+1,0.0185
+2,0.0209
+3,0.0118
+4,0.0181
+5,0.0137
+6,0.0177
+7,0.034
+8,0.0225
+9,0.0132
+10,0.0265
+11,0.0139
+12,0.0203
+13,0.009
+14,0.0367
+15,0.0177
+16,0.0203
+17,0.013
+18,0.0127
+19,0.0168
+20,0.0191
+21,0.0129
+22,0.0088
+23,0.0329
+24,0.0107
+25,0.0237
+26,0.0167
+27,0.0338
+28,0.0247
+29,0.0253
+30,0.0343
+31,0.035
+32,0.0146
+33,0.0216
+34,0.0202
+35,0.0151
+36,0.0148
+37,0.0132
+38,0.0236
+39,0.0181
+40,0.0139
+41,0.0136
+42,0.0252
+43,0.0199
+44,0.0169
+45,0.0226
+46,0.0372
+47,0.0204
+48,0.0171
+49,0.0245

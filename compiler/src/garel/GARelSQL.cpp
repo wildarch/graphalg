@@ -61,6 +61,8 @@ private:
   mlir::LogicalResult translate(mlir::arith::AndIOp op);
   mlir::LogicalResult translate(mlir::arith::OrIOp op);
   mlir::LogicalResult translate(mlir::arith::CmpIOp op);
+  mlir::LogicalResult translate(mlir::arith::DivFOp op);
+  mlir::LogicalResult translate(mlir::arith::SIToFPOp op);
 
   mlir::LogicalResult translateConstant(mlir::Location loc,
                                         mlir::Attribute attr);
@@ -166,6 +168,8 @@ mlir::LogicalResult SQLTranslator::translate(mlir::Operation *op) {
   CASE(mlir::arith::AndIOp)
   CASE(mlir::arith::OrIOp)
   CASE(mlir::arith::CmpIOp)
+  CASE(mlir::arith::DivFOp)
+  CASE(mlir::arith::SIToFPOp)
 #undef CASE
 
   return op->emitOpError("no SQL translation defined for this op");
@@ -597,6 +601,28 @@ mlir::LogicalResult SQLTranslator::translate(mlir::arith::CmpIOp op) {
     return mlir::failure();
   }
   _os << ")";
+  return mlir::success();
+}
+
+mlir::LogicalResult SQLTranslator::translate(mlir::arith::DivFOp op) {
+  _os << "(";
+  if (mlir::failed(translate(op.getLhs()))) {
+    return mlir::failure();
+  }
+  _os << " / ";
+  if (mlir::failed(translate(op.getRhs()))) {
+    return mlir::failure();
+  }
+  _os << ")";
+  return mlir::success();
+}
+
+mlir::LogicalResult SQLTranslator::translate(mlir::arith::SIToFPOp op) {
+  _os << "CAST(";
+  if (mlir::failed(translate(op.getIn()))) {
+    return mlir::failure();
+  }
+  _os << " AS DOUBLE PRECISION)";
   return mlir::success();
 }
 
