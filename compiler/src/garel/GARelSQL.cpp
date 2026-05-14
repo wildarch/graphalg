@@ -49,6 +49,7 @@ private:
   mlir::LogicalResult translate(UnionOp op);
   mlir::LogicalResult translate(JoinOp op);
   mlir::LogicalResult translate(RemapOp op);
+  mlir::LogicalResult translate(SelectOp op);
 
   mlir::LogicalResult translate(ExtractOp op);
   mlir::LogicalResult translate(mlir::arith::SelectOp op);
@@ -58,6 +59,7 @@ private:
   mlir::LogicalResult translate(mlir::arith::MulIOp op);
   mlir::LogicalResult translate(mlir::arith::MulFOp op);
   mlir::LogicalResult translate(mlir::arith::AndIOp op);
+  mlir::LogicalResult translate(mlir::arith::OrIOp op);
   mlir::LogicalResult translate(mlir::arith::CmpIOp op);
 
   mlir::LogicalResult translateConstant(mlir::Location loc,
@@ -153,6 +155,7 @@ mlir::LogicalResult SQLTranslator::translate(mlir::Operation *op) {
   CASE(UnionOp)
   CASE(JoinOp)
   CASE(RemapOp)
+  CASE(SelectOp)
   CASE(ExtractOp)
   CASE(mlir::arith::SelectOp)
   CASE(mlir::arith::ConstantOp)
@@ -161,6 +164,7 @@ mlir::LogicalResult SQLTranslator::translate(mlir::Operation *op) {
   CASE(mlir::arith::MulIOp)
   CASE(mlir::arith::MulFOp)
   CASE(mlir::arith::AndIOp)
+  CASE(mlir::arith::OrIOp)
   CASE(mlir::arith::CmpIOp)
 #undef CASE
 
@@ -430,12 +434,36 @@ mlir::LogicalResult SQLTranslator::translate(RemapOp op) {
       _os << ", ";
     }
 
-    _os << "c" << inIdx << " AS c" << outIdx;
+    _os << "c" << inIdx << " AS c" << outIdx++;
   }
 
   _os << " FROM ";
   if (mlir::failed(translate(op.getInput()))) {
     return mlir::failure();
+  }
+
+  _os << ")";
+  return mlir::success();
+}
+
+mlir::LogicalResult SQLTranslator::translate(SelectOp op) {
+  _os << "(SELECT * FROM ";
+  if (mlir::failed(translate(op.getInput()))) {
+    return mlir::failure();
+  }
+
+  _os << " WHERE ";
+  auto yieldOp = op.getTerminator();
+  for (auto [i, pred] : llvm::enumerate(yieldOp.getPredicates())) {
+    if (i != 0) {
+      _os << " AND ";
+    }
+
+    _os << "(";
+    if (mlir::failed(translate(pred))) {
+      return mlir::failure();
+    }
+    _os << ")";
   }
 
   _os << ")";
@@ -517,6 +545,19 @@ mlir::LogicalResult SQLTranslator::translate(mlir::arith::AndIOp op) {
     return mlir::failure();
   }
   _os << " AND ";
+  if (mlir::failed(translate(op->getOperand(1)))) {
+    return mlir::failure();
+  }
+  _os << ")";
+  return mlir::success();
+}
+
+mlir::LogicalResult SQLTranslator::translate(mlir::arith::OrIOp op) {
+  _os << "(";
+  if (mlir::failed(translate(op->getOperand(0)))) {
+    return mlir::failure();
+  }
+  _os << " OR ";
   if (mlir::failed(translate(op->getOperand(1)))) {
     return mlir::failure();
   }

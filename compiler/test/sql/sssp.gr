@@ -40,7 +40,7 @@ from pathlib import Path
 
 dir = Path(__file__).parent
 conn = duckdb.connect()
-vertices = conn.sql("SELECT generate_series AS c0 FROM generate_series(0, 10)")
+vertices = conn.sql("SELECT generate_series AS c0 FROM generate_series(0, 9)")
 edges = conn.read_csv(dir / 'edges.csv')
 source = conn.sql("SELECT 0 AS c0, true AS c1")
 
