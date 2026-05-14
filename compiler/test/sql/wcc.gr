@@ -1,0 +1,67 @@
+// RUN: split-file %s %t
+// RUN: graphalg-translate --import-graphalg %t/input.gr > %t/parsed.mlir
+// RUN: graphalg-opt %t/parsed.mlir --graphalg-to-core-pipeline --graphalg-verify-loop-bounds --graphalg-explicate-sparsity --graphalg-split-aggregate --graphalg-loop-aggregate --graphalg-to-rel > %t/rel.mlir
+// RUN: garel-translate --export-sql %t/rel.mlir > %t/wcc.py
+// RUN: touch %t/__init__.py
+// RUN: python3 %t/driver.py
+// RUN: diff %t/reference.csv %t/output.csv
+
+//--- edges.csv
+c0,c1,c2
+0,1,true
+0,2,true
+1,0,true
+1,2,true
+1,3,true
+3,1,true
+5,6,true
+5,7,true
+6,5,true
+8,2,true
+
+//--- input.gr
+func WCC(graph: Matrix<s, s, bool>) -> Matrix<s, s, bool> {
+  id = Vector<bool>(graph.nrows);
+  id[:] = bool(true);
+  label = diag(id);
+
+  for i in graph.nrows {
+    // Keep current label
+    alternatives = label;
+    // Labels reachable with a forward step
+    alternatives += graph * label;
+    // Labels reachable with a backward step
+    alternatives += graph.T * label;
+
+    // Select a new label
+    label = pickAny(alternatives);
+  }
+
+  return label;
+}
+
+//--- driver.py
+from wcc import WCC
+import duckdb
+from pathlib import Path
+
+dir = Path(__file__).parent
+conn = duckdb.connect()
+vertices = conn.sql("SELECT generate_series AS c0 FROM generate_series(0, 8)")
+edges = conn.read_csv(dir / 'edges.csv')
+source = conn.sql("SELECT 0 AS c0, true AS c1")
+
+res = WCC(conn, edges, vertices)
+res.sort('c0').to_csv(str(dir / 'output.csv'))
+
+//--- reference.csv
+c0,c1,c2
+0,0,true
+1,0,true
+2,0,true
+3,0,true
+4,4,true
+5,5,true
+6,5,true
+7,5,true
+8,0,true
