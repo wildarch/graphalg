@@ -65,12 +65,13 @@ source = conn.sql("SELECT 0 AS c0, true::BOOL AS c1")
 res = BFS(conn, edges, source, vertices)
 res.sort('c0').to_csv(str(dir / 'output.csv'))
 
-//--- reference.m
-0 0 1 : i64
-1 0 2 : i64
-2 0 2 : i64
-3 0 3 : i64
-4 0 3 : i64
-5 0 4 : i64
-6 0 4 : i64
-7 0 4 : i64
+//--- reference.csv
+c0,c1
+0,1
+1,2
+2,2
+3,3
+4,3
+5,4
+6,4
+7,4
