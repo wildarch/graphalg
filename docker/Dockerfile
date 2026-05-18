@@ -36,7 +36,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
   zlib1g-dev \
   && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --break-system-packages lit
+RUN pip install --break-system-packages lit duckdb
 
 # - Use clang-20 as default compiler
 # - Allow user 'ubuntu' to run commands as root
