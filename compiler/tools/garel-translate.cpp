@@ -11,7 +11,25 @@
 #include "garel/GARelSQL.h"
 #include "graphalg/GraphAlgDialect.h"
 
+enum class SQLDialect {
+  DUCKDB_PYTHON,
+  UMBRA_ITERATE,
+};
+
+namespace cmd {
+
+using namespace llvm;
+
+cl::opt<SQLDialect> sqlDialect(
+    "sql-dialect", cl::desc("The SQL dialect to export"),
+    cl::init(SQLDialect::DUCKDB_PYTHON),
+    cl::values(clEnumValN(SQLDialect::DUCKDB_PYTHON, "duckdb_python",
+                          "DuckDB (with Python driver for control flow)"),
+               clEnumValN(SQLDialect::UMBRA_ITERATE, "umbra", "Umbra")));
+} // namespace cmd
+
 int main(int argc, char *argv[]) {
+  // TODO: Use dialect flag.
   mlir::TranslateFromMLIRRegistration exportSQL(
       "export-sql", "export to SQL", garel::translateToSQL,
       [](mlir::DialectRegistry &registry) {
