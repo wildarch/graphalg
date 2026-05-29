@@ -94,6 +94,7 @@ mlir::LogicalResult SQLTranslator::translate(mlir::ModuleOp op) {
     if (mlir::failed(translate(funcOp))) {
       return mlir::failure();
     }
+    _os << "\n";
   }
 
   return mlir::success();
@@ -360,17 +361,31 @@ mlir::LogicalResult SQLTranslator::translateUmbra(ForOp op) {
   indent();
   _os << "counter_next => TABLE(SELECT i + 1 AS i FROM counter)";
 
+  // until clause for iteration count
+  _os << ",\n";
+  indent();
+  _os << "until => TABLE(SELECT i = c0 FROM counter,";
+  if (mlir::failed(translate(op.getIters()))) {
+    return mlir::failure();
+  }
+
   if (!op.getUntil().empty()) {
-    return op->emitOpError("until not yet supported");
-  } else {
-    _os << ",\n";
-    indent();
-    _os << "until => TABLE(SELECT i = c0 FROM counter,";
-    if (mlir::failed(translate(op.getIters()))) {
+    // Additional until clause
+    _os << " UNION ALL SELECT c0 FROM ";
+
+    auto &body = op.getUntil().front();
+    auto yieldOp = llvm::cast<ForYieldOp>(body.getTerminator());
+    // Map block arguments
+    for (auto i : stateOrder) {
+      _valMap[body.getArgument(i)] = stateTables[i];
+    }
+
+    if (mlir::failed(translate(yieldOp.getInputs()[0]))) {
       return mlir::failure();
     }
-    _os << ")";
   }
+
+  _os << ")";
 
   _os << "))\n";
   _indentLevel--;
