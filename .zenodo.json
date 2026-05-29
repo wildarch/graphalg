@@ -1,0 +1,71 @@
+{
+  "title": "GraphAlg: An Embeddable Language for Writing Graph Algorithms in Linear Algebra",
+  "description": "<p>GraphAlg is a domain-specific language for graph algorithms based on linear algebra, designed to be embedded in databases. It compiles via a MATLANG-based core language to relational algebra, and is integrated into AvantGraph through the Cypher <code>WITH ALGORITHM</code> clause. The repository includes the compiler, language specification, Codemirror language support, an interactive WebAssembly playground, and a tutorial.</p>",
+  "upload_type": "software",
+  "access_right": "open",
+  "license": "MIT",
+  "creators": [
+    {
+      "name": "de Graaf, Daan",
+      "affiliation": "Eindhoven University of Technology",
+      "orcid": "0009-0000-0322-1149"
+    },
+    {
+      "name": "Brijder, Robert",
+      "affiliation": "Eindhoven University of Technology",
+      "orcid": "0000-0002-8912-1735"
+    },
+    {
+      "name": "Chakraborty, Soham",
+      "affiliation": "Delft University of Technology",
+      "orcid": "0000-0002-4454-2050"
+    },
+    {
+      "name": "Fletcher, George H. L.",
+      "affiliation": "Eindhoven University of Technology",
+      "orcid": "0000-0003-2111-6769"
+    },
+    {
+      "name": "van de Wall, Bram",
+      "affiliation": "Eindhoven University of Technology",
+      "orcid": "0009-0001-3066-863X"
+    },
+    {
+      "name": "Yakovets, Nikolay",
+      "affiliation": "Eindhoven University of Technology",
+      "orcid": "0000-0002-1488-1414"
+    }
+  ],
+  "keywords": [
+    "graph algorithms",
+    "linear algebra",
+    "domain-specific language",
+    "graph databases",
+    "MATLANG",
+    "WebAssembly"
+  ],
+  "grants": [
+    {"id": "10.13039/501100000780::101058573"}
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "10.48550/arXiv.2604.11454",
+      "relation": "isDocumentedBy",
+      "resource_type": "publication-preprint"
+    },
+    {
+      "identifier": "https://wildarch.dev/graphalg/playground",
+      "relation": "isDocumentedBy",
+      "resource_type": "other"
+    },
+    {
+      "identifier": "https://wildarch.dev/graphalg/tutorial",
+      "relation": "isDocumentedBy",
+      "resource_type": "other"
+    }
+  ],
+  "communities": [
+    {"identifier": "scilake_project"},
+    {"identifier": "eu"}
+  ]
+}
