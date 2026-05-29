@@ -11,27 +11,26 @@
 #include "garel/GARelSQL.h"
 #include "graphalg/GraphAlgDialect.h"
 
-enum class SQLDialect {
-  DUCKDB_PYTHON,
-  UMBRA_ITERATE,
-};
-
-namespace cmd {
+namespace {
 
 using namespace llvm;
 
-cl::opt<SQLDialect> sqlDialect(
+cl::opt<garel::SQLDialect> sqlDialect(
     "sql-dialect", cl::desc("The SQL dialect to export"),
-    cl::init(SQLDialect::DUCKDB_PYTHON),
-    cl::values(clEnumValN(SQLDialect::DUCKDB_PYTHON, "duckdb_python",
+    cl::init(garel::SQLDialect::DUCKDB_PYTHON),
+    cl::values(clEnumValN(garel::SQLDialect::DUCKDB_PYTHON, "duckdb_python",
                           "DuckDB (with Python driver for control flow)"),
-               clEnumValN(SQLDialect::UMBRA_ITERATE, "umbra", "Umbra")));
-} // namespace cmd
+               clEnumValN(garel::SQLDialect::UMBRA_ITERATE, "umbra", "Umbra")));
+
+} // namespace
 
 int main(int argc, char *argv[]) {
   // TODO: Use dialect flag.
   mlir::TranslateFromMLIRRegistration exportSQL(
-      "export-sql", "export to SQL", garel::translateToSQL,
+      "export-sql", "export to SQL",
+      [](mlir::Operation *op, llvm::raw_ostream &os) {
+        return garel::translateToSQL(op, os, sqlDialect);
+      },
       [](mlir::DialectRegistry &registry) {
         registry.insert<garel::GARelDialect>();
         registry.insert<graphalg::GraphAlgDialect>();

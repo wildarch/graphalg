@@ -1,21 +1,22 @@
 #include <llvm/ADT/DenseMap.h>
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/SmallVector.h>
+#include <llvm/ADT/StringRef.h>
 #include <llvm/Support/Casting.h>
 #include <llvm/Support/raw_ostream.h>
 #include <mlir/Dialect/Arith/IR/Arith.h>
 #include <mlir/Dialect/Func/IR/FuncOps.h>
+#include <mlir/IR/BuiltinAttributes.h>
 #include <mlir/IR/BuiltinOps.h>
 #include <mlir/IR/Diagnostics.h>
+#include <mlir/IR/Location.h>
 #include <mlir/IR/Operation.h>
 #include <mlir/Support/LLVM.h>
 
 #include "garel/GARelAttr.h"
 #include "garel/GARelOps.h"
+#include "garel/GARelSQL.h"
 #include "garel/GARelTypes.h"
-#include "mlir/IR/BuiltinAttributes.h"
-#include "mlir/IR/Location.h"
-#include "llvm/ADT/StringRef.h"
 
 namespace garel {
 
@@ -24,8 +25,9 @@ namespace {
 class SQLTranslator {
 private:
   llvm::raw_ostream &_os;
-  std::size_t _indentLevel = 0;
+  SQLDialect _dialect;
 
+  std::size_t _indentLevel = 0;
   llvm::DenseMap<mlir::Value, std::string> _valMap;
   std::size_t _tempCount;
 
@@ -40,9 +42,13 @@ private:
   }
 
   mlir::LogicalResult translate(mlir::func::FuncOp op);
+  mlir::LogicalResult translateDuckDB(mlir::func::FuncOp op);
+  mlir::LogicalResult translateUmbra(mlir::func::FuncOp op);
   mlir::LogicalResult translate(mlir::Value val);
   mlir::LogicalResult translate(mlir::Operation *op);
   mlir::LogicalResult translate(ForOp op);
+  mlir::LogicalResult translateDuckDB(ForOp op);
+  mlir::LogicalResult translateUmbra(ForOp op);
   mlir::LogicalResult translate(ConstantOp op);
   mlir::LogicalResult translate(AggregateOp op);
   mlir::LogicalResult translate(ProjectOp op);
@@ -70,7 +76,8 @@ private:
   mlir::LogicalResult translateMul(mlir::Operation *op);
 
 public:
-  SQLTranslator(llvm::raw_ostream &os) : _os(os) {}
+  SQLTranslator(llvm::raw_ostream &os, SQLDialect dialect)
+      : _os(os), _dialect(dialect) {}
 
   mlir::LogicalResult translate(mlir::ModuleOp op);
 };
@@ -93,6 +100,15 @@ mlir::LogicalResult SQLTranslator::translate(mlir::ModuleOp op) {
 }
 
 mlir::LogicalResult SQLTranslator::translate(mlir::func::FuncOp op) {
+  switch (_dialect) {
+  case SQLDialect::DUCKDB_PYTHON:
+    return translateDuckDB(op);
+  case SQLDialect::UMBRA_ITERATE:
+    return translateUmbra(op);
+  }
+}
+
+mlir::LogicalResult SQLTranslator::translateDuckDB(mlir::func::FuncOp op) {
   auto name = op.getSymName();
   _os << "def " << name << "(conn";
   for (auto [i, arg] : llvm::enumerate(op.getBody().getArguments())) {
@@ -126,6 +142,30 @@ mlir::LogicalResult SQLTranslator::translate(mlir::func::FuncOp op) {
 
   _os << "\"\"\")\n";
   _indentLevel--;
+  return mlir::success();
+}
+
+mlir::LogicalResult SQLTranslator::translateUmbra(mlir::func::FuncOp op) {
+  auto name = op.getSymName();
+  _os << "-- " << name << "\n";
+
+  // Assume arguments are tables named farg0, farg1, ...
+  for (auto [i, arg] : llvm::enumerate(op.getBody().getArguments())) {
+    auto varName = std::string("farg") + std::to_string(i);
+    _valMap[arg] = varName;
+  }
+
+  auto retOp =
+      llvm::cast<mlir::func::ReturnOp>(op.getBody().front().getTerminator());
+  if (retOp.getNumOperands() != 1) {
+    return retOp.emitOpError("expected a single return value");
+  }
+
+  _os << "SELECT * FROM ";
+  if (mlir::failed(translate(retOp.getOperand(0)))) {
+    return mlir::failure();
+  }
+
   return mlir::success();
 }
 
@@ -176,14 +216,23 @@ mlir::LogicalResult SQLTranslator::translate(mlir::Operation *op) {
 }
 
 mlir::LogicalResult SQLTranslator::translate(ForOp op) {
+  switch (_dialect) {
+  case SQLDialect::DUCKDB_PYTHON:
+    return translateDuckDB(op);
+  case SQLDialect::UMBRA_ITERATE:
+    return translateUmbra(op);
+  }
+}
+
+mlir::LogicalResult SQLTranslator::translateDuckDB(ForOp op) {
   auto &body = op.getBody().front();
   // Initialize temporary tables for loop state
   llvm::SmallVector<std::string> stateTables;
-  for (auto i : llvm::seq(op.getInit().size())) {
+  for (auto [i, init] : llvm::enumerate(op.getInit())) {
     auto temp = newTemp();
     indent();
     _os << "conn.execute(\"\"\"CREATE TABLE " << temp << " AS ";
-    if (mlir::failed(translate(op.getInit()[i]))) {
+    if (mlir::failed(translate(init))) {
       return mlir::failure();
     }
     _os << "\"\"\")\n";
@@ -257,6 +306,77 @@ mlir::LogicalResult SQLTranslator::translate(ForOp op) {
   return mlir::success();
 }
 
+mlir::LogicalResult SQLTranslator::translateUmbra(ForOp op) {
+  auto &body = op.getBody().front();
+  _os << "(SELECT * FROM umbra.iterate(\n";
+  _indentLevel++;
+
+  // Define the order in which we add the states. This matters because the first
+  // state becomes the result of the op.
+  llvm::SmallVector<std::size_t> stateOrder{op.getResultIdx()};
+  for (auto i : llvm::seq(op.getInit().size())) {
+    if (i != op.getResultIdx()) {
+      stateOrder.push_back(i);
+    }
+  }
+
+  // Initial state
+  llvm::SmallVector<std::string> stateTables(op.getInit().size());
+  bool first = true;
+  for (auto i : stateOrder) {
+    if (first) {
+      first = false;
+    } else {
+      _os << ",\n";
+    }
+
+    auto temp = newTemp();
+    indent();
+    _os << temp << "_init => TABLE";
+    if (mlir::failed(translate(op.getInit()[i]))) {
+      return mlir::failure();
+    }
+
+    stateTables[i] = temp;
+    _valMap[body.getArgument(i)] = temp;
+  }
+
+  // Next state
+  auto yieldOp = llvm::cast<ForYieldOp>(op.getBody().front().getTerminator());
+  for (auto i : stateOrder) {
+    _os << ",\n";
+
+    indent();
+    _os << stateTables[i] << "_next => TABLE";
+    if (mlir::failed(translate(yieldOp.getInputs()[i]))) {
+      return mlir::failure();
+    }
+  }
+
+  // Loop counter
+  _os << ",\n";
+  indent();
+  _os << "counter_init => TABLE(SELECT 0 AS i),\n";
+  indent();
+  _os << "counter_next => TABLE(SELECT i + 1 AS i FROM counter)";
+
+  if (!op.getUntil().empty()) {
+    return op->emitOpError("until not yet supported");
+  } else {
+    _os << ",\n";
+    indent();
+    _os << "until => TABLE(SELECT i = c0 FROM counter,";
+    if (mlir::failed(translate(op.getIters()))) {
+      return mlir::failure();
+    }
+    _os << ")";
+  }
+
+  _os << "))\n";
+  _indentLevel--;
+  return mlir::success();
+}
+
 mlir::LogicalResult SQLTranslator::translateConstant(mlir::Location loc,
                                                      mlir::Attribute attr) {
   if (auto boolAttr = llvm::dyn_cast<mlir::BoolAttr>(attr)) {
@@ -323,8 +443,13 @@ mlir::LogicalResult SQLTranslator::translate(AggregateOp op) {
     }
 
     _os << translateAggregateFunc(agg.getFunc()) << "(";
-    llvm::interleaveComma(agg.getInputs(), _os,
-                          [&](ColumnIdx idx) { _os << "c" << idx; });
+    if (agg.getFunc() == AggregateFunc::COUNT) {
+      assert(agg.getInputs().empty());
+      _os << "*";
+    } else {
+      llvm::interleaveComma(agg.getInputs(), _os,
+                            [&](ColumnIdx idx) { _os << "c" << idx; });
+    }
     _os << ") AS c" << colOut++;
   }
 
@@ -626,8 +751,9 @@ mlir::LogicalResult SQLTranslator::translate(mlir::arith::SIToFPOp op) {
   return mlir::success();
 }
 
-mlir::LogicalResult translateToSQL(mlir::Operation *op, llvm::raw_ostream &os) {
-  SQLTranslator translator(os);
+mlir::LogicalResult translateToSQL(mlir::Operation *op, llvm::raw_ostream &os,
+                                   SQLDialect dialect) {
+  SQLTranslator translator(os, dialect);
   auto moduleOp = llvm::dyn_cast<mlir::ModuleOp>(op);
   if (!moduleOp) {
     return op->emitOpError("expected a module");

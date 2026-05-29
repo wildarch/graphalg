@@ -6,6 +6,12 @@
 
 namespace garel {
 
-mlir::LogicalResult translateToSQL(mlir::Operation *op, llvm::raw_ostream &os);
+enum class SQLDialect {
+  DUCKDB_PYTHON,
+  UMBRA_ITERATE,
+};
+
+mlir::LogicalResult translateToSQL(mlir::Operation *op, llvm::raw_ostream &os,
+                                   SQLDialect dialect);
 
 } // namespace garel
