@@ -207,7 +207,9 @@ mlir::LogicalResult Evaluator::evaluate(ForOp op) {
   // Initialize block arguments
   for (auto [init, blockArg] :
        llvm::zip_equal(op.getInitArgs(), body.getArguments().drop_front())) {
-    _values[blockArg] = _values[init];
+    // Don't read from _values while writing
+    auto tmp = _values[init];
+    _values[blockArg] = tmp;
   }
 
   for (auto i : llvm::seq(rangeBegin, rangeEnd)) {
@@ -224,7 +226,9 @@ mlir::LogicalResult Evaluator::evaluate(ForOp op) {
         // Update block arguments
         for (auto [value, blockArg] : llvm::zip_equal(
                  yieldOp.getInputs(), body.getArguments().drop_front())) {
-          _values[blockArg] = _values[value];
+          // Don't read from _values while writing
+          auto tmp = _values[value];
+          _values[blockArg] = tmp;
         }
       } else if (mlir::failed(evaluate(&op))) {
         return mlir::failure();
@@ -239,7 +243,9 @@ mlir::LogicalResult Evaluator::evaluate(ForOp op) {
       // Use current state of loop variables as input to until block.
       for (auto [bodyArg, untilArg] :
            llvm::zip_equal(body.getArguments(), until.getArguments())) {
-        _values[untilArg] = _values[bodyArg];
+        // Don't read from _values while writing
+        auto tmp = _values[bodyArg];
+        _values[untilArg] = tmp;
       }
 
       for (auto &op : until) {
@@ -263,7 +269,9 @@ mlir::LogicalResult Evaluator::evaluate(ForOp op) {
   // Set loop results.
   for (auto [value, result] :
        llvm::zip_equal(body.getArguments().drop_front(), op->getResults())) {
-    _values[result] = _values[value];
+    // Don't read from _values while writing
+    auto tmp = _values[value];
+    _values[result] = tmp;
   }
 
   return mlir::success();
@@ -296,7 +304,7 @@ mlir::LogicalResult Evaluator::evaluate(ApplyOp op) {
     }
   }
 
-  _values[op] = result.build();
+  _values[op.getResult()] = result.build();
   return mlir::success();
 }
 
