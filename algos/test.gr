@@ -3,7 +3,7 @@ func BC(graph: Matrix<s, s, bool>, exchange: Matrix<s, s, bool>) -> Matrix<s, 1,
 
   todo = Vector<bool>(graph.nrows);
   todo[:] = bool(true);
-  //for i in graph.nrows {
+  for i in graph.nrows {
     source = pickAny(todo.T).T;
     todo<source>[:] = bool(false);
     todo = todo;
@@ -50,7 +50,7 @@ func BC(graph: Matrix<s, s, bool>, exchange: Matrix<s, s, bool>) -> Matrix<s, 1,
     }
 
     b += u;
-  //}
+  }
 
   return b;
 }

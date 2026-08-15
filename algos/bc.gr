@@ -1,12 +1,12 @@
-func BC(graph: Matrix<s, s, bool>, exchange: Matrix<s, s, bool>) -> Vector<s, real> {
+func BC(graph: Matrix<s, s, bool>, exchange: Matrix<s, s, bool>) -> Matrix<s, 1, real> {
   b = Vector<real>(graph.nrows);
 
-  // Visiting vertices one by one
   todo = Vector<bool>(graph.nrows);
   todo[:] = bool(true);
   for i in graph.nrows {
     source = pickAny(todo.T).T;
     todo<source>[:] = bool(false);
+    todo = todo;
 
     // BFS
     S = Matrix<bool>(graph.nrows, graph.ncols);
@@ -21,25 +21,31 @@ func BC(graph: Matrix<s, s, bool>, exchange: Matrix<s, s, bool>) -> Vector<s, re
       todo2 = todo2;
 
       p += cast<int>(f);
-      S += f * dv.T;
+      S += dv * f.T;
       pb = cast<bool>(p);
-      f<!pb> = f * graph;
-      f=f;
+      fn = Vector<bool>(graph.nrows);
+      fn<!pb> = f * graph;
+      f = fn;
     } until f.nvals == int(0);
 
     todo2 = Vector<bool>(graph.nrows);
     todo2[:] = bool(true);
+
     u = Vector<real>(graph.nrows);
     for j in graph.nrows {
+      todo2 = todo2;
       dv = pickAny(todo2.T).T;
       todo2<dv>[:] = bool(false);
+      dv2 = pickAny(todo2.T).T;
+
       d = dv * exchange;
+      d2 = dv2 * exchange;
       u1 = Vector<real>(graph.nrows);
       u1[:] = real(1.0);
       u1 += u;
-      w = cast<real>(S * d) (.*) u1 (./) cast<real>(p);
+      w = cast<real>(d * S) (.*) u1 (./) cast<real>(p);
       w = cast<real>(graph) * w;
-      w = w (.*) cast<real>(S * d) (.*) cast<real>(p);
+      w = w (.*) cast<real>(d2 * S) (.*) cast<real>(p);
       u += w;
     }
 
