@@ -1,0 +1,16 @@
+func gt_k(v: int, k: int) -> bool {
+  return v >= k;
+}
+
+func KCore(graph: Matrix<s, s, bool>, k:int) -> Vector<s, bool> {
+  undir = graph (.+) graph.T;
+
+  active = Vector<bool>(graph.nrows);
+  active[:] = bool(true);
+  for i in graph.nrows {
+    active_nb = undir * diag(active);
+    active = active (.*) apply(gt_k, reduceRows(cast<int>(active_nb)), k);
+  }
+
+  return active;
+}

@@ -737,6 +737,18 @@ def EqOp : Core_Op<"eq", [Pure, AllTypesMatch<["lhs", "rhs"]>]> {
     let hasFolder = 1;
 }
 
+def CmpOp : Core_Op<"cmp", [Pure, AllTypesMatch<["lhs", "rhs"]>]> {
+    let summary = "Scalar comparison";
+
+    let arguments = (ins AnySemiring:$lhs, BinaryOp:$op, AnySemiring:$rhs);
+
+    let results = (outs I1:$result);
+
+    let assemblyFormat = [{
+        $lhs `,` $rhs `:` type($lhs) attr-dict
+    }];
+}
+
 // Note: In spec but not used in implementation: OneVector.
 // Its functionality is subsumed by BroadcastOp.
 

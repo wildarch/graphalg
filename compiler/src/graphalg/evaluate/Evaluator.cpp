@@ -1,3 +1,4 @@
+#include <cassert>
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/DenseMap.h>
 #include <llvm/ADT/STLExtras.h>
@@ -20,6 +21,7 @@
 #include "graphalg/GraphAlgTypes.h"
 #include "graphalg/SemiringTypes.h"
 #include "graphalg/evaluate/Evaluator.h"
+#include "mlir/IR/BuiltinTypes.h"
 
 namespace graphalg {
 
@@ -56,6 +58,7 @@ private:
   mlir::LogicalResult evaluate(MulOp op);
   mlir::LogicalResult evaluate(CastScalarOp op);
   mlir::LogicalResult evaluate(EqOp op);
+  mlir::LogicalResult evaluate(CmpOp op);
   mlir::LogicalResult evaluate(mlir::arith::DivFOp op);
   mlir::LogicalResult evaluate(mlir::arith::SubIOp op);
   mlir::LogicalResult evaluate(mlir::arith::SubFOp op);
@@ -423,6 +426,46 @@ mlir::LogicalResult ScalarEvaluator::evaluate(EqOp op) {
   return mlir::success();
 }
 
+static mlir::LogicalResult compareInt(CmpOp op, std::int64_t lhs,
+                                      std::int64_t rhs, bool &result) {
+  switch (op.getOp()) {
+  case graphalg::BinaryOp::LT:
+    result = lhs < rhs;
+    break;
+  case graphalg::BinaryOp::GT:
+    result = lhs > rhs;
+    break;
+  case graphalg::BinaryOp::LE:
+    result = lhs <= rhs;
+    break;
+  case graphalg::BinaryOp::GE:
+    result = lhs >= rhs;
+    break;
+  default:
+    return op.emitOpError("unsupported comparison type");
+  }
+
+  return mlir::success();
+}
+
+mlir::LogicalResult ScalarEvaluator::evaluate(CmpOp op) {
+  assert(op.getLhs().getType() == op.getRhs().getType());
+  auto type = op.getLhs().getType();
+  bool result = false;
+  if (type == mlir::IntegerType::get(op->getContext(), 64)) {
+    auto lhs = llvm::cast<mlir::IntegerAttr>(_values[op.getLhs()]).getInt();
+    auto rhs = llvm::cast<mlir::IntegerAttr>(_values[op.getRhs()]).getInt();
+    if (mlir::failed(compareInt(op, lhs, rhs, result))) {
+      return mlir::failure();
+    }
+  } else {
+    return op.emitOpError("not implemented");
+  }
+
+  _values[op] = mlir::BoolAttr::get(op.getContext(), result);
+  return mlir::success();
+}
+
 mlir::LogicalResult ScalarEvaluator::evaluate(mlir::arith::DivFOp op) {
   auto lhs =
       llvm::cast<mlir::FloatAttr>(_values[op.getLhs()]).getValueAsDouble();
@@ -455,7 +498,7 @@ mlir::LogicalResult ScalarEvaluator::evaluate(mlir::Operation *op) {
   return llvm::TypeSwitch<mlir::Operation *, mlir::LogicalResult>(op)
 #define GA_CASE(Op) .Case<Op>([&](Op op) { return evaluate(op); })
       GA_CASE(ConstantOp) GA_CASE(mlir::arith::ConstantOp) GA_CASE(AddOp)
-          GA_CASE(MulOp) GA_CASE(CastScalarOp) GA_CASE(EqOp)
+          GA_CASE(MulOp) GA_CASE(CastScalarOp) GA_CASE(EqOp) GA_CASE(CmpOp)
               GA_CASE(mlir::arith::DivFOp) GA_CASE(mlir::arith::SubIOp)
                   GA_CASE(mlir::arith::SubFOp)
 #undef GA_CASE

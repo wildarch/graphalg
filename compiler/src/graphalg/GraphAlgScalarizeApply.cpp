@@ -251,8 +251,7 @@ mlir::FailureOr<mlir::Value> createScalarOpFor(mlir::Location loc, BinaryOp op,
   case BinaryOp::GT:
   case BinaryOp::LE:
   case BinaryOp::GE:
-    return mlir::emitError(loc)
-           << "operator " << stringifyBinaryOp(op) << " is not yet supported";
+    return mlir::Value(builder.create<CmpOp>(loc, lhs, op, rhs));
   }
 }
 
