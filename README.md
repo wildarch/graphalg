@@ -34,9 +34,9 @@ npm --workspace=codemirror-lang-graphalg run prepare
 cmake --build ./compiler/build
 cmake --build ./compiler/build --target check
 
-npm --workspace=playground install
 playground/cpp/configure-wasm.sh
 cmake --build playground/cpp/build-wasm --target graphalg-playground
+npm --workspace=playground install
 # Or npm --workspace=playground run watch to rebuild automatically upon edit.
 npm --workspace=playground run prepare
 
