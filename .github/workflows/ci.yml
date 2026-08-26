@@ -12,7 +12,7 @@ jobs:
     container: ghcr.io/wildarch/graphalg-ci
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Build codemirror-lang-graphalg
         shell: bash
         run: |
