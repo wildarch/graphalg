@@ -429,7 +429,7 @@ mlir::LogicalResult ScalarEvaluator::evaluate(EqOp op) {
 }
 
 static bool isLessThan(mlir::IntegerAttr lhs, mlir::IntegerAttr rhs) {
-  return (lhs.getValue() - rhs.getValue()).isNegative();
+  return lhs.getValue().slt(rhs.getValue());
 }
 
 static bool isLessThan(mlir::FloatAttr lhs, mlir::FloatAttr rhs) {

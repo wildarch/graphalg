@@ -1340,6 +1340,46 @@ mlir::LogicalResult OpConversion<graphalg::EqOp>::matchAndRewrite(
 }
 
 template <>
+mlir::LogicalResult OpConversion<graphalg::LtOp>::matchAndRewrite(
+    graphalg::LtOp op, OpAdaptor adaptor,
+    mlir::ConversionPatternRewriter &rewriter) const {
+  auto lhs = adaptor.getLhs();
+  auto rhs = adaptor.getRhs();
+  if (lhs.getType().isF64()) {
+    assert(rhs.getType().isF64());
+    rewriter.replaceOpWithNewOp<mlir::arith::CmpFOp>(
+        op, mlir::arith::CmpFPredicate::OLT, lhs, rhs);
+  } else {
+    assert(lhs.getType().isSignlessInteger());
+    assert(rhs.getType().isSignlessInteger());
+    rewriter.replaceOpWithNewOp<mlir::arith::CmpIOp>(
+        op, mlir::arith::CmpIPredicate::slt, lhs, rhs);
+  }
+
+  return mlir::success();
+}
+
+template <>
+mlir::LogicalResult OpConversion<graphalg::LeOp>::matchAndRewrite(
+    graphalg::LeOp op, OpAdaptor adaptor,
+    mlir::ConversionPatternRewriter &rewriter) const {
+  auto lhs = adaptor.getLhs();
+  auto rhs = adaptor.getRhs();
+  if (lhs.getType().isF64()) {
+    assert(rhs.getType().isF64());
+    rewriter.replaceOpWithNewOp<mlir::arith::CmpFOp>(
+        op, mlir::arith::CmpFPredicate::OLE, lhs, rhs);
+  } else {
+    assert(lhs.getType().isSignlessInteger());
+    assert(rhs.getType().isSignlessInteger());
+    rewriter.replaceOpWithNewOp<mlir::arith::CmpIOp>(
+        op, mlir::arith::CmpIPredicate::sle, lhs, rhs);
+  }
+
+  return mlir::success();
+}
+
+template <>
 mlir::LogicalResult OpConversion<graphalg::MulOp>::matchAndRewrite(
     graphalg::MulOp op, OpAdaptor adaptor,
     mlir::ConversionPatternRewriter &rewriter) const {
@@ -1453,6 +1493,7 @@ void GraphAlgToRel::runOnOperation() {
       .add<OpConversion<graphalg::ApplyReturnOp>,
            OpConversion<graphalg::ConstantOp>, OpConversion<graphalg::AddOp>,
            OpConversion<graphalg::CastScalarOp>, OpConversion<graphalg::EqOp>,
+           OpConversion<graphalg::LtOp>, OpConversion<graphalg::LeOp>,
            OpConversion<graphalg::MulOp>>(semiringTypeConverter, &getContext());
 
   if (mlir::failed(mlir::applyFullConversion(getOperation(), target,

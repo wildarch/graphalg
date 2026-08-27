@@ -524,7 +524,7 @@ mlir::OpFoldResult EqOp::fold(FoldAdaptor adaptor) {
 }
 
 static bool isLessThan(mlir::IntegerAttr lhs, mlir::IntegerAttr rhs) {
-  return (lhs.getValue() - rhs.getValue()).isNegative();
+  return lhs.getValue().slt(rhs.getValue());
 }
 
 static bool isLessThan(mlir::FloatAttr lhs, mlir::FloatAttr rhs) {
