@@ -248,11 +248,13 @@ mlir::FailureOr<mlir::Value> createScalarOpFor(mlir::Location loc, BinaryOp op,
     return mlir::Value(builder.create<EqOp>(loc, falseOp, eqOp));
   }
   case BinaryOp::LT:
+    return mlir::Value(builder.create<LtOp>(loc, lhs, rhs));
   case BinaryOp::GT:
+    return mlir::Value(builder.create<LtOp>(loc, rhs, lhs));
   case BinaryOp::LE:
+    return mlir::Value(builder.create<LeOp>(loc, lhs, rhs));
   case BinaryOp::GE:
-    return mlir::emitError(loc)
-           << "operator " << stringifyBinaryOp(op) << " is not yet supported";
+    return mlir::Value(builder.create<LeOp>(loc, rhs, lhs));
   }
 }
 

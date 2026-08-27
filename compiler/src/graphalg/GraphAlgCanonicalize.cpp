@@ -3,6 +3,7 @@
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/Support/Casting.h>
+#include <llvm/Support/ErrorHandling.h>
 #include <mlir/IR/Attributes.h>
 #include <mlir/IR/Builders.h>
 #include <mlir/IR/BuiltinAttributeInterfaces.h>
@@ -517,6 +518,53 @@ mlir::OpFoldResult EqOp::fold(FoldAdaptor adaptor) {
     if (mlir::matchPattern(isNot.input, nested)) {
       return nested.input;
     }
+  }
+
+  return nullptr;
+}
+
+static bool isLessThan(mlir::IntegerAttr lhs, mlir::IntegerAttr rhs) {
+  return (lhs.getValue() - rhs.getValue()).isNegative();
+}
+
+static bool isLessThan(mlir::FloatAttr lhs, mlir::FloatAttr rhs) {
+  return lhs.getValueAsDouble() < rhs.getValueAsDouble();
+}
+
+static bool isLessThan(mlir::Attribute lhs, mlir::Attribute rhs) {
+  if (auto lhsInt = llvm::dyn_cast<mlir::IntegerAttr>(lhs)) {
+    return isLessThan(lhsInt, llvm::cast<mlir::IntegerAttr>(rhs));
+  } else if (auto lhsFloat = llvm::dyn_cast<mlir::FloatAttr>(lhs)) {
+    return isLessThan(lhsFloat, llvm::cast<mlir::FloatAttr>(rhs));
+  } else {
+    llvm_unreachable("unsupported type for less-than comparison");
+  }
+}
+
+mlir::OpFoldResult LtOp::fold(FoldAdaptor adaptor) {
+  if (getLhs() == getRhs()) {
+    return mlir::BoolAttr::get(getContext(), false);
+  }
+
+  auto lhs = adaptor.getLhs();
+  auto rhs = adaptor.getRhs();
+  if (lhs && rhs) {
+    return mlir::BoolAttr::get(getContext(), isLessThan(lhs, rhs));
+  }
+
+  return nullptr;
+}
+
+mlir::OpFoldResult LeOp::fold(FoldAdaptor adaptor) {
+  if (getLhs() == getRhs()) {
+    return mlir::BoolAttr::get(getContext(), true);
+  }
+
+  auto lhs = adaptor.getLhs();
+  auto rhs = adaptor.getRhs();
+  if (lhs && rhs) {
+    return mlir::BoolAttr::get(getContext(),
+                               isLessThan(lhs, rhs) || (lhs == rhs));
   }
 
   return nullptr;

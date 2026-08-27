@@ -723,10 +723,8 @@ def MulOp : Core_Op<"mul", [Pure, SameOperandsAndResultType]> {
     let hasFolder = 1;
 }
 
-def EqOp : Core_Op<"eq", [Pure, AllTypesMatch<["lhs", "rhs"]>]> {
-    let summary = "Scalar equality comparison";
-
-    let arguments = (ins AnySemiring:$lhs, AnySemiring:$rhs);
+class CompareOp<string mnemonic> : Core_Op<mnemonic, [Pure, AllTypesMatch<["lhs", "rhs"]>]> {
+    let arguments = (ins PartialOrd:$lhs, PartialOrd:$rhs);
 
     let results = (outs I1:$result);
 
@@ -735,6 +733,21 @@ def EqOp : Core_Op<"eq", [Pure, AllTypesMatch<["lhs", "rhs"]>]> {
     }];
 
     let hasFolder = 1;
+}
+
+def EqOp : CompareOp<"eq"> {
+    let summary = "Scalar equality comparison";
+
+    // Arguments do not need to be partially ordered
+    let arguments = (ins AnySemiring:$lhs, AnySemiring:$rhs);
+}
+
+def LtOp : CompareOp<"lt"> {
+    let summary = "Scalar less-than comparison";
+}
+
+def LeOp : CompareOp<"le"> {
+    let summary = "Scalar less-than-or-equal comparison";
 }
 
 // Note: In spec but not used in implementation: OneVector.
