@@ -740,6 +740,8 @@ def EqOp : CompareOp<"eq"> {
 
     // Arguments do not need to be partially ordered
     let arguments = (ins AnySemiring:$lhs, AnySemiring:$rhs);
+
+    let hasCanonicalizer = 1;
 }
 
 def LtOp : CompareOp<"lt"> {

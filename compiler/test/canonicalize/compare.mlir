@@ -101,3 +101,25 @@ func.func @LeNotFolded(%arg0: i64, %arg1: i64) -> i1 {
   // CHECK: return %[[#LE]]
   return %0 : i1
 }
+
+// CHECK-LABEL: @NotLt
+func.func @NotLt(%arg0: i64, %arg1: i64) -> i1 {
+  // CHECK: %[[#LE:]] = graphalg.le %arg1, %arg0 : i64
+  %0 = graphalg.lt %arg0, %arg1 : i64
+  %1 = graphalg.const false
+  %2 = graphalg.eq %1, %0 : i1
+
+  // CHECK: return %[[#LE]]
+  return %2 : i1
+}
+
+// CHECK-LABEL: @NotLe
+func.func @NotLe(%arg0: i64, %arg1: i64) -> i1 {
+  // CHECK: %[[#LT:]] = graphalg.lt %arg1, %arg0 : i64
+  %0 = graphalg.le %arg0, %arg1 : i64
+  %1 = graphalg.const false
+  %2 = graphalg.eq %0, %1 : i1
+
+  // CHECK: return %[[#LT]]
+  return %2 : i1
+}

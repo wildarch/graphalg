@@ -570,6 +570,45 @@ mlir::OpFoldResult LeOp::fold(FoldAdaptor adaptor) {
   return nullptr;
 }
 
+// Fold the negation of a compare op.
+//
+//   !(a < b)  =>  b <= a
+//   !(a <= b) =>  b < a
+//
+// The negation of the comparison is expressed as `eq false, (cmp a b)`.
+static mlir::LogicalResult negateCompare(EqOp op,
+                                         mlir::PatternRewriter &rewriter) {
+  // One operand must be the boolean constant `false`.
+  mlir::Value cmp;
+  if (isFalse(op.getLhs())) {
+    cmp = op.getRhs();
+  } else if (isFalse(op.getRhs())) {
+    cmp = op.getLhs();
+  } else {
+    return mlir::failure();
+  }
+
+  // The other operand must be a less-than / less-than-or-equal comparison.
+  if (auto ltOp = cmp.getDefiningOp<LtOp>()) {
+    // !(a < b) => b <= a
+    rewriter.replaceOpWithNewOp<LeOp>(op, ltOp.getRhs(), ltOp.getLhs());
+    return mlir::success();
+  }
+
+  if (auto leOp = cmp.getDefiningOp<LeOp>()) {
+    // !(a <= b) => b < a
+    rewriter.replaceOpWithNewOp<LtOp>(op, leOp.getRhs(), leOp.getLhs());
+    return mlir::success();
+  }
+
+  return mlir::failure();
+}
+
+void EqOp::getCanonicalizationPatterns(mlir::RewritePatternSet &patterns,
+                                       mlir::MLIRContext *context) {
+  patterns.add(negateCompare);
+}
+
 // Test if the value is equal to the additive identity.
 static bool isAdditiveIdentity(mlir::Value v) {
   mlir::Attribute constantValue;
