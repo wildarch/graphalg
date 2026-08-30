@@ -1,5 +1,7 @@
+#include <cassert>
 #include <cstdint>
 #include <cstring>
+#include <iostream>
 #include <optional>
 
 #include <llvm/ADT/Sequence.h>
@@ -22,6 +24,8 @@
 #include <mlir/Support/LLVM.h>
 #include <mlir/Transforms/Passes.h>
 
+#include "garel/GARelPasses.h"
+#include "garel/GARelSQL.h"
 #include "graphalg/GraphAlgAttr.h"
 #include "graphalg/GraphAlgDialect.h"
 #include "graphalg/GraphAlgPasses.h"
@@ -30,6 +34,8 @@
 #include "graphalg/SemiringTypes.h"
 #include "graphalg/evaluate/Evaluator.h"
 #include "graphalg/parse/Parser.h"
+#include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/STLExtras.h"
 
 class Playground {
 private:
@@ -52,9 +58,17 @@ private:
   graphalg::MatrixAttr _result;
   std::optional<graphalg::MatrixAttrReader> _resultReader;
   std::string _resultRingStr;
+  std::string _sqlStr;
 
   void setArgumentValue(std::size_t argIdx, std::size_t row, std::size_t col,
                         mlir::TypedAttr value);
+
+  mlir::LogicalResult
+  addDuckDBWrapper(llvm::raw_ostream &os,
+                   llvm::ArrayRef<graphalg::MatrixAttr> args);
+  mlir::LogicalResult
+  addUmbraWrapper(llvm::raw_ostream &os,
+                  llvm::ArrayRef<graphalg::MatrixAttr> args);
 
 public:
   Playground();
@@ -90,6 +104,8 @@ public:
   }
 
   bool evaluate();
+
+  const char *exportToSQL(garel::SQLDialect dialect);
 
   const char *getResultRing();
   std::size_t getResultRows();
@@ -240,6 +256,157 @@ bool Playground::evaluate() {
   return true;
 }
 
+mlir::LogicalResult
+Playground::addDuckDBWrapper(llvm::raw_ostream &os,
+                             llvm::ArrayRef<graphalg::MatrixAttr> args) {
+  os << "import duckdb\n\n";
+  os << "conn = duckdb.connect()\n";
+
+  // Create arguments
+  for (auto [i, attr] : llvm::enumerate(args)) {
+    graphalg::MatrixAttrReader reader{attr};
+    os << "farg" << i << " = conn.sql(\"\"\"\n";
+    bool first = true;
+    for (auto r : llvm::seq(reader.nRows())) {
+      for (auto c : llvm::seq(reader.nCols())) {
+        if (first) {
+          first = false;
+        } else {
+          os << "UNION ALL\n";
+        }
+
+        auto v = reader.at(r, c);
+        os << "SELECT " << r << " AS c0, " << c << " AS c1, ";
+        if (mlir::failed(garel::translateToSQL(
+                v, os, garel::SQLDialect::DUCKDB_PYTHON))) {
+          return mlir::failure();
+        }
+        os << " AS c2\n";
+      }
+    }
+    os << "\"\"\")\n";
+  }
+
+  auto funcName = _funcOp.getSymName();
+  os << funcName << "(conn";
+  for (auto i : llvm::seq(args.size())) {
+    os << ", farg" << i;
+  }
+  os << ").show()\n";
+  return mlir::success();
+}
+
+mlir::LogicalResult
+Playground::addUmbraWrapper(llvm::raw_ostream &os,
+                            llvm::ArrayRef<graphalg::MatrixAttr> args) {
+  os << "WITH ";
+
+  // Create arguments
+  for (auto [i, attr] : llvm::enumerate(args)) {
+    if (i != 0) {
+      os << ", ";
+    }
+
+    graphalg::MatrixAttrReader reader{attr};
+    os << "farg" << i << " AS (\n";
+    bool first = true;
+    for (auto r : llvm::seq(reader.nRows())) {
+      for (auto c : llvm::seq(reader.nCols())) {
+        if (first) {
+          first = false;
+        } else {
+          os << "UNION ALL\n";
+        }
+
+        auto v = reader.at(r, c);
+        os << "SELECT " << r << " AS c0, " << c << " AS c1, ";
+        if (mlir::failed(garel::translateToSQL(
+                v, os, garel::SQLDialect::UMBRA_ITERATE))) {
+          return mlir::failure();
+        }
+        os << " AS c2\n";
+      }
+    }
+
+    os << ")\n";
+  }
+
+  return mlir::success();
+}
+
+const char *Playground::exportToSQL(garel::SQLDialect dialect) {
+  llvm::SmallVector<graphalg::MatrixAttr> args;
+  for (auto &builder : _argBuilders) {
+    args.push_back(builder.build());
+  }
+
+  _argBuilders.clear();
+
+  // Inline constant arguments.
+  llvm::SmallVector<mlir::TypedAttr> constArgs;
+  for (auto arg : args) {
+    graphalg::MatrixAttrReader reader(arg);
+    if (reader.nRows() == 1 && reader.nCols() == 1) {
+      constArgs.push_back(reader.at(0, 0));
+    } else {
+      // Not constant
+      constArgs.push_back(mlir::TypedAttr());
+    }
+  }
+
+  if (mlir::failed(graphalg::setConstantArguments(_funcOp, constArgs))) {
+    return nullptr;
+  }
+
+  // Passes run at function level
+  {
+    mlir::PassManager pm(&_ctx);
+    pm.addPass(mlir::createCanonicalizerPass()); // To propagate constants
+    pm.addPass(graphalg::createGraphAlgVerifyLoopBounds());
+    pm.addPass(graphalg::createGraphAlgExplicateSparsity());
+    pm.addPass(graphalg::createGraphAlgSplitAggregate());
+    pm.addPass(graphalg::createGraphAlgLoopAggregate());
+    if (mlir::failed(pm.run(_funcOp))) {
+      return nullptr;
+    }
+  }
+
+  // Passes at module level
+  {
+    mlir::PassManager pm(&_ctx);
+    pm.addPass(garel::createGraphAlgToRel());
+    if (mlir::failed(pm.run(*_moduleOp))) {
+      return nullptr;
+    }
+  }
+
+  _sqlStr.clear();
+
+  // Lower the algorithm
+  llvm::raw_string_ostream os{_sqlStr};
+  if (dialect == garel::SQLDialect::DUCKDB_PYTHON) {
+    if (mlir::failed(garel::translateToSQL(*_moduleOp, os, dialect))) {
+      return nullptr;
+    }
+
+    if (mlir::failed(addDuckDBWrapper(os, args))) {
+      return nullptr;
+    }
+  } else {
+    assert(dialect == garel::SQLDialect::UMBRA_ITERATE);
+
+    if (mlir::failed(addUmbraWrapper(os, args))) {
+      return nullptr;
+    }
+
+    if (mlir::failed(garel::translateToSQL(_funcOp, os, dialect))) {
+      return nullptr;
+    }
+  }
+
+  return _sqlStr.c_str();
+}
+
 const char *Playground::getResultRing() {
   _resultRingStr.clear();
   llvm::raw_string_ostream ros(_resultRingStr);
@@ -338,6 +505,14 @@ void ga_set_arg_real(Playground *pg, std::size_t argIdx, std::size_t row,
 
 bool ga_evaluate(Playground *pg) { return pg->evaluate(); }
 
+const char *ga_export_duckdb(Playground *pg) {
+  return pg->exportToSQL(garel::SQLDialect::DUCKDB_PYTHON);
+}
+
+const char *ga_export_umbra(Playground *pg) {
+  return pg->exportToSQL(garel::SQLDialect::UMBRA_ITERATE);
+}
+
 const char *ga_get_res_ring(Playground *pg) { return pg->getResultRing(); }
 std::size_t ga_get_res_rows(Playground *pg) { return pg->getResultRows(); }
 std::size_t ga_get_res_cols(Playground *pg) { return pg->getResultCols(); }
@@ -392,16 +567,20 @@ int main(int argc, char **argv) {
   ga_set_arg_int(pg, 1, 1, 0, 19);
   ga_set_arg_int(pg, 1, 1, 1, 23);
 
-  if (!ga_evaluate(pg)) {
+  auto sqlStr = ga_export_duckdb(pg);
+  // auto sqlStr = ga_export_umbra(pg);
+
+  auto ndiag = ga_diag_count(pg);
+  for (auto i : llvm::seq(ndiag)) {
+    auto msg = ga_diag_msg(pg, i);
+    std::cout << "diagnostics: " << msg << "\n";
+  }
+
+  if (!sqlStr) {
     return 1;
   }
 
-  for (auto row : llvm::seq(2)) {
-    for (auto col : llvm::seq(2)) {
-      llvm::outs() << row << " " << col << " " << ga_get_res_int(pg, row, col)
-                   << "\n";
-    }
-  }
+  std::cout << sqlStr << "\n";
 
   ga_free(pg);
 }

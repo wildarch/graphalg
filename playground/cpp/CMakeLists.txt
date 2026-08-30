@@ -36,6 +36,8 @@ target_link_libraries(graphalg-playground PRIVATE
     GraphAlgIR
     GraphAlgParse
     GraphAlgPasses
+    GraphAlgToRel
+    GARelSQL
 )
 
 if(ENABLE_WASM)
@@ -64,6 +66,8 @@ if(ENABLE_WASM)
         _ga_get_res_int
         _ga_get_res_real
         _ga_get_res_inf
+        _ga_export_duckdb
+        _ga_export_umbra
     )
     string (REPLACE ";" "," PLAYGROUND_EXPORTED_FUNCTIONS_STR "${PLAYGROUND_EXPORTED_FUNCTIONS}")
 

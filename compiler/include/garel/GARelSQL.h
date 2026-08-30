@@ -1,6 +1,7 @@
 #pragma once
 
 #include <llvm/Support/raw_ostream.h>
+#include <mlir/IR/Attributes.h>
 #include <mlir/IR/Operation.h>
 #include <mlir/Support/LLVM.h>
 
@@ -12,6 +13,8 @@ enum class SQLDialect {
 };
 
 mlir::LogicalResult translateToSQL(mlir::Operation *op, llvm::raw_ostream &os,
+                                   SQLDialect dialect);
+mlir::LogicalResult translateToSQL(mlir::Attribute attr, llvm::raw_ostream &os,
                                    SQLDialect dialect);
 
 } // namespace garel

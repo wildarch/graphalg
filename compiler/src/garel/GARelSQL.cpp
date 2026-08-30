@@ -17,6 +17,8 @@
 #include "garel/GARelOps.h"
 #include "garel/GARelSQL.h"
 #include "garel/GARelTypes.h"
+#include "mlir/IR/Attributes.h"
+#include "mlir/IR/BuiltinAttributeInterfaces.h"
 
 namespace garel {
 
@@ -41,7 +43,6 @@ private:
     return std::string("temp") + std::to_string(_tempCount++);
   }
 
-  mlir::LogicalResult translate(mlir::func::FuncOp op);
   mlir::LogicalResult translateDuckDB(mlir::func::FuncOp op);
   mlir::LogicalResult translateUmbra(mlir::func::FuncOp op);
   mlir::LogicalResult translate(mlir::Value val);
@@ -70,8 +71,6 @@ private:
   mlir::LogicalResult translate(mlir::arith::DivFOp op);
   mlir::LogicalResult translate(mlir::arith::SIToFPOp op);
 
-  mlir::LogicalResult translateConstant(mlir::Location loc,
-                                        mlir::Attribute attr);
   mlir::LogicalResult translateAdd(mlir::Operation *op);
   mlir::LogicalResult translateMul(mlir::Operation *op);
 
@@ -80,6 +79,9 @@ public:
       : _os(os), _dialect(dialect) {}
 
   mlir::LogicalResult translate(mlir::ModuleOp op);
+  mlir::LogicalResult translate(mlir::func::FuncOp op);
+  mlir::LogicalResult translateConstant(mlir::Location loc,
+                                        mlir::Attribute attr);
 };
 
 } // namespace
@@ -769,12 +771,26 @@ mlir::LogicalResult SQLTranslator::translate(mlir::arith::SIToFPOp op) {
 mlir::LogicalResult translateToSQL(mlir::Operation *op, llvm::raw_ostream &os,
                                    SQLDialect dialect) {
   SQLTranslator translator(os, dialect);
-  auto moduleOp = llvm::dyn_cast<mlir::ModuleOp>(op);
-  if (!moduleOp) {
-    return op->emitOpError("expected a module");
+  if (auto moduleOp = llvm::dyn_cast<mlir::ModuleOp>(op)) {
+    return translator.translate(moduleOp);
+  } else if (auto funcOp = llvm::dyn_cast<mlir::func::FuncOp>(op)) {
+    return translator.translate(funcOp);
+  } else {
+    return op->emitOpError("expected a module or function");
+  }
+}
+
+mlir::LogicalResult translateToSQL(mlir::Attribute attr, llvm::raw_ostream &os,
+                                   SQLDialect dialect) {
+  SQLTranslator translator(os, dialect);
+  auto typed = llvm::dyn_cast<mlir::TypedAttr>(attr);
+  auto loc = mlir::UnknownLoc::get(attr.getContext());
+  if (!typed) {
+    return mlir::emitError(loc)
+           << "expected an 'mlir::TypedAttr', got " << attr;
   }
 
-  return translator.translate(moduleOp);
+  return translator.translateConstant(loc, typed);
 }
 
 } // namespace garel
