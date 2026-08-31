@@ -316,7 +316,7 @@ mlir::LogicalResult SQLTranslator::translateUmbra(ForOp op) {
 
   // Define the order in which we add the states. This matters because the first
   // state becomes the result of the op.
-  llvm::SmallVector<std::size_t> stateOrder{op.getResultIdx()};
+  llvm::SmallVector<std::size_t> stateOrder{std::size_t(op.getResultIdx())};
   for (auto i : llvm::seq(op.getInit().size())) {
     if (i != op.getResultIdx()) {
       stateOrder.push_back(i);
