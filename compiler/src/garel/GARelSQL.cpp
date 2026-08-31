@@ -1,3 +1,5 @@
+#include <cstdint>
+#include <limits>
 #include <llvm/ADT/DenseMap.h>
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/SmallVector.h>
@@ -17,6 +19,8 @@
 #include "garel/GARelOps.h"
 #include "garel/GARelSQL.h"
 #include "garel/GARelTypes.h"
+#include "graphalg/GraphAlgAttr.h"
+#include "graphalg/GraphAlgTypes.h"
 #include "mlir/IR/Attributes.h"
 #include "mlir/IR/BuiltinAttributeInterfaces.h"
 
@@ -31,7 +35,7 @@ private:
 
   std::size_t _indentLevel = 0;
   llvm::DenseMap<mlir::Value, std::string> _valMap;
-  std::size_t _tempCount;
+  std::size_t _tempCount = 0;
 
   void indent() {
     for (auto i : llvm::seq(_indentLevel)) {
@@ -408,6 +412,18 @@ mlir::LogicalResult SQLTranslator::translateConstant(mlir::Location loc,
       _os << "'Infinity'";
     } else {
       _os << "CAST(" << value << " AS DOUBLE PRECISION)";
+    }
+  } else if (auto tropIntAttr = llvm::dyn_cast<graphalg::TropIntAttr>(attr)) {
+    return translateConstant(loc, tropIntAttr.getValue());
+  } else if (auto tropFloatAttr =
+                 llvm::dyn_cast<graphalg::TropFloatAttr>(attr)) {
+    return translateConstant(loc, tropFloatAttr.getValue());
+  } else if (auto tropInftAttr = llvm::dyn_cast<graphalg::TropInfAttr>(attr)) {
+    if (tropInftAttr.getType() ==
+        graphalg::TropF64Type::get(attr.getContext())) {
+      _os << "CAST('Infinity' AS DOUBLE PRECISION)";
+    } else {
+      _os << std::numeric_limits<std::int64_t>::max();
     }
   } else {
     return mlir::emitError(loc) << "cannot convert constant " << attr;

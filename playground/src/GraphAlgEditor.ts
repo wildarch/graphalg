@@ -1,6 +1,6 @@
 import { GraphAlgMatrix } from "./GraphAlgMatrix"
 import { GraphAlgDiagnostic } from "./GraphAlgDiagnostic"
-import { PlaygroundInstance } from "./PlaygroundInstance"
+import { PlaygroundInstance, SQLDialect } from "./PlaygroundInstance"
 import { renderVectorAsNodeProperty, renderMatrix, MatrixRenderMode } from "./matrixRendering"
 import { EditorView, basicSetup } from "codemirror"
 import { Extension } from "@codemirror/state"
@@ -260,6 +260,27 @@ export class GraphAlgEditor {
         summary.textContent = "Output";
         details.append(summary, resultElem);
         outputElems.push(details);
+
+        if (result.result) {
+            // Place export buttons
+            const exportElem = document.createElement("div");
+            const duckDBButton = document.createElement("button");
+            duckDBButton.setAttribute('type', 'button');
+            duckDBButton.setAttribute('class', 'btn');
+            duckDBButton.textContent = "DuckDB";
+            duckDBButton.addEventListener('click', () => {
+                const sql = inst.exportSQL(program!!, this.functionName!!, args, SQLDialect.DUCKDB);
+                console.log(sql);
+            });
+            exportElem.append(duckDBButton);
+
+            const details = document.createElement("details");
+            const summary = document.createElement("summary");
+            summary.textContent = "Export";
+            details.append(summary, exportElem);
+            outputElems.push(details);
+
+        }
 
         return outputElems;
     }

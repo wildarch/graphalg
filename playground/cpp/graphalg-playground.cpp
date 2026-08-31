@@ -539,11 +539,15 @@ bool ga_get_res_inf(Playground *pg, std::size_t row, std::size_t col) {
 int main(int argc, char **argv) {
   auto pg = ga_new();
   auto program = R"(
-    func
-    MatMul(lhs : Matrix<s, s, int>, rhs : Matrix<s, s, int>)
-        -> Matrix<s, s, int> {
-      return lhs * rhs;
-    }
+func SSSP(
+    graph: Matrix<s1, s1, trop_real>,
+    source: Vector<s1, bool>) -> Vector<s1, trop_real> {
+  v = cast<trop_real>(source);
+  for i in graph.nrows {
+    v += v * graph;
+  }
+  return v;
+}
   )";
   if (!ga_parse(pg, program)) {
     return 1;
@@ -554,18 +558,15 @@ int main(int argc, char **argv) {
   }
 
   ga_add_arg(pg, 2, 2); // lhs
-  ga_add_arg(pg, 2, 2); // rhs
-  ga_set_dims(pg, "MatMul");
+  ga_add_arg(pg, 2, 1); // rhs
+  ga_set_dims(pg, "SSSP");
 
-  ga_set_arg_int(pg, 0, 0, 0, 3);
-  ga_set_arg_int(pg, 0, 0, 1, 5);
-  ga_set_arg_int(pg, 0, 1, 0, 7);
-  ga_set_arg_int(pg, 0, 1, 1, 11);
+  ga_set_arg_real(pg, 0, 0, 0, 3);
+  ga_set_arg_real(pg, 0, 0, 1, 5);
+  ga_set_arg_real(pg, 0, 1, 0, 7);
+  ga_set_arg_real(pg, 0, 1, 1, 11);
 
-  ga_set_arg_int(pg, 1, 0, 0, 13);
-  ga_set_arg_int(pg, 1, 0, 1, 17);
-  ga_set_arg_int(pg, 1, 1, 0, 19);
-  ga_set_arg_int(pg, 1, 1, 1, 23);
+  ga_set_arg_bool(pg, 1, 0, 0, true);
 
   auto sqlStr = ga_export_duckdb(pg);
   // auto sqlStr = ga_export_umbra(pg);
