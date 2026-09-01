@@ -3,6 +3,7 @@
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/Support/Casting.h>
+#include <llvm/Support/ErrorHandling.h>
 #include <mlir/IR/Attributes.h>
 #include <mlir/IR/Builders.h>
 #include <mlir/IR/BuiltinAttributeInterfaces.h>
@@ -520,6 +521,92 @@ mlir::OpFoldResult EqOp::fold(FoldAdaptor adaptor) {
   }
 
   return nullptr;
+}
+
+static bool isLessThan(mlir::IntegerAttr lhs, mlir::IntegerAttr rhs) {
+  return lhs.getValue().slt(rhs.getValue());
+}
+
+static bool isLessThan(mlir::FloatAttr lhs, mlir::FloatAttr rhs) {
+  return lhs.getValueAsDouble() < rhs.getValueAsDouble();
+}
+
+static bool isLessThan(mlir::Attribute lhs, mlir::Attribute rhs) {
+  if (auto lhsInt = llvm::dyn_cast<mlir::IntegerAttr>(lhs)) {
+    return isLessThan(lhsInt, llvm::cast<mlir::IntegerAttr>(rhs));
+  } else if (auto lhsFloat = llvm::dyn_cast<mlir::FloatAttr>(lhs)) {
+    return isLessThan(lhsFloat, llvm::cast<mlir::FloatAttr>(rhs));
+  } else {
+    llvm_unreachable("unsupported type for less-than comparison");
+  }
+}
+
+mlir::OpFoldResult LtOp::fold(FoldAdaptor adaptor) {
+  if (getLhs() == getRhs()) {
+    return mlir::BoolAttr::get(getContext(), false);
+  }
+
+  auto lhs = adaptor.getLhs();
+  auto rhs = adaptor.getRhs();
+  if (lhs && rhs) {
+    return mlir::BoolAttr::get(getContext(), isLessThan(lhs, rhs));
+  }
+
+  return nullptr;
+}
+
+mlir::OpFoldResult LeOp::fold(FoldAdaptor adaptor) {
+  if (getLhs() == getRhs()) {
+    return mlir::BoolAttr::get(getContext(), true);
+  }
+
+  auto lhs = adaptor.getLhs();
+  auto rhs = adaptor.getRhs();
+  if (lhs && rhs) {
+    return mlir::BoolAttr::get(getContext(),
+                               isLessThan(lhs, rhs) || (lhs == rhs));
+  }
+
+  return nullptr;
+}
+
+// Fold the negation of a compare op.
+//
+//   !(a < b)  =>  b <= a
+//   !(a <= b) =>  b < a
+//
+// The negation of the comparison is expressed as `eq false, (cmp a b)`.
+static mlir::LogicalResult negateCompare(EqOp op,
+                                         mlir::PatternRewriter &rewriter) {
+  // One operand must be the boolean constant `false`.
+  mlir::Value cmp;
+  if (isFalse(op.getLhs())) {
+    cmp = op.getRhs();
+  } else if (isFalse(op.getRhs())) {
+    cmp = op.getLhs();
+  } else {
+    return mlir::failure();
+  }
+
+  // The other operand must be a less-than / less-than-or-equal comparison.
+  if (auto ltOp = cmp.getDefiningOp<LtOp>()) {
+    // !(a < b) => b <= a
+    rewriter.replaceOpWithNewOp<LeOp>(op, ltOp.getRhs(), ltOp.getLhs());
+    return mlir::success();
+  }
+
+  if (auto leOp = cmp.getDefiningOp<LeOp>()) {
+    // !(a <= b) => b < a
+    rewriter.replaceOpWithNewOp<LtOp>(op, leOp.getRhs(), leOp.getLhs());
+    return mlir::success();
+  }
+
+  return mlir::failure();
+}
+
+void EqOp::getCanonicalizationPatterns(mlir::RewritePatternSet &patterns,
+                                       mlir::MLIRContext *context) {
+  patterns.add(negateCompare);
 }
 
 // Test if the value is equal to the additive identity.

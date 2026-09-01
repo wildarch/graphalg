@@ -56,6 +56,8 @@ private:
   mlir::LogicalResult evaluate(MulOp op);
   mlir::LogicalResult evaluate(CastScalarOp op);
   mlir::LogicalResult evaluate(EqOp op);
+  mlir::LogicalResult evaluate(LtOp op);
+  mlir::LogicalResult evaluate(LeOp op);
   mlir::LogicalResult evaluate(mlir::arith::DivFOp op);
   mlir::LogicalResult evaluate(mlir::arith::SubIOp op);
   mlir::LogicalResult evaluate(mlir::arith::SubFOp op);
@@ -421,9 +423,41 @@ mlir::LogicalResult ScalarEvaluator::evaluate(CastScalarOp op) {
 }
 
 mlir::LogicalResult ScalarEvaluator::evaluate(EqOp op) {
-  auto ring = llvm::cast<SemiringTypeInterface>(op.getType());
   bool eq = _values[op.getLhs()] == _values[op.getRhs()];
   _values[op] = mlir::BoolAttr::get(op.getContext(), eq);
+  return mlir::success();
+}
+
+static bool isLessThan(mlir::IntegerAttr lhs, mlir::IntegerAttr rhs) {
+  return lhs.getValue().slt(rhs.getValue());
+}
+
+static bool isLessThan(mlir::FloatAttr lhs, mlir::FloatAttr rhs) {
+  return lhs.getValueAsDouble() < rhs.getValueAsDouble();
+}
+
+static bool isLessThan(mlir::Attribute lhs, mlir::Attribute rhs) {
+  if (auto lhsInt = llvm::dyn_cast<mlir::IntegerAttr>(lhs)) {
+    return isLessThan(lhsInt, llvm::cast<mlir::IntegerAttr>(rhs));
+  } else if (auto lhsFloat = llvm::dyn_cast<mlir::FloatAttr>(lhs)) {
+    return isLessThan(lhsFloat, llvm::cast<mlir::FloatAttr>(rhs));
+  } else {
+    llvm_unreachable("unsupported type for less-than comparison");
+  }
+}
+
+mlir::LogicalResult ScalarEvaluator::evaluate(LtOp op) {
+  auto lhs = _values[op.getLhs()];
+  auto rhs = _values[op.getRhs()];
+  _values[op] = mlir::BoolAttr::get(op.getContext(), isLessThan(lhs, rhs));
+  return mlir::success();
+}
+
+mlir::LogicalResult ScalarEvaluator::evaluate(LeOp op) {
+  auto lhs = _values[op.getLhs()];
+  auto rhs = _values[op.getRhs()];
+  _values[op] =
+      mlir::BoolAttr::get(op.getContext(), isLessThan(lhs, rhs) || lhs == rhs);
   return mlir::success();
 }
 
@@ -461,7 +495,7 @@ mlir::LogicalResult ScalarEvaluator::evaluate(mlir::Operation *op) {
       GA_CASE(ConstantOp) GA_CASE(mlir::arith::ConstantOp) GA_CASE(AddOp)
           GA_CASE(MulOp) GA_CASE(CastScalarOp) GA_CASE(EqOp)
               GA_CASE(mlir::arith::DivFOp) GA_CASE(mlir::arith::SubIOp)
-                  GA_CASE(mlir::arith::SubFOp)
+                  GA_CASE(mlir::arith::SubFOp) GA_CASE(LtOp) GA_CASE(LeOp)
 #undef GA_CASE
                       .Default([](mlir::Operation *op) {
                         return op->emitOpError("unsupported op");

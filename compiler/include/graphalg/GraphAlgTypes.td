@@ -125,6 +125,8 @@ def AnySemiring : Type<
     CPred<"::llvm::isa<SemiringTypeInterface>($_self)">,
     "semiring">;
 
+def PartialOrd : AnyTypeOf<[I64, F64]>;
+
 class AllSemiringsMatch<list<string> names> : AllMatchSameOperatorTrait<
     names,
     "llvm::cast<graphalg::MatrixType>($_self.getType()).getSemiring()",
