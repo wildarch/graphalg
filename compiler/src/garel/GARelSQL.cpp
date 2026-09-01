@@ -61,6 +61,7 @@ private:
   mlir::LogicalResult translate(JoinOp op);
   mlir::LogicalResult translate(RemapOp op);
   mlir::LogicalResult translate(SelectOp op);
+  mlir::LogicalResult translate(RangeOp op);
 
   mlir::LogicalResult translate(ExtractOp op);
   mlir::LogicalResult translate(mlir::arith::SelectOp op);
@@ -205,6 +206,7 @@ mlir::LogicalResult SQLTranslator::translate(mlir::Operation *op) {
   CASE(JoinOp)
   CASE(RemapOp)
   CASE(SelectOp)
+  CASE(RangeOp)
   CASE(ExtractOp)
   CASE(mlir::arith::SelectOp)
   CASE(mlir::arith::ConstantOp)
@@ -629,6 +631,13 @@ mlir::LogicalResult SQLTranslator::translate(SelectOp op) {
   }
 
   _os << ")";
+  return mlir::success();
+}
+
+mlir::LogicalResult SQLTranslator::translate(RangeOp op) {
+  _os << "(SELECT generate_series AS c0 FROM generate_series(0, ";
+  _os << op.getSize() - 1;
+  _os << "))";
   return mlir::success();
 }
 

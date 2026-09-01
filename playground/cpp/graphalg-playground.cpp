@@ -269,13 +269,18 @@ Playground::addDuckDBWrapper(llvm::raw_ostream &os,
     bool first = true;
     for (auto r : llvm::seq(reader.nRows())) {
       for (auto c : llvm::seq(reader.nCols())) {
+        auto v = reader.at(r, c);
+        if (v == reader.ring().addIdentity()) {
+          // skip it
+          continue;
+        }
+
         if (first) {
           first = false;
         } else {
           os << "UNION ALL\n";
         }
 
-        auto v = reader.at(r, c);
         os << "SELECT " << r << " AS c0, " << c << " AS c1, ";
         if (mlir::failed(garel::translateToSQL(
                 v, os, garel::SQLDialect::DUCKDB_PYTHON))) {
@@ -312,13 +317,18 @@ Playground::addUmbraWrapper(llvm::raw_ostream &os,
     bool first = true;
     for (auto r : llvm::seq(reader.nRows())) {
       for (auto c : llvm::seq(reader.nCols())) {
+        auto v = reader.at(r, c);
+        if (v == reader.ring().addIdentity()) {
+          // skip it
+          continue;
+        }
+
         if (first) {
           first = false;
         } else {
           os << "UNION ALL\n";
         }
 
-        auto v = reader.at(r, c);
         os << "SELECT " << r << " AS c0, " << c << " AS c1, ";
         if (mlir::failed(garel::translateToSQL(
                 v, os, garel::SQLDialect::UMBRA_ITERATE))) {
