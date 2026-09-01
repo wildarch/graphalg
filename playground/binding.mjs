@@ -55,6 +55,8 @@ export function loadPlaygroundWasm() {
         bindings.ga_get_res_int = instance.cwrap('ga_get_res_int', 'number', ['number', 'number', 'number']);
         bindings.ga_get_res_real = instance.cwrap('ga_get_res_real', 'number', ['number', 'number', 'number']);
         bindings.ga_get_res_inf = instance.cwrap('ga_get_res_inf', 'boolean', ['number', 'number', 'number']);
+        bindings.ga_export_duckdb = instance.cwrap('ga_export_duckdb', 'number', ['number']);
+        bindings.ga_export_umbra = instance.cwrap('ga_export_umbra', 'number', ['number']);
         bindings.UTF8ToString = instance.UTF8ToString;
         bindings.loaded = true;
 

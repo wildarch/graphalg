@@ -113,7 +113,7 @@ def UnionOp : GARel_Op<"union", [SameOperandsAndResultType]> {
     let results = (outs Relation:$result);
 
     let assemblyFormat = [{
-        $inputs `:` type($inputs)
+        $inputs `:` type($result)
         attr-dict
     }];
 

@@ -1,6 +1,6 @@
 import { GraphAlgMatrix } from "./GraphAlgMatrix"
 import { GraphAlgDiagnostic } from "./GraphAlgDiagnostic"
-import { PlaygroundInstance } from "./PlaygroundInstance"
+import { PlaygroundInstance, SQLDialect } from "./PlaygroundInstance"
 import { renderVectorAsNodeProperty, renderMatrix, MatrixRenderMode } from "./matrixRendering"
 import { EditorView, basicSetup } from "codemirror"
 import { Extension } from "@codemirror/state"
@@ -261,6 +261,42 @@ export class GraphAlgEditor {
         details.append(summary, resultElem);
         outputElems.push(details);
 
+        if (result.result) {
+            // Place export buttons
+            const exportElem = document.createElement("div");
+            const duckDBButton = document.createElement("button");
+            duckDBButton.setAttribute('type', 'button');
+            duckDBButton.setAttribute('class', 'btn');
+            duckDBButton.textContent = "DuckDB";
+            duckDBButton.addEventListener('click', () => {
+                const sql = inst.exportSQL(program!!, this.functionName!!, args, SQLDialect.DUCKDB);
+                for (let diag of sql.diagnostics) {
+                    console.log(diag);
+                }
+                downloadTextAsFile(sql.sql!!, `${this.functionName ?? "graphalg"}.py`, "text/x-python");
+            });
+            // Umbra
+            const umbraButton = document.createElement("button");
+            umbraButton.setAttribute('type', 'button');
+            umbraButton.setAttribute('class', 'btn');
+            umbraButton.textContent = "Umbra";
+            umbraButton.addEventListener('click', () => {
+                const sql = inst.exportSQL(program!!, this.functionName!!, args, SQLDialect.UMBRA);
+                for (let diag of sql.diagnostics) {
+                    console.log(diag);
+                }
+                downloadTextAsFile(sql.sql!!, `${this.functionName ?? "graphalg"}.sql`, "application/sql");
+            });
+            exportElem.append(duckDBButton, umbraButton);
+
+            const details = document.createElement("details");
+            const summary = document.createElement("summary");
+            summary.textContent = "Export (experimental)";
+            details.append(summary, exportElem);
+            outputElems.push(details);
+
+        }
+
         return outputElems;
     }
 
@@ -334,6 +370,19 @@ export class GraphAlgEditor {
             arg.rootElem.appendChild(renderMatrix(arg.value, this.renderMode));
         }
     }
+}
+
+function downloadTextAsFile(text: string, fileName: string, mimeType: string) {
+    const blob = new Blob([text], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    link.style.display = "none";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 function renderIR(ir: string): HTMLElement {

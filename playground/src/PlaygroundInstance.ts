@@ -8,6 +8,16 @@ export interface RunResults {
     coreIR?: string; // IR after desugaring to Core
 }
 
+export enum SQLDialect {
+    DUCKDB,
+    UMBRA,
+}
+
+export interface ExportSQLResults {
+    sql?: string;
+    diagnostics: GraphAlgDiagnostic[];
+}
+
 export class PlaygroundInstance {
     bindings: any;
 
@@ -202,6 +212,77 @@ export class PlaygroundInstance {
             diagnostics: this.getDiagnosticsAndFree(pg),
             parsedIR,
             coreIR: coreIR,
+        };
+    }
+
+    exportSQL(program: string, func: string, args: GraphAlgMatrix[], dialect: SQLDialect): ExportSQLResults {
+        const ga_new = this.bindings.ga_new;
+        const ga_parse = this.bindings.ga_parse;
+        const ga_desugar = this.bindings.ga_desugar;
+        const ga_add_arg = this.bindings.ga_add_arg;
+        const ga_set_dims = this.bindings.ga_set_dims;
+        const ga_set_arg_bool = this.bindings.ga_set_arg_bool;
+        const ga_set_arg_int = this.bindings.ga_set_arg_int;
+        const ga_set_arg_real = this.bindings.ga_set_arg_real;
+        const ga_export_duckdb = this.bindings.ga_export_duckdb;
+        const ga_export_umbra = this.bindings.ga_export_umbra;
+        const UTF8ToString = this.bindings.UTF8ToString;
+
+        const pg = ga_new();
+
+        if (!ga_parse(pg, program)) {
+            return {
+                diagnostics: this.getDiagnosticsAndFree(pg),
+            };
+        }
+
+        if (!ga_desugar(pg)) {
+            return {
+                diagnostics: this.getDiagnosticsAndFree(pg),
+            };
+        }
+
+        for (let arg of args) {
+            ga_add_arg(pg, arg.rows, arg.cols);
+        }
+
+        if (!ga_set_dims(pg, func)) {
+            return {
+                diagnostics: this.getDiagnosticsAndFree(pg),
+            };
+        }
+
+        args.forEach((arg, idx) => {
+            for (let val of arg.values) {
+                switch (arg.ring) {
+                    case 'i1':
+                        ga_set_arg_bool(pg, idx, val.row, val.col, val.val);
+                        break;
+                    case 'i64':
+                    case '!graphalg.trop_i64':
+                    case '!graphalg.trop_max_i64':
+                        ga_set_arg_int(pg, idx, val.row, val.col, val.val);
+                        break;
+                    case 'f64':
+                    case '!graphalg.trop_f64':
+                        ga_set_arg_real(pg, idx, val.row, val.col, val.val);
+                        break;
+                }
+            }
+        });
+
+        const sql = dialect == SQLDialect.DUCKDB ? ga_export_duckdb(pg) : ga_export_umbra(pg);
+        if (!sql) {
+            return {
+                diagnostics: this.getDiagnosticsAndFree(pg),
+            };
+        }
+
+        const sqlString = UTF8ToString(sql);
+
+        return {
+            diagnostics: this.getDiagnosticsAndFree(pg),
+            sql: sqlString
         };
     }
 }

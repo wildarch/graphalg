@@ -1,0 +1,93 @@
+// RUN: split-file %s %t
+// RUN: graphalg-translate --import-graphalg %t/input.gr > %t/parsed.mlir
+// RUN: graphalg-opt %t/parsed.mlir --graphalg-to-core-pipeline --graphalg-verify-loop-bounds --graphalg-explicate-sparsity --graphalg-split-aggregate --graphalg-loop-aggregate --graphalg-to-rel > %t/rel.mlir
+// RUN: garel-translate --export-sql %t/rel.mlir > %t/cdlp.py
+// RUN: touch %t/__init__.py
+// RUN: python3 %t/driver.py
+// RUN: diff %t/reference.csv %t/output.csv
+
+//--- edges.csv
+c0, c1, c2
+0,1,TRUE
+0,2,TRUE
+0,6,TRUE
+1,0,TRUE
+1,2,TRUE
+2,0,TRUE
+2,1,TRUE
+3,4,TRUE
+3,5,TRUE
+4,3,TRUE
+4,5,TRUE
+4,6,TRUE
+5,4,TRUE
+5,6,TRUE
+6,4,TRUE
+6,5,TRUE
+6,7,TRUE
+7,5,TRUE
+
+//--- input.gr
+func isMax(v: int, max: trop_max_int) -> bool {
+  return (cast<trop_max_int>(v) == max)
+      * (v != zero(int));
+}
+
+func CDLP(graph: Matrix<s, s, bool>) -> Matrix<s, s, bool> {
+    id = Vector<bool>(graph.nrows);
+    id[:] = bool(true);
+    L = diag(id);
+
+    for i in int(0):int(5) {
+        step_forward = cast<int>(graph) * cast<int>(L);
+        step_backward = cast<int>(graph.T) * cast<int>(L);
+        step = step_forward (.+) step_backward;
+
+        // Max per row
+        max = reduceRows(cast<trop_max_int>(step));
+
+        // Broadcast to all columns
+        b = Vector<trop_max_int>(graph.ncols);
+        b[:] = one(trop_max_int);
+        max_broadcast = max * b.T;
+
+        // Matrix with true at every position where L has max element.
+        step_max = step (.isMax) max_broadcast;
+
+        // Keep only one assigned label per vertex.
+        // The implementation always picks the one with the lowest id.
+        L = pickAny(step_max);
+    }
+
+    // Map isolated nodes to their own label.
+    connected = reduceRows(graph) (.+) reduceRows(graph.T);
+    isolated = Vector<bool>(graph.nrows);
+    isolated<!connected>[:] = bool(true);
+    L = diag(isolated) (.+) L;
+
+    return L;
+}
+
+//--- driver.py
+from cdlp import CDLP
+import duckdb
+from pathlib import Path
+
+dir = Path(__file__).parent
+conn = duckdb.connect()
+vertices = conn.sql("SELECT generate_series AS c0 FROM generate_series(0, 7)")
+edges = conn.read_csv(dir / 'edges.csv', dtype=['int64', 'int64', 'bool'])
+
+res = CDLP(conn, edges, vertices)
+res.filter('c2').sort('c0').to_csv(str(dir / 'output.csv'))
+
+//--- reference.csv
+c0,c1,c2
+0,0,true
+1,0,true
+2,0,true
+3,4,true
+4,3,true
+5,3,true
+6,3,true
+7,3,true
