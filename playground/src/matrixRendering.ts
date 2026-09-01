@@ -123,6 +123,9 @@ function renderMatrixVisGraph(m: GraphAlgMatrix): HTMLElement {
         let label = renderValue(val.val, m.ring);
         if (m.ring == "i1" && val.val == true) {
             label = "";
+        } else if (m.ring == "i1") {
+            // Don't render false
+            continue;
         }
 
         edges.add({
